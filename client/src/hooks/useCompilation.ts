@@ -21,11 +21,10 @@ export function useCompilation() {
     setCompilationStatus('compiling');
 
     try {
-      // Save first
-      await api.writeFile(filePath, useEditorStore.getState().content);
-      // Then compile
+      // Save and compile in one request
+      const currentContent = useEditorStore.getState().content;
       const startTime = Date.now();
-      const result = await api.compile(filePath);
+      const result = await api.compile(filePath, currentContent);
       const elapsed = Date.now() - startTime;
       setCompileResult({ ...result, elapsed });
     } catch (err) {
