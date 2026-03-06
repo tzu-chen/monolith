@@ -1,21 +1,43 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import { compileTex } from '../services/tectonic.js';
 
 export function createCompileRouter(projectRoot: string): Router {
   const router = Router();
 
   router.post('/', async (req: Request, res: Response) => {
-    const { mainFile = 'main.tex' } = req.body;
+    const { mainFile = 'main.tex', content } = req.body;
 
-    console.log(`[compile] Compiling ${mainFile} in ${projectRoot}`);
-    const startTime = Date.now();
+    try {
+      // If content is provided, save the file before compiling
+      if (typeof content === 'string') {
+        const filePath = path.join(projectRoot, mainFile);
+        if (!filePath.startsWith(projectRoot)) {
+          res.status(403).json({ error: 'Path traversal not allowed' });
+          return;
+        }
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, content, 'utf-8');
+      }
 
-    const result = await compileTex(projectRoot, mainFile);
+      console.log(`[compile] Compiling ${mainFile} in ${projectRoot}`);
+      const startTime = Date.now();
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[compile] Done in ${elapsed}s — success=${result.success}, errors=${result.errors.length}`);
+      const result = await compileTex(projectRoot, mainFile);
 
-    res.json(result);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`[compile] Done in ${elapsed}s — success=${result.success}, errors=${result.errors.length}`);
+
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        log: '',
+        errors: [`Server error: ${err}`],
+        warnings: [],
+      });
+    }
   });
 
   return router;

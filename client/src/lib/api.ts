@@ -26,11 +26,11 @@ export interface CompileResponse {
   warnings: string[];
 }
 
-export async function compile(mainFile: string = 'main.tex'): Promise<CompileResponse> {
+export async function compile(mainFile: string = 'main.tex', content?: string): Promise<CompileResponse> {
   const res = await fetch('/api/compile', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mainFile }),
+    body: JSON.stringify({ mainFile, content }),
   });
   if (!res.ok) {
     throw new Error(`Compilation request failed: ${res.statusText}`);
