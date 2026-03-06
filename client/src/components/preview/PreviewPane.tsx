@@ -138,6 +138,7 @@ export default function PreviewPane() {
       {/* Content */}
       {activeTab === 'pdf' ? (
         <div
+          key="pdf"
           ref={containerRef}
           style={{
             flex: 1,
@@ -176,6 +177,7 @@ export default function PreviewPane() {
         </div>
       ) : (
         <div
+          key="log"
           style={{
             flex: 1,
             overflow: 'auto',
