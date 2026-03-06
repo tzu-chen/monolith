@@ -42,7 +42,7 @@ export async function compileTex(
     });
 
     proc.on('close', async (code) => {
-      const log = stdout + stderr;
+      const log = stderr;
       const errors: string[] = [];
       const warnings: string[] = [];
 
