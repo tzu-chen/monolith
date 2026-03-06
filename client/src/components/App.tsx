@@ -21,9 +21,9 @@ export default function App() {
       })
       .catch((err) => {
         console.error('Failed to load initial file:', err);
-        // Set some default content if file doesn't exist
+        // Set default content if file doesn't exist
         setContent(
-          '\\documentclass{article}\n\\begin{document}\nHello, TeXLab!\n\\end{document}\n'
+          '\\documentclass[12pt]{article}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\n\\title{My Document}\n\\author{Author}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nStart writing here.\n\n\\end{document}\n'
         );
         useEditorStore.getState().setDirty(false);
       });
