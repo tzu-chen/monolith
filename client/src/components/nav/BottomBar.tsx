@@ -1,7 +1,7 @@
 import { useEditorStore } from '../../stores/editorStore';
 
 export default function BottomBar() {
-  const { compilationStatus, errors, warnings } = useEditorStore();
+  const { compilationStatus, errors, warnings, activeTabPath } = useEditorStore();
 
   const statusDotColor =
     compilationStatus === 'error' ? 'var(--red)' :
@@ -55,6 +55,7 @@ export default function BottomBar() {
           gap: 18,
         }}
       >
+        {activeTabPath && <span>{activeTabPath}</span>}
         <span>UTF-8</span>
         <span>LaTeX</span>
       </div>

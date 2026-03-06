@@ -1,3 +1,12 @@
+export async function listFiles(): Promise<string[]> {
+  const res = await fetch('/api/files/');
+  if (!res.ok) {
+    throw new Error(`Failed to list files: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.files;
+}
+
 export async function readFile(filePath: string): Promise<string> {
   const res = await fetch(`/api/files/${filePath}`);
   if (!res.ok) {
@@ -15,6 +24,37 @@ export async function writeFile(filePath: string, content: string): Promise<void
   });
   if (!res.ok) {
     throw new Error(`Failed to write ${filePath}: ${res.statusText}`);
+  }
+}
+
+export async function createFile(filePath: string, content: string = ''): Promise<void> {
+  const res = await fetch(`/api/files/${filePath}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create ${filePath}: ${res.statusText}`);
+  }
+}
+
+export async function deleteFile(filePath: string): Promise<void> {
+  const res = await fetch(`/api/files/${filePath}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to delete ${filePath}: ${res.statusText}`);
+  }
+}
+
+export async function renameFile(from: string, to: string): Promise<void> {
+  const res = await fetch('/api/files/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to rename ${from} to ${to}: ${res.statusText}`);
   }
 }
 
