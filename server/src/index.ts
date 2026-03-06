@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { createFilesRouter } from './routes/files.js';
 import { createCompileRouter } from './routes/compile.js';
+import { setupWebSocket } from './ws.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -37,6 +38,9 @@ const server = app.listen(PORT, () => {
     console.log(`[texlab] Serving client from ${CLIENT_DIST}`);
   }
 });
+
+// Mount WebSocket server for file watching
+setupWebSocket(server, PROJECT_ROOT);
 
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {

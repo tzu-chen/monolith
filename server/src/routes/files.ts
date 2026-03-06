@@ -5,6 +5,34 @@ import path from 'path';
 export function createFilesRouter(projectRoot: string): Router {
   const router = Router();
 
+  function safePath(relPath: string): string | null {
+    const filePath = path.join(projectRoot, relPath);
+    if (!filePath.startsWith(projectRoot)) return null;
+    return filePath;
+  }
+
+  // Rename / move file
+  router.post('/rename', async (req: Request, res: Response) => {
+    try {
+      const { from, to } = req.body;
+      if (!from || !to) {
+        res.status(400).json({ error: 'Body must include "from" and "to" paths' });
+        return;
+      }
+      const fromPath = safePath(from);
+      const toPath = safePath(to);
+      if (!fromPath || !toPath) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+      await fs.mkdir(path.dirname(toPath), { recursive: true });
+      await fs.rename(fromPath, toPath);
+      res.json({ from, to, renamed: true });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to rename: ${err}` });
+    }
+  });
+
   // List files in project
   router.get('/', async (_req: Request, res: Response) => {
     try {
@@ -23,9 +51,8 @@ export function createFilesRouter(projectRoot: string): Router {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = path.join(projectRoot, relPath);
-      // Prevent path traversal
-      if (!filePath.startsWith(projectRoot)) {
+      const filePath = safePath(relPath);
+      if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
       }
@@ -40,6 +67,35 @@ export function createFilesRouter(projectRoot: string): Router {
     }
   });
 
+  // Create file
+  router.post('/*', async (req: Request, res: Response) => {
+    try {
+      const relPath = req.params[0];
+      if (!relPath) {
+        res.status(400).json({ error: 'No file path specified' });
+        return;
+      }
+      const filePath = safePath(relPath);
+      if (!filePath) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+      const { content = '' } = req.body || {};
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      try {
+        await fs.access(filePath);
+        res.status(409).json({ error: 'File already exists' });
+        return;
+      } catch {
+        // File doesn't exist — proceed
+      }
+      await fs.writeFile(filePath, content, 'utf-8');
+      res.status(201).json({ path: relPath, created: true });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to create file: ${err}` });
+    }
+  });
+
   // Write file content
   router.put('/*', async (req: Request, res: Response) => {
     try {
@@ -48,8 +104,8 @@ export function createFilesRouter(projectRoot: string): Router {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = path.join(projectRoot, relPath);
-      if (!filePath.startsWith(projectRoot)) {
+      const filePath = safePath(relPath);
+      if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
       }
@@ -63,6 +119,30 @@ export function createFilesRouter(projectRoot: string): Router {
       res.json({ path: relPath, saved: true });
     } catch (err) {
       res.status(500).json({ error: `Failed to write file: ${err}` });
+    }
+  });
+
+  // Delete file
+  router.delete('/*', async (req: Request, res: Response) => {
+    try {
+      const relPath = req.params[0];
+      if (!relPath) {
+        res.status(400).json({ error: 'No file path specified' });
+        return;
+      }
+      const filePath = safePath(relPath);
+      if (!filePath) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+      await fs.rm(filePath, { recursive: true });
+      res.json({ path: relPath, deleted: true });
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        res.status(404).json({ error: 'File not found' });
+      } else {
+        res.status(500).json({ error: `Failed to delete file: ${err}` });
+      }
     }
   });
 

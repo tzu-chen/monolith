@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
 import { createExtensions } from './extensions';
@@ -11,63 +11,142 @@ interface EditorPaneProps {
 export default function EditorPane({ onSave }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const { content, setContent } = useEditorStore();
-  const initialContentRef = useRef(content);
+  // Cache EditorState per file so undo history is preserved across tab switches
+  const stateCache = useRef<Map<string, EditorState>>(new Map());
+  const activeTabPath = useEditorStore((s) => s.activeTabPath);
+  const content = useEditorStore((s) => s.content);
+  const scrollToLine = useEditorStore((s) => s.scrollToLine);
+  const clearScrollToLine = useEditorStore((s) => s.clearScrollToLine);
+  const updateContent = useEditorStore((s) => s.updateContent);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // Stable ref for onSave so we don't recreate the editor on every render
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
 
-    const saveKeymap = keymap.of([
-      {
-        key: 'Mod-s',
-        run: () => {
-          onSave();
-          return true;
+  const createView = useCallback(
+    (doc: string, parent: HTMLElement): EditorView => {
+      const saveKeymap = keymap.of([
+        {
+          key: 'Mod-s',
+          run: () => {
+            onSaveRef.current();
+            return true;
+          },
         },
-      },
-    ]);
+      ]);
 
-    const updateListener = EditorView.updateListener.of((update: ViewUpdate) => {
-      if (update.docChanged) {
-        const newContent = update.state.doc.toString();
-        setContent(newContent);
+      const updateListener = EditorView.updateListener.of(
+        (update: ViewUpdate) => {
+          if (update.docChanged) {
+            const newContent = update.state.doc.toString();
+            useEditorStore.getState().updateContent(newContent);
+          }
+        }
+      );
+
+      const state = EditorState.create({
+        doc,
+        extensions: [saveKeymap, ...createExtensions(), updateListener],
+      });
+
+      return new EditorView({ state, parent });
+    },
+    []
+  );
+
+  // Create/swap EditorView when active tab changes
+  useEffect(() => {
+    if (!containerRef.current || !activeTabPath) return;
+
+    // Save current editor state to cache before switching
+    if (viewRef.current) {
+      const currentPath = viewRef.current.dom.dataset.filePath;
+      if (currentPath) {
+        stateCache.current.set(currentPath, viewRef.current.state);
       }
-    });
+      viewRef.current.destroy();
+      viewRef.current = null;
+    }
 
-    const state = EditorState.create({
-      doc: initialContentRef.current,
-      extensions: [
-        saveKeymap,
-        ...createExtensions(),
-        updateListener,
-      ],
-    });
+    // Check if we have a cached state for this file
+    const cached = stateCache.current.get(activeTabPath);
 
-    const view = new EditorView({
-      state,
-      parent: containerRef.current,
-    });
+    if (cached) {
+      // Restore cached state (preserves undo history)
+      const saveKeymap = keymap.of([
+        {
+          key: 'Mod-s',
+          run: () => {
+            onSaveRef.current();
+            return true;
+          },
+        },
+      ]);
 
-    viewRef.current = view;
+      const updateListener = EditorView.updateListener.of(
+        (update: ViewUpdate) => {
+          if (update.docChanged) {
+            const newContent = update.state.doc.toString();
+            useEditorStore.getState().updateContent(newContent);
+          }
+        }
+      );
+
+      // Recreate state with cached doc + extensions (CM6 doesn't allow reusing state across views directly)
+      const state = EditorState.create({
+        doc: cached.doc,
+        extensions: [saveKeymap, ...createExtensions(), updateListener],
+        selection: cached.selection,
+      });
+
+      const view = new EditorView({
+        state,
+        parent: containerRef.current,
+      });
+      view.dom.dataset.filePath = activeTabPath;
+      viewRef.current = view;
+    } else {
+      // Create new editor with content from store
+      const view = createView(content, containerRef.current);
+      view.dom.dataset.filePath = activeTabPath;
+      viewRef.current = view;
+    }
 
     return () => {
-      view.destroy();
-      viewRef.current = null;
+      // Don't destroy on cleanup — we handle it at the top of this effect
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync external content changes (e.g. file load) into editor
+  // Handle scroll-to-line requests from outline
   useEffect(() => {
+    if (scrollToLine == null || !viewRef.current) return;
     const view = viewRef.current;
-    if (!view) return;
-    const currentDoc = view.state.doc.toString();
-    if (content !== currentDoc && content !== initialContentRef.current) {
-      view.dispatch({
-        changes: { from: 0, to: currentDoc.length, insert: content },
-      });
-      initialContentRef.current = content;
-    }
-  }, [content]);
+    const line = view.state.doc.line(Math.min(scrollToLine, view.state.doc.lines));
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+    });
+    clearScrollToLine();
+  }, [scrollToLine, clearScrollToLine]);
+
+  // Show empty state when no tabs are open
+  if (!activeTabPath) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'var(--bg-editor)',
+          color: 'var(--text-dim)',
+          fontSize: 14,
+        }}
+      >
+        Open a file from the sidebar to start editing
+      </div>
+    );
+  }
 
   return (
     <div
