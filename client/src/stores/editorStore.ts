@@ -24,6 +24,9 @@ interface EditorState {
   warnings: string[];
   lastCompileTime: number | null;
 
+  // Sidebar visibility
+  sidebarVisible: boolean;
+
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
 
@@ -48,6 +51,9 @@ interface EditorState {
     warnings: string[];
     elapsed: number;
   }) => void;
+
+  // Sidebar
+  toggleSidebar: () => void;
 
   // Outline
   requestScrollToLine: (line: number) => void;
@@ -74,6 +80,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   errors: [],
   warnings: [],
   lastCompileTime: null,
+  sidebarVisible: true,
   scrollToLine: null,
 
   // Derived state (computed from active tab)
@@ -175,6 +182,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       warnings: result.warnings,
       lastCompileTime: result.elapsed,
     }),
+
+  toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),
