@@ -47,6 +47,17 @@ export async function deleteFile(filePath: string): Promise<void> {
   }
 }
 
+export async function createDirectory(dirPath: string): Promise<void> {
+  const res = await fetch('/api/files/mkdir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: dirPath }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create directory ${dirPath}: ${res.statusText}`);
+  }
+}
+
 export async function renameFile(from: string, to: string): Promise<void> {
   const res = await fetch('/api/files/rename', {
     method: 'POST',

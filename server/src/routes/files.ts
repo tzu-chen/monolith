@@ -11,6 +11,37 @@ export function createFilesRouter(getProjectRoot: () => string | null): Router {
     return filePath;
   }
 
+  // Create directory
+  router.post('/mkdir', async (req: Request, res: Response) => {
+    try {
+      const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
+      const { path: dirPath } = req.body;
+      if (!dirPath) {
+        res.status(400).json({ error: 'Body must include "path"' });
+        return;
+      }
+      const fullPath = safePath(dirPath, projectRoot);
+      if (!fullPath) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+      try {
+        const stat = await fs.stat(fullPath);
+        if (stat.isDirectory()) {
+          res.status(409).json({ error: 'Directory already exists' });
+          return;
+        }
+      } catch {
+        // Doesn't exist — proceed
+      }
+      await fs.mkdir(fullPath, { recursive: true });
+      res.status(201).json({ path: dirPath, created: true });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to create directory: ${err}` });
+    }
+  });
+
   // Rename / move file
   router.post('/rename', async (req: Request, res: Response) => {
     try {
