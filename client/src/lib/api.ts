@@ -38,6 +38,23 @@ export async function createFile(filePath: string, content: string = ''): Promis
   }
 }
 
+export async function uploadFile(file: File, directory: string = ''): Promise<{ path: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (directory) {
+    formData.append('directory', directory);
+  }
+  const res = await fetch('/api/files/upload', {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to upload file: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function deleteFile(filePath: string): Promise<void> {
   const res = await fetch(`/api/files/${filePath}`, {
     method: 'DELETE',

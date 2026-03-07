@@ -395,6 +395,7 @@ export default function FileTree() {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tree = buildTree(fileTree);
 
@@ -497,6 +498,28 @@ export default function FileTree() {
     setCreatingFolder(false);
   }, [currentDir]);
 
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      try {
+        const result = await api.uploadFile(file, currentDir);
+        await refreshFileTree();
+        // Try to open text-based files in the editor
+        try {
+          const content = await api.readFile(result.path);
+          useEditorStore.getState().openFile(result.path, content);
+        } catch {
+          // Binary file — just refresh the tree, don't open
+        }
+      } catch (err) {
+        console.error('Failed to upload file:', err);
+      }
+    }
+    // Reset the input so the same file can be uploaded again
+    e.target.value = '';
+  }, [currentDir]);
+
   // Context menu action: may target a directory (for "new file"/"new folder" inside it)
   const handleContextAction = useCallback((action: string) => {
     const node = contextMenu?.node ?? null;
@@ -543,9 +566,16 @@ export default function FileTree() {
         }}
       >
         <span>Files</span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileUpload}
+        />
         <button
-          onClick={() => setCreatingFile(true)}
-          title="New file"
+          onClick={() => fileInputRef.current?.click()}
+          title="Upload file"
           style={{
             background: 'none',
             border: 'none',

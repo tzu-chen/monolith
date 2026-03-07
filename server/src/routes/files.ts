@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import multer from 'multer';
 
 export function createFilesRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
@@ -10,6 +11,38 @@ export function createFilesRouter(getProjectRoot: () => string | null): Router {
     if (!filePath.startsWith(projectRoot)) return null;
     return filePath;
   }
+
+  // File upload via multipart form data
+  const upload = multer({ storage: multer.memoryStorage() });
+
+  router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
+
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: 'No file provided' });
+        return;
+      }
+
+      const targetDir = req.body.directory || '';
+      const fileName = file.originalname;
+      const relPath = targetDir ? `${targetDir}/${fileName}` : fileName;
+
+      const filePath = safePath(relPath, projectRoot);
+      if (!filePath) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, file.buffer);
+      res.status(201).json({ path: relPath, created: true });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to upload file: ${err}` });
+    }
+  });
 
   // Create directory
   router.post('/mkdir', async (req: Request, res: Response) => {
