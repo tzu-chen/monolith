@@ -40,15 +40,15 @@ export default function App() {
         const files = await api.listFiles();
         store.setFileTree(files);
 
-        // Open main.tex as the default file
-        const content = await api.readFile('main.tex');
-        store.openFile('main.tex', content);
+        // Open main.tex as the default file if it exists
+        try {
+          const content = await api.readFile('main.tex');
+          store.openFile('main.tex', content);
+        } catch {
+          // main.tex doesn't exist — no file opened by default
+        }
       } catch (err) {
         console.error('Failed to initialize:', err);
-        // Open with default content if main.tex doesn't exist
-        const defaultContent =
-          '\\documentclass[12pt]{article}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\n\\title{My Document}\n\\author{Author}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nStart writing here.\n\n\\end{document}\n';
-        useEditorStore.getState().openFile('main.tex', defaultContent);
       }
     };
     init();

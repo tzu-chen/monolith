@@ -5,23 +5,6 @@ import { getProjectsRoot, getCurrent, switchProject, renameProject, deleteProjec
 
 const VALID_NAME = /^[a-zA-Z0-9_-]+$/;
 
-const DEFAULT_MAIN_TEX = `\\documentclass[12pt]{article}
-\\usepackage{amsmath, amssymb, amsthm}
-\\usepackage{graphicx}
-
-\\title{My Document}
-\\author{Author}
-\\date{\\today}
-
-\\begin{document}
-\\maketitle
-
-\\section{Introduction}
-Start writing here.
-
-\\end{document}
-`;
-
 export function createProjectsRouter(): Router {
   const router = Router();
 
@@ -66,7 +49,6 @@ export function createProjectsRouter(): Router {
         // Does not exist — proceed
       }
       await fs.mkdir(projectDir, { recursive: true });
-      await fs.writeFile(path.join(projectDir, 'main.tex'), DEFAULT_MAIN_TEX, 'utf-8');
       res.status(201).json({ name, created: true });
     } catch (err) {
       res.status(500).json({ error: `Failed to create project: ${err}` });
