@@ -3,11 +3,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import { compileTex } from '../services/tectonic.js';
 
-export function createCompileRouter(getProjectRoot: () => string): Router {
+export function createCompileRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
 
   router.post('/', async (req: Request, res: Response) => {
     const projectRoot = getProjectRoot();
+    if (!projectRoot) {
+      res.status(400).json({ success: false, log: '', errors: ['No project selected'], warnings: [] });
+      return;
+    }
     const { mainFile = 'main.tex', content } = req.body;
 
     try {

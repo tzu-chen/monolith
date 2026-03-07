@@ -250,6 +250,7 @@ function NewFileInput({
 
 export default function FileTree() {
   const fileTree = useEditorStore((s) => s.fileTree);
+  const projectRoot = useEditorStore((s) => s.projectRoot);
   const [currentDir, setCurrentDir] = useState('');
   const [creatingFile, setCreatingFile] = useState(false);
 
@@ -319,6 +320,24 @@ export default function FileTree() {
           +
         </button>
       </div>
+
+      {/* Project path */}
+      {projectRoot && (
+        <div
+          style={{
+            padding: '0 12px 4px',
+            fontSize: 10,
+            color: 'var(--text-dim)',
+            fontFamily: "'Source Code Pro', monospace",
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={projectRoot}
+        >
+          {projectRoot}
+        </div>
+      )}
 
       {/* Current directory breadcrumb bar */}
       {currentDir && (

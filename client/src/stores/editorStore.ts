@@ -11,6 +11,7 @@ export interface FileTab {
 interface EditorState {
   // Project state
   currentProject: string | null;
+  projectRoot: string | null;
   projects: string[];
 
   // Multi-file tab state
@@ -35,7 +36,8 @@ interface EditorState {
   scrollToLine: number | null;
 
   // Project actions
-  setCurrentProject: (name: string) => void;
+  setCurrentProject: (name: string | null) => void;
+  setProjectRoot: (path: string | null) => void;
   setProjects: (projects: string[]) => void;
   resetEditorState: () => void;
 
@@ -81,6 +83,7 @@ interface EditorState {
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
+  projectRoot: null,
   projects: [],
   openTabs: [],
   activeTabPath: null,
@@ -100,6 +103,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   dirty: false,
 
   setCurrentProject: (name) => set({ currentProject: name }),
+  setProjectRoot: (path) => set({ projectRoot: path }),
   setProjects: (projects) => set({ projects }),
   resetEditorState: () =>
     set({
@@ -116,6 +120,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       filePath: 'main.tex',
       dirty: false,
       scrollToLine: null,
+      projectRoot: null,
     }),
 
   openFile: (path, content) => {

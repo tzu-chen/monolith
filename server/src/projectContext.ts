@@ -2,8 +2,8 @@ import path from 'path';
 import fs from 'fs';
 
 export interface ProjectContext {
-  projectName: string;
-  projectRoot: string;
+  projectName: string | null;
+  projectRoot: string | null;
 }
 
 type SwitchListener = (ctx: ProjectContext) => void;
@@ -12,12 +12,16 @@ let projectsRoot: string;
 let current: ProjectContext;
 const listeners: SwitchListener[] = [];
 
-export function initProjectContext(root: string, defaultProject: string): void {
+export function initProjectContext(root: string, defaultProject: string | null): void {
   projectsRoot = root;
-  current = {
-    projectName: defaultProject,
-    projectRoot: path.join(root, defaultProject),
-  };
+  if (defaultProject) {
+    current = {
+      projectName: defaultProject,
+      projectRoot: path.join(root, defaultProject),
+    };
+  } else {
+    current = { projectName: null, projectRoot: null };
+  }
 }
 
 export function getProjectsRoot(): string {

@@ -17,12 +17,16 @@ export default function App() {
         const store = useEditorStore.getState();
 
         // Fetch project list and current project
-        const [projects, currentProject] = await Promise.all([
+        const [projects, currentInfo] = await Promise.all([
           api.listProjects(),
           api.getCurrentProject(),
         ]);
         store.setProjects(projects);
-        store.setCurrentProject(currentProject);
+        store.setCurrentProject(currentInfo.project ?? '');
+        store.setProjectRoot(currentInfo.projectRoot);
+
+        // Only load files if a project is selected
+        if (!currentInfo.project) return;
 
         // Fetch file tree
         const files = await api.listFiles();

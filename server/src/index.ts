@@ -12,38 +12,19 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const PROJECTS_ROOT = path.resolve(process.env.PROJECTS_ROOT || path.join(import.meta.dirname, '../../projects'));
 const CLIENT_DIST = path.resolve(import.meta.dirname, '../../client/dist');
-const SAMPLE_PROJECT = path.resolve(import.meta.dirname, '../../sample-project');
 
-// Ensure projects root exists and migrate sample-project if needed
+// Ensure projects root exists
 if (!fs.existsSync(PROJECTS_ROOT)) {
   fs.mkdirSync(PROJECTS_ROOT, { recursive: true });
 }
 
-const sampleDest = path.join(PROJECTS_ROOT, 'sample-project');
-if (fs.existsSync(SAMPLE_PROJECT) && !fs.existsSync(sampleDest)) {
-  fs.cpSync(SAMPLE_PROJECT, sampleDest, { recursive: true });
-}
-
-// Pick default project: first directory in PROJECTS_ROOT
+// Pick default project: first directory in PROJECTS_ROOT (or null if none)
 const projectDirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true })
   .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
   .map((e) => e.name)
   .sort();
 
-const defaultProject = projectDirs.includes('sample-project')
-  ? 'sample-project'
-  : projectDirs[0] || 'sample-project';
-
-// If no projects exist at all, create a default one
-if (projectDirs.length === 0) {
-  const defaultDir = path.join(PROJECTS_ROOT, 'sample-project');
-  fs.mkdirSync(defaultDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(defaultDir, 'main.tex'),
-    '\\documentclass[12pt]{article}\n\\usepackage{amsmath, amssymb, amsthm}\n\\usepackage{graphicx}\n\n\\title{My Document}\n\\author{Author}\n\\date{\\today}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nStart writing here.\n\n\\end{document}\n',
-    'utf-8'
-  );
-}
+const defaultProject = projectDirs[0] || null;
 
 initProjectContext(PROJECTS_ROOT, defaultProject);
 
@@ -72,7 +53,7 @@ if (fs.existsSync(CLIENT_DIST)) {
 const server = app.listen(PORT, () => {
   console.log(`[texlab] Server listening on http://localhost:${PORT}`);
   console.log(`[texlab] Projects root: ${PROJECTS_ROOT}`);
-  console.log(`[texlab] Active project: ${getCurrent().projectName}`);
+  console.log(`[texlab] Active project: ${getCurrent().projectName ?? '(none)'}`);
   if (fs.existsSync(CLIENT_DIST)) {
     console.log(`[texlab] Serving client from ${CLIENT_DIST}`);
   }

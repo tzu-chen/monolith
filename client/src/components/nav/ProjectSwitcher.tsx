@@ -39,10 +39,11 @@ export default function ProjectSwitcher() {
       return;
     }
     try {
-      await api.switchProject(name);
+      const { projectRoot } = await api.switchProject(name);
       const store = useEditorStore.getState();
       store.resetEditorState();
       store.setCurrentProject(name);
+      store.setProjectRoot(projectRoot);
 
       const files = await api.listFiles();
       store.setFileTree(files);
