@@ -41,8 +41,8 @@ export function createProjectsRouter(): Router {
 
   // Get current project
   router.get('/current', (_req: Request, res: Response) => {
-    const { projectName } = getCurrent();
-    res.json({ project: projectName });
+    const { projectName, projectRoot } = getCurrent();
+    res.json({ project: projectName, projectRoot });
   });
 
   // Create a new project

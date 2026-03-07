@@ -17,18 +17,21 @@ export function setupWebSocket(server: Server): void {
     });
   };
 
-  function startWatcher(projectRoot: string) {
+  function startWatcher(projectRoot: string | null) {
     if (watcher) watcher.close();
-    watcher = createWatcher(projectRoot, broadcast);
+    watcher = null;
+    if (projectRoot) {
+      watcher = createWatcher(projectRoot, broadcast);
+    }
   }
 
-  // Start watching the current project
+  // Start watching the current project (may be null)
   startWatcher(getCurrent().projectRoot);
 
   // Re-start watcher when project switches
   onSwitch((ctx) => {
     startWatcher(ctx.projectRoot);
-    broadcast({ type: 'project_switched', project: ctx.projectName });
+    broadcast({ type: 'project_switched', project: ctx.projectName ?? '' });
   });
 
   wss.on('connection', (ws) => {

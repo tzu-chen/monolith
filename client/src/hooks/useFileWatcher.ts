@@ -41,11 +41,13 @@ export function useFileWatcher() {
             store.resetEditorState();
             store.setCurrentProject(msg.project);
 
-            const [projects, files] = await Promise.all([
+            const [projects, currentInfo, files] = await Promise.all([
               api.listProjects(),
+              api.getCurrentProject(),
               api.listFiles(),
             ]);
             store.setProjects(projects);
+            store.setProjectRoot(currentInfo.projectRoot);
             store.setFileTree(files);
 
             try {

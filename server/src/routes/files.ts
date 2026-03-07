@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 
-export function createFilesRouter(getProjectRoot: () => string): Router {
+export function createFilesRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
 
   function safePath(relPath: string, projectRoot: string): string | null {
@@ -15,6 +15,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.post('/rename', async (req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
       const { from, to } = req.body;
       if (!from || !to) {
         res.status(400).json({ error: 'Body must include "from" and "to" paths' });
@@ -38,6 +39,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.get('/', async (_req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.json({ root: null, files: [] }); return; }
       const files = await listFiles(projectRoot, projectRoot);
       res.json({ root: projectRoot, files });
     } catch (err) {
@@ -49,6 +51,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.get('/*', async (req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
@@ -74,6 +77,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.post('/*', async (req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
@@ -104,6 +108,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.put('/*', async (req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
@@ -131,6 +136,7 @@ export function createFilesRouter(getProjectRoot: () => string): Router {
   router.delete('/*', async (req: Request, res: Response) => {
     try {
       const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });

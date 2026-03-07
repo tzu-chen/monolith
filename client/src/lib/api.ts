@@ -68,13 +68,13 @@ export async function listProjects(): Promise<string[]> {
   return data.projects;
 }
 
-export async function getCurrentProject(): Promise<string> {
+export async function getCurrentProject(): Promise<{ project: string | null; projectRoot: string | null }> {
   const res = await fetch('/api/projects/current');
   if (!res.ok) {
     throw new Error(`Failed to get current project: ${res.statusText}`);
   }
   const data = await res.json();
-  return data.project;
+  return { project: data.project, projectRoot: data.projectRoot };
 }
 
 export async function createProject(name: string): Promise<void> {
@@ -89,7 +89,7 @@ export async function createProject(name: string): Promise<void> {
   }
 }
 
-export async function switchProject(name: string): Promise<void> {
+export async function switchProject(name: string): Promise<{ projectRoot: string }> {
   const res = await fetch('/api/projects/current', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -98,6 +98,8 @@ export async function switchProject(name: string): Promise<void> {
   if (!res.ok) {
     throw new Error(`Failed to switch project: ${res.statusText}`);
   }
+  const data = await res.json();
+  return { projectRoot: data.projectRoot };
 }
 
 export interface CompileResponse {
