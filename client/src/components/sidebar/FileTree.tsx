@@ -44,19 +44,15 @@ function buildTree(files: string[]): TreeNode[] {
   return root;
 }
 
-function getSubtree(tree: TreeNode[], currentDir: string): TreeNode[] {
-  if (!currentDir) return tree;
-  const parts = currentDir.split('/').filter(Boolean);
-  let nodes = tree;
-  for (const part of parts) {
-    const found = nodes.find((n) => n.isDir && n.name === part);
-    if (found) {
-      nodes = found.children;
-    } else {
-      return [];
+function findNode(tree: TreeNode[], path: string): TreeNode | null {
+  for (const node of tree) {
+    if (node.path === path) return node;
+    if (node.isDir) {
+      const found = findNode(node.children, path);
+      if (found) return found;
     }
   }
-  return nodes;
+  return null;
 }
 
 function FileIcon({ isDir, isOpen }: { isDir: boolean; isOpen?: boolean }) {
@@ -92,6 +88,7 @@ function TreeItem({
   onNavigateInto: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [hovered, setHovered] = useState(false);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const openFile = useEditorStore((s) => s.openFile);
   const isActive = node.path === activeTabPath;
@@ -101,7 +98,6 @@ function TreeItem({
       setExpanded((e) => !e);
       return;
     }
-    // Check if file is already open
     const state = useEditorStore.getState();
     const existing = state.openTabs.find((t) => t.path === node.path);
     if (existing) {
@@ -116,17 +112,18 @@ function TreeItem({
     }
   }, [node.path, node.isDir, openFile]);
 
-  const handleDoubleClick = useCallback(() => {
-    if (node.isDir) {
-      onNavigateInto(node.path);
-    }
-  }, [node.isDir, node.path, onNavigateInto]);
-
   return (
     <>
       <div
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
+        onMouseEnter={(e) => {
+          setHovered(true);
+          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+        }}
+        onMouseLeave={(e) => {
+          setHovered(false);
+          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -141,17 +138,36 @@ function TreeItem({
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
+          position: 'relative',
         }}
-        onMouseEnter={(e) => {
-          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
-        }}
-        title={node.isDir ? `Double-click to navigate into ${node.path}` : node.path}
+        title={node.path}
       >
         <FileIcon isDir={node.isDir} isOpen={expanded} />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{node.name}</span>
+        {node.isDir && hovered && (
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateInto(node.path);
+            }}
+            title="Open folder"
+            style={{
+              fontSize: 11,
+              color: 'var(--text-dim)',
+              flexShrink: 0,
+              padding: '0 2px',
+              lineHeight: 1,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)';
+            }}
+          >
+            →
+          </span>
+        )}
       </div>
       {node.isDir && expanded && node.children.map((child) => (
         <TreeItem key={child.path} node={child} depth={depth + 1} onNavigateInto={onNavigateInto} />
@@ -183,10 +199,8 @@ function NewFileInput({
     const fullPath = currentDir ? `${currentDir}/${name}` : name;
     try {
       await api.createFile(fullPath);
-      // Refresh file tree
       const files = await api.listFiles();
       useEditorStore.getState().setFileTree(files);
-      // Open the new file
       const content = await api.readFile(fullPath);
       useEditorStore.getState().openFile(fullPath, content);
     } catch (err) {
@@ -240,13 +254,21 @@ export default function FileTree() {
   const [creatingFile, setCreatingFile] = useState(false);
 
   const tree = buildTree(fileTree);
-  const visibleNodes = getSubtree(tree, currentDir);
+
+  // Get visible nodes for the current directory
+  let visibleNodes: TreeNode[];
+  if (!currentDir) {
+    visibleNodes = tree;
+  } else {
+    const dirNode = findNode(tree, currentDir);
+    visibleNodes = dirNode ? dirNode.children : tree;
+  }
 
   const handleNavigateUp = useCallback(() => {
     setCurrentDir((dir) => {
-      const parts = dir.split('/').filter(Boolean);
-      parts.pop();
-      return parts.join('/');
+      if (!dir) return '';
+      const lastSlash = dir.lastIndexOf('/');
+      return lastSlash === -1 ? '' : dir.substring(0, lastSlash);
     });
   }, []);
 
@@ -254,8 +276,12 @@ export default function FileTree() {
     setCurrentDir(path);
   }, []);
 
+  // Build breadcrumb segments from currentDir
+  const breadcrumbs = currentDir ? currentDir.split('/') : [];
+
   return (
     <div style={{ flex: 1, overflow: 'auto' }}>
+      {/* Header */}
       <div
         style={{
           padding: '8px 12px 4px',
@@ -293,6 +319,71 @@ export default function FileTree() {
           +
         </button>
       </div>
+
+      {/* Current directory breadcrumb bar */}
+      {currentDir && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            padding: '3px 8px',
+            fontSize: 11,
+            color: 'var(--text-secondary)',
+            borderBottom: '1px solid var(--border)',
+            marginBottom: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span
+            onClick={() => setCurrentDir('')}
+            style={{
+              cursor: 'pointer',
+              color: 'var(--accent-light)',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.textDecoration = 'none';
+            }}
+            title="Go to root"
+          >
+            ~
+          </span>
+          {breadcrumbs.map((segment, i) => {
+            const segmentPath = breadcrumbs.slice(0, i + 1).join('/');
+            const isLast = i === breadcrumbs.length - 1;
+            return (
+              <span key={segmentPath} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <span style={{ color: 'var(--text-dim)' }}>/</span>
+                {isLast ? (
+                  <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{segment}</span>
+                ) : (
+                  <span
+                    onClick={() => setCurrentDir(segmentPath)}
+                    style={{
+                      cursor: 'pointer',
+                      color: 'var(--accent-light)',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.textDecoration = 'none';
+                    }}
+                    title={`Go to ${segmentPath}`}
+                  >
+                    {segment}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Go up row */}
       {currentDir && (
         <div
           onClick={handleNavigateUp}
@@ -315,12 +406,16 @@ export default function FileTree() {
           title="Go up one level"
         >
           <span style={{ fontSize: 12, width: 16, textAlign: 'center', flexShrink: 0 }}>↑</span>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>../{currentDir.split('/').pop()}</span>
+          <span>..</span>
         </div>
       )}
+
+      {/* New file input */}
       {creatingFile && (
         <NewFileInput currentDir={currentDir} onDone={() => setCreatingFile(false)} />
       )}
+
+      {/* File tree items */}
       {visibleNodes.map((node) => (
         <TreeItem key={node.path} node={node} depth={0} onNavigateInto={handleNavigateInto} />
       ))}
