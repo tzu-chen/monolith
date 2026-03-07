@@ -1,4 +1,5 @@
 import { useEditorStore } from '../../stores/editorStore';
+import ProjectSwitcher from './ProjectSwitcher';
 
 interface TopBarProps {
   onCompile: () => void;
@@ -52,6 +53,9 @@ export default function TopBar({ onCompile }: TopBarProps) {
         </div>
         TeXLab
       </div>
+
+      {/* Project Switcher */}
+      <ProjectSwitcher />
 
       {/* Nav */}
       <div style={{ display: 'flex', gap: 2 }}>

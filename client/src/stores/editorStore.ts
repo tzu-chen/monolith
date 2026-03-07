@@ -9,6 +9,10 @@ export interface FileTab {
 }
 
 interface EditorState {
+  // Project state
+  currentProject: string | null;
+  projects: string[];
+
   // Multi-file tab state
   openTabs: FileTab[];
   activeTabPath: string | null;
@@ -29,6 +33,11 @@ interface EditorState {
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
+
+  // Project actions
+  setCurrentProject: (name: string) => void;
+  setProjects: (projects: string[]) => void;
+  resetEditorState: () => void;
 
   // Tab actions
   openFile: (path: string, content: string) => void;
@@ -71,6 +80,8 @@ interface EditorState {
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
+  currentProject: null,
+  projects: [],
   openTabs: [],
   activeTabPath: null,
   fileTree: [],
@@ -87,6 +98,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   content: '',
   filePath: 'main.tex',
   dirty: false,
+
+  setCurrentProject: (name) => set({ currentProject: name }),
+  setProjects: (projects) => set({ projects }),
+  resetEditorState: () =>
+    set({
+      openTabs: [],
+      activeTabPath: null,
+      fileTree: [],
+      pdfData: null,
+      compilationStatus: 'idle',
+      log: '',
+      errors: [],
+      warnings: [],
+      lastCompileTime: null,
+      content: '',
+      filePath: 'main.tex',
+      dirty: false,
+      scrollToLine: null,
+    }),
 
   openFile: (path, content) => {
     const state = get();

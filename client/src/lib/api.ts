@@ -58,6 +58,48 @@ export async function renameFile(from: string, to: string): Promise<void> {
   }
 }
 
+// Project management
+export async function listProjects(): Promise<string[]> {
+  const res = await fetch('/api/projects');
+  if (!res.ok) {
+    throw new Error(`Failed to list projects: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.projects;
+}
+
+export async function getCurrentProject(): Promise<string> {
+  const res = await fetch('/api/projects/current');
+  if (!res.ok) {
+    throw new Error(`Failed to get current project: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.project;
+}
+
+export async function createProject(name: string): Promise<void> {
+  const res = await fetch('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to create project: ${res.statusText}`);
+  }
+}
+
+export async function switchProject(name: string): Promise<void> {
+  const res = await fetch('/api/projects/current', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to switch project: ${res.statusText}`);
+  }
+}
+
 export interface CompileResponse {
   success: boolean;
   pdf?: string;

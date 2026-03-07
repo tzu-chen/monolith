@@ -10,17 +10,27 @@ import * as api from '../lib/api';
 export default function App() {
   const { doCompile } = useCompilation();
 
-  // Load file tree and open main.tex on mount
+  // Load projects, file tree, and open main.tex on mount
   useEffect(() => {
     const init = async () => {
       try {
+        const store = useEditorStore.getState();
+
+        // Fetch project list and current project
+        const [projects, currentProject] = await Promise.all([
+          api.listProjects(),
+          api.getCurrentProject(),
+        ]);
+        store.setProjects(projects);
+        store.setCurrentProject(currentProject);
+
         // Fetch file tree
         const files = await api.listFiles();
-        useEditorStore.getState().setFileTree(files);
+        store.setFileTree(files);
 
         // Open main.tex as the default file
         const content = await api.readFile('main.tex');
-        useEditorStore.getState().openFile('main.tex', content);
+        store.openFile('main.tex', content);
       } catch (err) {
         console.error('Failed to initialize:', err);
         // Open with default content if main.tex doesn't exist

@@ -8,6 +8,11 @@ interface FileChangeMessage {
   path: string;
 }
 
+interface ProjectSwitchedMessage {
+  type: 'project_switched';
+  project: string;
+}
+
 export function useFileWatcher() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,7 +33,30 @@ export function useFileWatcher() {
 
       ws.onmessage = async (event) => {
         try {
-          const msg: FileChangeMessage = JSON.parse(event.data);
+          const msg: FileChangeMessage | ProjectSwitchedMessage = JSON.parse(event.data);
+
+          // Handle project switch (from another client/tab)
+          if (msg.type === 'project_switched') {
+            const store = useEditorStore.getState();
+            store.resetEditorState();
+            store.setCurrentProject(msg.project);
+
+            const [projects, files] = await Promise.all([
+              api.listProjects(),
+              api.listFiles(),
+            ]);
+            store.setProjects(projects);
+            store.setFileTree(files);
+
+            try {
+              const content = await api.readFile('main.tex');
+              store.openFile('main.tex', content);
+            } catch {
+              // No main.tex in this project
+            }
+            return;
+          }
+
           if (msg.type !== 'file_changed') return;
 
           // Refresh file tree on any file system change
