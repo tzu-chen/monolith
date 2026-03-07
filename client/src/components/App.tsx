@@ -1,14 +1,22 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import TopBar from './nav/TopBar';
 import BottomBar from './nav/BottomBar';
 import Layout from './Layout';
 import { useEditorStore } from '../stores/editorStore';
 import { useCompilation } from '../hooks/useCompilation';
+import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
 import * as api from '../lib/api';
 
 export default function App() {
   const { doCompile } = useCompilation();
+  const { saveNow } = useAutosave();
+
+  // Ctrl+S: save file to disk then compile
+  const handleSave = useCallback(async () => {
+    await saveNow();
+    doCompile();
+  }, [saveNow, doCompile]);
 
   // Load projects, file tree, and open main.tex on mount
   useEffect(() => {
@@ -52,7 +60,7 @@ export default function App() {
   return (
     <>
       <TopBar onCompile={doCompile} />
-      <Layout onSave={doCompile} />
+      <Layout onSave={handleSave} onManualSave={saveNow} />
       <BottomBar />
     </>
   );
