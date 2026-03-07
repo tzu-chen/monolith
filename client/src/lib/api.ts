@@ -100,6 +100,30 @@ export async function createProject(name: string): Promise<void> {
   }
 }
 
+export async function renameProject(oldName: string, newName: string): Promise<{ project: string; projectRoot: string }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(oldName)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to rename project: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteProject(name: string): Promise<{ deleted: true; switchedTo: string | null }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to delete project: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function switchProject(name: string): Promise<{ projectRoot: string }> {
   const res = await fetch('/api/projects/current', {
     method: 'PUT',
