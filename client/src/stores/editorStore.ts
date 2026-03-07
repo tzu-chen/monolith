@@ -21,7 +21,7 @@ interface EditorState {
   // File tree
   fileTree: string[];
 
-  // Compilation state (global — always compiles main.tex)
+  // Compilation state
   compilationStatus: CompilationStatus;
   pdfData: string | null;
   log: string;

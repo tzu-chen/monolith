@@ -19,14 +19,24 @@ export function useCompilation() {
     setCompilationStatus('compiling');
 
     try {
-      // Always compile with main.tex as the entry point
-      // But send the current content to save it first
+      // Compile the currently active .tex file
       const state = useEditorStore.getState();
-      const mainTab = state.openTabs.find((t) => t.path === 'main.tex');
-      const compileContent = mainTab ? mainTab.content : state.content;
+      const activeFile = state.activeTabPath;
+      if (!activeFile || !activeFile.endsWith('.tex')) {
+        setCompileResult({
+          success: false,
+          log: '',
+          errors: ['No .tex file is currently open'],
+          warnings: [],
+          elapsed: 0,
+        });
+        return;
+      }
+      const activeTab = state.openTabs.find((t) => t.path === activeFile);
+      const compileContent = activeTab ? activeTab.content : state.content;
 
       const startTime = Date.now();
-      const result = await api.compile('main.tex', compileContent);
+      const result = await api.compile(activeFile, compileContent);
       const elapsed = Date.now() - startTime;
       setCompileResult({ ...result, elapsed });
     } catch (err) {
