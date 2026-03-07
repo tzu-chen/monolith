@@ -2,10 +2,10 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 
-export function createFilesRouter(projectRoot: string): Router {
+export function createFilesRouter(getProjectRoot: () => string): Router {
   const router = Router();
 
-  function safePath(relPath: string): string | null {
+  function safePath(relPath: string, projectRoot: string): string | null {
     const filePath = path.join(projectRoot, relPath);
     if (!filePath.startsWith(projectRoot)) return null;
     return filePath;
@@ -14,13 +14,14 @@ export function createFilesRouter(projectRoot: string): Router {
   // Rename / move file
   router.post('/rename', async (req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const { from, to } = req.body;
       if (!from || !to) {
         res.status(400).json({ error: 'Body must include "from" and "to" paths' });
         return;
       }
-      const fromPath = safePath(from);
-      const toPath = safePath(to);
+      const fromPath = safePath(from, projectRoot);
+      const toPath = safePath(to, projectRoot);
       if (!fromPath || !toPath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
@@ -36,6 +37,7 @@ export function createFilesRouter(projectRoot: string): Router {
   // List files in project
   router.get('/', async (_req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const files = await listFiles(projectRoot, projectRoot);
       res.json({ root: projectRoot, files });
     } catch (err) {
@@ -46,12 +48,13 @@ export function createFilesRouter(projectRoot: string): Router {
   // Read file content
   router.get('/*', async (req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = safePath(relPath);
+      const filePath = safePath(relPath, projectRoot);
       if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
@@ -70,12 +73,13 @@ export function createFilesRouter(projectRoot: string): Router {
   // Create file
   router.post('/*', async (req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = safePath(relPath);
+      const filePath = safePath(relPath, projectRoot);
       if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
@@ -99,12 +103,13 @@ export function createFilesRouter(projectRoot: string): Router {
   // Write file content
   router.put('/*', async (req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = safePath(relPath);
+      const filePath = safePath(relPath, projectRoot);
       if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;
@@ -125,12 +130,13 @@ export function createFilesRouter(projectRoot: string): Router {
   // Delete file
   router.delete('/*', async (req: Request, res: Response) => {
     try {
+      const projectRoot = getProjectRoot();
       const relPath = req.params[0];
       if (!relPath) {
         res.status(400).json({ error: 'No file path specified' });
         return;
       }
-      const filePath = safePath(relPath);
+      const filePath = safePath(relPath, projectRoot);
       if (!filePath) {
         res.status(403).json({ error: 'Path traversal not allowed' });
         return;

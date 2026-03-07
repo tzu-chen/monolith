@@ -3,10 +3,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import { compileTex } from '../services/tectonic.js';
 
-export function createCompileRouter(projectRoot: string): Router {
+export function createCompileRouter(getProjectRoot: () => string): Router {
   const router = Router();
 
   router.post('/', async (req: Request, res: Response) => {
+    const projectRoot = getProjectRoot();
     const { mainFile = 'main.tex', content } = req.body;
 
     try {
