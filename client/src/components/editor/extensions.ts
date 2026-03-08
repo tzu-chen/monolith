@@ -6,6 +6,8 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { Extension } from '@codemirror/state';
 import { latexLanguage } from './latex-lang';
 import { lightEditorTheme, lightHighlightStyle } from '../../themes/light';
+import { autoCloseEnv } from './auto-close-env';
+import { latexSnippetCompletion } from './snippet-completion';
 
 export function createExtensions(): Extension[] {
   return [
@@ -20,6 +22,9 @@ export function createExtensions(): Extension[] {
     latexLanguage,
     lightEditorTheme,
     lightHighlightStyle,
+    latexSnippetCompletion,
+    // autoCloseEnv must come before defaultKeymap so it handles Enter first
+    autoCloseEnv,
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,

@@ -62,6 +62,33 @@ export const lightEditorTheme = EditorView.theme({
     border: '1px solid #e2ddd3',
     color: '#9e9588',
   },
+  '.cm-tooltip': {
+    border: '1px solid #e2ddd3',
+    backgroundColor: '#fffef9',
+    boxShadow: '0 2px 8px rgba(44, 40, 32, 0.12)',
+  },
+  '.cm-tooltip-autocomplete > ul': {
+    fontFamily: "'Source Code Pro', monospace",
+    fontSize: '12px',
+  },
+  '.cm-tooltip-autocomplete > ul > li': {
+    padding: '3px 8px',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'rgba(139, 94, 60, 0.12)',
+    color: '#2c2820',
+  },
+  '.cm-completionLabel': {
+    color: '#2c2820',
+  },
+  '.cm-completionDetail': {
+    color: '#9e9588',
+    fontStyle: 'italic',
+    marginLeft: '8px',
+  },
+  '.cm-snippetFieldPosition': {
+    border: '1px solid #8b5e3c',
+  },
 });
 
 export const lightHighlightStyle = syntaxHighlighting(
