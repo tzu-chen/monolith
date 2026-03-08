@@ -96,15 +96,12 @@ export function createLightEditorTheme(font: FontSettings) {
   '.cm-snippetFieldPosition': {
     border: '1px solid #8b5e3c',
   },
-  '.cm-math-preview': {
-    zIndex: '10',
-    pointerEvents: 'none',
-    backgroundColor: 'rgba(255, 254, 249, 0.95)',
-    backdropFilter: 'blur(4px)',
+  '.cm-tooltip.cm-math-preview': {
+    backgroundColor: '#fffef9',
     border: '1px solid #e2ddd3',
     borderRadius: '6px',
     padding: '8px 14px',
-    maxWidth: 'calc(100% - 80px)',
+    maxWidth: '600px',
     overflowX: 'auto',
     color: '#2c2820',
     fontSize: '15px',

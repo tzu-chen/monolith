@@ -1,5 +1,5 @@
-import { EditorState } from '@codemirror/state';
-import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
+import { StateField, EditorState } from '@codemirror/state';
+import { showTooltip, Tooltip, EditorView, ViewUpdate } from '@codemirror/view';
 import katex from 'katex';
 
 interface MathMatch {
@@ -36,7 +36,6 @@ function extractMathFromLine(lineText: string): MathMatch[] {
       let end = -1;
       for (let j = start; j < lineText.length; j++) {
         if (lineText[j] === '$' && lineText[j - 1] !== '\\') {
-          // Make sure it's not a $$ (display math opening)
           if (j + 1 < lineText.length && lineText[j + 1] === '$') continue;
           end = j;
           break;
@@ -66,7 +65,6 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
   const doc = state.doc;
   const totalLines = doc.lines;
 
-  // Search upward from cursor line for an opening $$
   let openLine = -1;
   let closeLine = -1;
 
@@ -113,13 +111,18 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
   return { math: content, displayMode: true, lineFrom: openLine };
 }
 
-function getMathForCursor(state: EditorState): { matches: MathMatch[]; anchorLineFrom: number } | null {
+interface MathResult {
+  matches: MathMatch[];
+  anchorPos: number;
+}
+
+function getMathForCursor(state: EditorState): MathResult | null {
   const cursor = state.selection.main.head;
   const cursorLine = state.doc.lineAt(cursor);
 
   const singleLineMatches = extractMathFromLine(cursorLine.text);
   if (singleLineMatches.length > 0) {
-    return { matches: singleLineMatches, anchorLineFrom: cursorLine.from };
+    return { matches: singleLineMatches, anchorPos: cursorLine.from };
   }
 
   const multiLine = extractMultiLineMath(state, cursorLine.number);
@@ -127,90 +130,79 @@ function getMathForCursor(state: EditorState): { matches: MathMatch[]; anchorLin
     const targetLine = state.doc.line(multiLine.lineFrom);
     return {
       matches: [{ math: multiLine.math, displayMode: multiLine.displayMode }],
-      anchorLineFrom: targetLine.from,
+      anchorPos: targetLine.from,
     };
   }
 
   return null;
 }
 
-class MathPreviewPlugin {
-  private container: HTMLDivElement;
-  private lastMathKey = '';
-
-  constructor(private view: EditorView) {
-    this.container = document.createElement('div');
-    this.container.className = 'cm-math-preview';
-    this.container.style.display = 'none';
-    this.container.style.position = 'absolute';
-    view.dom.style.position = 'relative';
-    view.dom.appendChild(this.container);
-    this.reposition();
-  }
-
-  update(update: ViewUpdate) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
-      this.reposition();
+function renderMath(container: HTMLElement, matches: MathMatch[]) {
+  container.innerHTML = '';
+  for (const expr of matches) {
+    const wrapper = document.createElement('div');
+    wrapper.className = expr.displayMode ? 'cm-math-preview-display' : 'cm-math-preview-inline';
+    try {
+      katex.render(expr.math, wrapper, {
+        throwOnError: false,
+        displayMode: expr.displayMode,
+        output: 'html',
+      });
+    } catch {
+      wrapper.textContent = expr.math;
     }
-  }
-
-  private reposition() {
-    const result = getMathForCursor(this.view.state);
-
-    if (!result) {
-      this.container.style.display = 'none';
-      this.lastMathKey = '';
-      return;
-    }
-
-    // Build a key from math content to avoid re-rendering KaTeX when unchanged
-    const mathKey = result.matches.map(m => `${m.displayMode}:${m.math}`).join('|');
-
-    if (mathKey !== this.lastMathKey) {
-      this.lastMathKey = mathKey;
-      this.container.innerHTML = '';
-
-      for (const expr of result.matches) {
-        const wrapper = document.createElement('div');
-        wrapper.className = expr.displayMode ? 'cm-math-preview-display' : 'cm-math-preview-inline';
-        try {
-          katex.render(expr.math, wrapper, {
-            throwOnError: false,
-            displayMode: expr.displayMode,
-            output: 'html',
-          });
-        } catch {
-          wrapper.textContent = expr.math;
-        }
-        this.container.appendChild(wrapper);
-      }
-    }
-
-    // Position above the anchor line
-    const lineCoords = this.view.coordsAtPos(result.anchorLineFrom);
-    const editorRect = this.view.dom.getBoundingClientRect();
-
-    if (!lineCoords) {
-      this.container.style.display = 'none';
-      return;
-    }
-
-    // Show temporarily to measure height
-    this.container.style.display = '';
-    this.container.style.visibility = 'hidden';
-    const previewHeight = this.container.offsetHeight;
-    this.container.style.visibility = '';
-
-    const top = lineCoords.top - editorRect.top - previewHeight - 4;
-    const left = this.view.defaultCharacterWidth * 2;
-
-    this.container.style.top = `${Math.max(0, top)}px`;
-    this.container.style.left = `${left}px`;
-  }
-
-  destroy() {
-    this.container.remove();
+    container.appendChild(wrapper);
   }
 }
 
-export const mathPreview = ViewPlugin.fromClass(MathPreviewPlugin);
+function mathKey(matches: MathMatch[]): string {
+  return matches.map(m => `${m.displayMode}:${m.math}`).join('|');
+}
+
+const mathTooltipField = StateField.define<MathResult | null>({
+  create(state) {
+    return getMathForCursor(state);
+  },
+  update(value, tr) {
+    if (tr.docChanged || tr.selection) {
+      return getMathForCursor(tr.state);
+    }
+    return value;
+  },
+  provide(field) {
+    return showTooltip.compute([field], (state): Tooltip | null => {
+      const result = state.field(field);
+      if (!result) return null;
+
+      // Capture matches for closure
+      const currentMatches = result.matches;
+
+      return {
+        pos: result.anchorPos,
+        above: true,
+        strictSide: true,
+        create(): { dom: HTMLElement; update: (update: ViewUpdate) => void } {
+          const dom = document.createElement('div');
+          dom.className = 'cm-math-preview';
+          renderMath(dom, currentMatches);
+          let lastKey = mathKey(currentMatches);
+
+          return {
+            dom,
+            update(update: ViewUpdate) {
+              const newResult = update.state.field(field);
+              if (!newResult) return;
+              const newKey = mathKey(newResult.matches);
+              if (newKey !== lastKey) {
+                lastKey = newKey;
+                renderMath(dom, newResult.matches);
+              }
+            },
+          };
+        },
+      };
+    });
+  },
+});
+
+export const mathPreview = mathTooltipField;
