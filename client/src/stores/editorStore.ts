@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import type { EditorView } from '@codemirror/view';
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
+export type ActivePanel = 'symbols' | 'snippets' | null;
 
 export interface FileTab {
   path: string;
@@ -31,6 +33,10 @@ interface EditorState {
 
   // Sidebar visibility
   sidebarVisible: boolean;
+
+  // Panel state (symbols, snippets)
+  activePanel: ActivePanel;
+  editorView: EditorView | null;
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
@@ -66,6 +72,10 @@ interface EditorState {
   // Sidebar
   toggleSidebar: () => void;
 
+  // Panels
+  setActivePanel: (panel: ActivePanel) => void;
+  setEditorView: (view: EditorView | null) => void;
+
   // Outline
   requestScrollToLine: (line: number) => void;
   clearScrollToLine: () => void;
@@ -95,6 +105,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   warnings: [],
   lastCompileTime: null,
   sidebarVisible: true,
+  activePanel: null,
+  editorView: null,
   scrollToLine: null,
 
   // Derived state (computed from active tab)
@@ -219,6 +231,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
+
+  setActivePanel: (activePanel) => set({ activePanel }),
+  setEditorView: (editorView) => set({ editorView }),
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),

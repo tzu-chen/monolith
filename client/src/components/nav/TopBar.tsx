@@ -1,4 +1,5 @@
 import { useEditorStore } from '../../stores/editorStore';
+import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
 
 interface TopBarProps {
@@ -7,6 +8,12 @@ interface TopBarProps {
 
 export default function TopBar({ onCompile }: TopBarProps) {
   const compilationStatus = useEditorStore((s) => s.compilationStatus);
+  const activePanel = useEditorStore((s) => s.activePanel);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
+
+  const togglePanel = (panel: ActivePanel) => {
+    setActivePanel(activePanel === panel ? null : panel);
+  };
 
   return (
     <div
@@ -59,10 +66,9 @@ export default function TopBar({ onCompile }: TopBarProps) {
 
       {/* Nav */}
       <div style={{ display: 'flex', gap: 2 }}>
-        <NavItem label="Editor" active />
-        <NavItem label="Templates" />
-        <NavItem label="Symbols" />
-        <NavItem label="Snippets" />
+        <NavItem label="Editor" active={!activePanel} onClick={() => setActivePanel(null)} />
+        <NavItem label="Symbols" active={activePanel === 'symbols'} onClick={() => togglePanel('symbols')} />
+        <NavItem label="Snippets" active={activePanel === 'snippets'} onClick={() => togglePanel('snippets')} />
       </div>
 
       {/* Right side */}
@@ -109,9 +115,10 @@ export default function TopBar({ onCompile }: TopBarProps) {
   );
 }
 
-function NavItem({ label, active }: { label: string; active?: boolean }) {
+function NavItem({ label, active, onClick }: { label: string; active?: boolean; onClick?: () => void }) {
   return (
     <div
+      onClick={onClick}
       style={{
         fontSize: 12.5,
         color: active ? 'var(--accent)' : 'var(--text-secondary)',

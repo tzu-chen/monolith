@@ -2,6 +2,8 @@ import { useCallback, useEffect } from 'react';
 import TopBar from './nav/TopBar';
 import BottomBar from './nav/BottomBar';
 import Layout from './Layout';
+import SymbolPalette from './panels/SymbolPalette';
+import SnippetPanel from './panels/SnippetPanel';
 import { useEditorStore } from '../stores/editorStore';
 import { useCompilation } from '../hooks/useCompilation';
 import { useAutosave } from '../hooks/useAutosave';
@@ -11,6 +13,7 @@ import * as api from '../lib/api';
 export default function App() {
   const { doCompile } = useCompilation();
   const { saveNow } = useAutosave();
+  const activePanel = useEditorStore((s) => s.activePanel);
 
   // Ctrl+S: save file to disk then compile
   const handleSave = useCallback(async () => {
@@ -60,6 +63,8 @@ export default function App() {
   return (
     <>
       <TopBar onCompile={doCompile} />
+      {activePanel === 'symbols' && <SymbolPalette />}
+      {activePanel === 'snippets' && <SnippetPanel />}
       <Layout onSave={handleSave} onManualSave={saveNow} />
       <BottomBar />
     </>

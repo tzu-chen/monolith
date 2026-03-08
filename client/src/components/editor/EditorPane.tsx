@@ -18,6 +18,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const scrollToLine = useEditorStore((s) => s.scrollToLine);
   const clearScrollToLine = useEditorStore((s) => s.clearScrollToLine);
   const updateContent = useEditorStore((s) => s.updateContent);
+  const setEditorView = useEditorStore((s) => s.setEditorView);
 
   // Stable ref for onSave so we don't recreate the editor on every render
   const onSaveRef = useRef(onSave);
@@ -105,11 +106,13 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       });
       view.dom.dataset.filePath = activeTabPath;
       viewRef.current = view;
+      setEditorView(view);
     } else {
       // Create new editor with content from store
       const view = createView(content, containerRef.current);
       view.dom.dataset.filePath = activeTabPath;
       viewRef.current = view;
+      setEditorView(view);
     }
 
     return () => {
