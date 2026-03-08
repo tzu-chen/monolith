@@ -2,15 +2,22 @@ import { EditorView } from '@codemirror/view';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 
-export const lightEditorTheme = EditorView.theme({
+export interface FontSettings {
+  fontSize: number;
+  fontFamily: string;
+}
+
+export function createLightEditorTheme(font: FontSettings) {
+  const gutterFontSize = `${Math.max(8, font.fontSize - 1.5)}px`;
+  return EditorView.theme({
   '&': {
     backgroundColor: '#ffffff',
     color: '#2c2820',
-    fontSize: '13.5px',
-    fontFamily: "'Source Code Pro', monospace",
+    fontSize: `${font.fontSize}px`,
+    fontFamily: font.fontFamily,
   },
   '.cm-content': {
-    fontFamily: "'Source Code Pro', monospace",
+    fontFamily: font.fontFamily,
     lineHeight: '1.75',
     padding: '16px 0',
     caretColor: '#8b5e3c',
@@ -23,8 +30,8 @@ export const lightEditorTheme = EditorView.theme({
     backgroundColor: '#ffffff',
     color: '#cdc6b8',
     border: 'none',
-    fontFamily: "'Source Code Pro', monospace",
-    fontSize: '12px',
+    fontFamily: font.fontFamily,
+    fontSize: gutterFontSize,
   },
   '.cm-lineNumbers .cm-gutterElement': {
     paddingRight: '18px',
@@ -68,8 +75,8 @@ export const lightEditorTheme = EditorView.theme({
     boxShadow: '0 2px 8px rgba(44, 40, 32, 0.12)',
   },
   '.cm-tooltip-autocomplete > ul': {
-    fontFamily: "'Source Code Pro', monospace",
-    fontSize: '12px',
+    fontFamily: font.fontFamily,
+    fontSize: `${Math.max(8, font.fontSize - 1.5)}px`,
   },
   '.cm-tooltip-autocomplete > ul > li': {
     padding: '3px 8px',
@@ -90,6 +97,7 @@ export const lightEditorTheme = EditorView.theme({
     border: '1px solid #8b5e3c',
   },
 });
+}
 
 export const lightHighlightStyle = syntaxHighlighting(
   HighlightStyle.define([

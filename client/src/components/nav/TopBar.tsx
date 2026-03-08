@@ -16,6 +16,10 @@ export default function TopBar({ onCompile }: TopBarProps) {
   const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
   const viewMode = useEditorStore((s) => s.viewMode);
   const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
+  const fontSize = useEditorStore((s) => s.fontSize);
+  const setFontSize = useEditorStore((s) => s.setFontSize);
+  const fontFamily = useEditorStore((s) => s.fontFamily);
+  const setFontFamily = useEditorStore((s) => s.setFontFamily);
 
   const togglePanel = (panel: ActivePanel) => {
     setActivePanel(activePanel === panel ? null : panel);
@@ -115,6 +119,89 @@ export default function TopBar({ onCompile }: TopBarProps) {
           <span style={{ opacity: viewMode === 'pdf' ? 0.3 : 1 }}>&#9636;</span>
           <span style={{ opacity: viewMode !== 'both' ? 0.3 : 1 }}>|</span>
           <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}>&#9636;</span>
+        </div>
+
+        {/* Font family */}
+        <select
+          value={fontFamily}
+          onChange={(e) => setFontFamily(e.target.value)}
+          title="Editor font family"
+          style={{
+            fontSize: 10,
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-warm)',
+            padding: '2px 4px',
+            borderRadius: 3,
+            border: '1px solid var(--border)',
+            fontFamily: "'Source Code Pro', monospace",
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          <option value="'Source Code Pro', monospace">Source Code Pro</option>
+          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+          <option value="'Fira Code', monospace">Fira Code</option>
+          <option value="'Cascadia Code', monospace">Cascadia Code</option>
+          <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="monospace">System Monospace</option>
+        </select>
+
+        {/* Font size */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            fontSize: 10,
+            color: 'var(--text-secondary)',
+            fontFamily: "'Source Code Pro', monospace",
+          }}
+        >
+          <div
+            onClick={() => setFontSize(fontSize - 0.5)}
+            title="Decrease font size"
+            style={{
+              background: 'var(--bg-warm)',
+              border: '1px solid var(--border)',
+              borderRadius: '3px 0 0 3px',
+              padding: '2px 5px',
+              cursor: 'pointer',
+              userSelect: 'none',
+              fontWeight: 600,
+            }}
+          >
+            −
+          </div>
+          <div
+            style={{
+              background: 'var(--bg-warm)',
+              borderTop: '1px solid var(--border)',
+              borderBottom: '1px solid var(--border)',
+              padding: '2px 4px',
+              minWidth: 28,
+              textAlign: 'center',
+              fontWeight: 600,
+            }}
+            title="Editor font size"
+          >
+            {fontSize}
+          </div>
+          <div
+            onClick={() => setFontSize(fontSize + 0.5)}
+            title="Increase font size"
+            style={{
+              background: 'var(--bg-warm)',
+              border: '1px solid var(--border)',
+              borderRadius: '0 3px 3px 0',
+              padding: '2px 5px',
+              cursor: 'pointer',
+              userSelect: 'none',
+              fontWeight: 600,
+            }}
+          >
+            +
+          </div>
         </div>
 
         {/* Vim toggle */}
