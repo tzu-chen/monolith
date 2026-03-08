@@ -14,6 +14,8 @@ export default function TopBar({ onCompile }: TopBarProps) {
   const toggleTheme = useEditorStore((s) => s.toggleTheme);
   const vimMode = useEditorStore((s) => s.vimMode);
   const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
+  const viewMode = useEditorStore((s) => s.viewMode);
+  const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
 
   const togglePanel = (panel: ActivePanel) => {
     setActivePanel(activePanel === panel ? null : panel);
@@ -84,6 +86,37 @@ export default function TopBar({ onCompile }: TopBarProps) {
           gap: 10,
         }}
       >
+        {/* View toggle */}
+        <div
+          onClick={cycleViewMode}
+          title={
+            viewMode === 'both'
+              ? 'Show editor only'
+              : viewMode === 'editor'
+                ? 'Show PDF only'
+                : 'Show both'
+          }
+          style={{
+            fontSize: 10,
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-warm)',
+            padding: '2px 6px',
+            borderRadius: 3,
+            border: '1px solid var(--border)',
+            fontFamily: "'Source Code Pro', monospace",
+            fontWeight: 600,
+            cursor: 'pointer',
+            userSelect: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3,
+          }}
+        >
+          <span style={{ opacity: viewMode === 'pdf' ? 0.3 : 1 }}>&#9636;</span>
+          <span style={{ opacity: viewMode !== 'both' ? 0.3 : 1 }}>|</span>
+          <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}>&#9636;</span>
+        </div>
+
         {/* Vim toggle */}
         <div
           onClick={toggleVimMode}
