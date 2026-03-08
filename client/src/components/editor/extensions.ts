@@ -11,6 +11,7 @@ import type { FontSettings } from '../../themes/light';
 import { createDarkEditorTheme, darkHighlightStyle } from '../../themes/dark';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
+import { mathPreview } from './math-preview';
 import type { Theme } from '../../stores/editorStore';
 
 export const themeCompartment = new Compartment();
@@ -39,6 +40,7 @@ export function createExtensions(theme: Theme = 'light', vimMode: boolean = fals
     latexLanguage,
     themeCompartment.of(getThemeExtensions(theme, font)),
     latexSnippetCompletion,
+    mathPreview,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
     autoCloseEnv,
     keymap.of([

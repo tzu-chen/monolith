@@ -96,6 +96,21 @@ export function createLightEditorTheme(font: FontSettings) {
   '.cm-snippetFieldPosition': {
     border: '1px solid #8b5e3c',
   },
+  '.cm-math-preview': {
+    backgroundColor: 'rgba(139, 94, 60, 0.04)',
+    border: '1px solid #e2ddd3',
+    borderRadius: '6px',
+    padding: '8px 14px',
+    margin: '2px 0 4px 52px',
+    maxWidth: 'calc(100% - 70px)',
+    overflowX: 'auto',
+    color: '#2c2820',
+    fontSize: '15px',
+    lineHeight: '1.6',
+  },
+  '.cm-math-preview-display': {
+    textAlign: 'center',
+  },
 });
 }
 
