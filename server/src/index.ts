@@ -5,6 +5,7 @@ import fs from 'fs';
 import { createFilesRouter } from './routes/files.js';
 import { createCompileRouter } from './routes/compile.js';
 import { createProjectsRouter } from './routes/projects.js';
+import { createSyncTeXRouter } from './routes/synctex.js';
 import { initProjectContext, getCurrent } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
@@ -35,6 +36,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/api/projects', createProjectsRouter());
 app.use('/api/files', createFilesRouter(() => getCurrent().projectRoot));
 app.use('/api/compile', createCompileRouter(() => getCurrent().projectRoot));
+app.use('/api/synctex', createSyncTeXRouter(() => getCurrent().projectRoot));
 
 app.get('/api/health', (_req, res) => {
   const { projectName, projectRoot } = getCurrent();
