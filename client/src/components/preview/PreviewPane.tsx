@@ -24,6 +24,26 @@ function parseLineNumber(msg: string): number | null {
   return null;
 }
 
+type ZoomOption = '50%' | '75%' | '100%' | '125%' | '150%' | '200%' | 'fit-width';
+
+const ZOOM_LEVELS: { label: string; value: ZoomOption }[] = [
+  { label: '50%', value: '50%' },
+  { label: '75%', value: '75%' },
+  { label: '100%', value: '100%' },
+  { label: '125%', value: '125%' },
+  { label: '150%', value: '150%' },
+  { label: '200%', value: '200%' },
+  { label: 'Fit Width', value: 'fit-width' },
+];
+
+function zoomToScale(zoom: ZoomOption, containerWidth: number, pageWidth: number): number {
+  if (zoom === 'fit-width') {
+    // Leave some padding (40px total) on each side
+    return (containerWidth - 40) / pageWidth;
+  }
+  return parseInt(zoom) / 100;
+}
+
 export default function PreviewPane() {
   const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
     useEditorStore();
@@ -31,6 +51,8 @@ export default function PreviewPane() {
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'log'>('pdf');
+  const [zoomLevel, setZoomLevel] = useState<ZoomOption>('fit-width');
+  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
 
   const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
@@ -62,19 +84,35 @@ export default function PreviewPane() {
     } catch {}
   }, []);
 
+  // Load the PDF document when pdfData changes
   useEffect(() => {
-    if (!pdfData || !containerRef.current || activeTab !== 'pdf') return;
+    if (!pdfData) return;
 
-    const container = containerRef.current;
-    const renderPdf = async () => {
-      // Decode base64 to Uint8Array
+    const loadPdf = async () => {
       const binaryStr = atob(pdfData);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
       }
+      setPdfDoc(await pdfjsLib.getDocument({ data: bytes }).promise);
+    };
 
-      const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    loadPdf().catch(console.error);
+  }, [pdfData]);
+
+  // Render pages whenever the doc, zoom, tab, or theme changes
+  useEffect(() => {
+    if (!pdfDoc || !containerRef.current || activeTab !== 'pdf') return;
+
+    const container = containerRef.current;
+    const pdf = pdfDoc;
+
+    const renderPdf = async () => {
+      // We need the intrinsic page width (at scale=1) for fit-width calculation
+      const firstPage = await pdf.getPage(1);
+      const baseViewport = firstPage.getViewport({ scale: 1 });
+      const containerWidth = container.clientWidth;
+      const scale = zoomToScale(zoomLevel, containerWidth, baseViewport.width);
 
       // Clear previous pages
       container.innerHTML = '';
@@ -83,7 +121,6 @@ export default function PreviewPane() {
       // Render each page
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const scale = 1.5;
         const viewport = page.getViewport({ scale });
 
         // Wrapper for positioning highlight overlays
@@ -123,7 +160,7 @@ export default function PreviewPane() {
     };
 
     renderPdf().catch(console.error);
-  }, [pdfData, activeTab, theme]);
+  }, [pdfDoc, activeTab, theme, zoomLevel]);
 
   // Render SyncTeX highlight overlay
   useEffect(() => {
@@ -226,6 +263,28 @@ export default function PreviewPane() {
         >
           Log
         </div>
+        {activeTab === 'pdf' && (
+          <select
+            value={zoomLevel}
+            onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
+            style={{
+              fontSize: 11,
+              padding: '2px 4px',
+              borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-editor)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {ZOOM_LEVELS.map((z) => (
+              <option key={z.value} value={z.value}>
+                {z.label}
+              </option>
+            ))}
+          </select>
+        )}
         <div
           style={{
             marginLeft: 'auto',
