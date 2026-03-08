@@ -3,14 +3,28 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { Extension } from '@codemirror/state';
+import { Extension, Compartment } from '@codemirror/state';
+import { vim } from '@replit/codemirror-vim';
 import { latexLanguage } from './latex-lang';
 import { lightEditorTheme, lightHighlightStyle } from '../../themes/light';
+import { darkEditorTheme, darkHighlightStyle } from '../../themes/dark';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
+import type { Theme } from '../../stores/editorStore';
 
-export function createExtensions(): Extension[] {
+export const themeCompartment = new Compartment();
+export const vimCompartment = new Compartment();
+
+function getThemeExtensions(theme: Theme): Extension {
+  if (theme === 'dark') {
+    return [darkEditorTheme, darkHighlightStyle];
+  }
+  return [lightEditorTheme, lightHighlightStyle];
+}
+
+export function createExtensions(theme: Theme = 'light', vimMode: boolean = false): Extension[] {
   return [
+    vimCompartment.of(vimMode ? vim() : []),
     lineNumbers(),
     highlightActiveLine(),
     highlightActiveLineGutter(),
@@ -20,8 +34,7 @@ export function createExtensions(): Extension[] {
     indentOnInput(),
     highlightSelectionMatches(),
     latexLanguage,
-    lightEditorTheme,
-    lightHighlightStyle,
+    themeCompartment.of(getThemeExtensions(theme)),
     latexSnippetCompletion,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
     autoCloseEnv,
@@ -33,4 +46,12 @@ export function createExtensions(): Extension[] {
       indentWithTab,
     ]),
   ];
+}
+
+export function getThemeReconfiguration(theme: Theme) {
+  return themeCompartment.reconfigure(getThemeExtensions(theme));
+}
+
+export function getVimReconfiguration(vimMode: boolean) {
+  return vimCompartment.reconfigure(vimMode ? vim() : []);
 }

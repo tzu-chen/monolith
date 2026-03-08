@@ -1,7 +1,7 @@
 import { useEditorStore } from '../../stores/editorStore';
 
 export default function BottomBar() {
-  const { compilationStatus, errors, warnings, activeTabPath } = useEditorStore();
+  const { compilationStatus, errors, warnings, activeTabPath, cursorLine, cursorCol, vimMode } = useEditorStore();
 
   const statusDotColor =
     compilationStatus === 'error' ? 'var(--red)' :
@@ -55,6 +55,14 @@ export default function BottomBar() {
           gap: 18,
         }}
       >
+        {activeTabPath && (
+          <span style={{ fontFamily: "'Source Code Pro', monospace" }}>
+            Ln {cursorLine}, Col {cursorCol}
+          </span>
+        )}
+        {vimMode && (
+          <span style={{ color: 'var(--accent)', fontWeight: 500 }}>VIM</span>
+        )}
         {activeTabPath && <span>{activeTabPath}</span>}
         <span>UTF-8</span>
         <span>LaTeX</span>

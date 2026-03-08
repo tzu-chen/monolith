@@ -24,6 +24,7 @@ export async function compileTex(
   return new Promise((resolve) => {
     const proc = spawn('tectonic', [
       '-X', 'compile',
+      '--synctex',
       '--outdir', buildDir,
       mainFilePath,
     ], {

@@ -10,6 +10,10 @@ export default function TopBar({ onCompile }: TopBarProps) {
   const compilationStatus = useEditorStore((s) => s.compilationStatus);
   const activePanel = useEditorStore((s) => s.activePanel);
   const setActivePanel = useEditorStore((s) => s.setActivePanel);
+  const theme = useEditorStore((s) => s.theme);
+  const toggleTheme = useEditorStore((s) => s.toggleTheme);
+  const vimMode = useEditorStore((s) => s.vimMode);
+  const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
 
   const togglePanel = (panel: ActivePanel) => {
     setActivePanel(activePanel === panel ? null : panel);
@@ -80,6 +84,47 @@ export default function TopBar({ onCompile }: TopBarProps) {
           gap: 10,
         }}
       >
+        {/* Vim toggle */}
+        <div
+          onClick={toggleVimMode}
+          title={vimMode ? 'Disable Vim mode' : 'Enable Vim mode'}
+          style={{
+            fontSize: 10,
+            color: vimMode ? 'var(--accent)' : 'var(--text-dim)',
+            background: vimMode ? 'var(--accent-bg)' : 'var(--bg-warm)',
+            padding: '2px 6px',
+            borderRadius: 3,
+            border: `1px solid ${vimMode ? 'var(--accent)' : 'var(--border)'}`,
+            fontFamily: "'Source Code Pro', monospace",
+            fontWeight: 600,
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          VIM
+        </div>
+
+        {/* Theme toggle */}
+        <div
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+          style={{
+            fontSize: 14,
+            cursor: 'pointer',
+            userSelect: 'none',
+            width: 26,
+            height: 26,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 4,
+            background: 'var(--bg-warm)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          {theme === 'light' ? '☾' : '☀'}
+        </div>
+
         <span
           style={{
             fontSize: 10,

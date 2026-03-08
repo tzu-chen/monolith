@@ -173,3 +173,39 @@ export async function compile(mainFile: string = 'main.tex', content?: string): 
   }
   return res.json();
 }
+
+// SyncTeX
+
+export interface SyncTexForwardResult {
+  page: number;
+  x: number;
+  y: number;
+  h: number;
+  w: number;
+}
+
+export interface SyncTexInverseResult {
+  file: string;
+  line: number;
+  col: number;
+}
+
+export async function syncTexForward(file: string, line: number, col: number = 1): Promise<SyncTexForwardResult | null> {
+  const res = await fetch('/api/synctex/forward', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file, line, col }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function syncTexInverse(page: number, x: number, y: number): Promise<SyncTexInverseResult | null> {
+  const res = await fetch('/api/synctex/inverse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ page, x, y }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}

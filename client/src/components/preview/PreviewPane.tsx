@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
+import * as api from '../../lib/api';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -8,11 +9,58 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+/** Try to extract a line number from an error/warning string */
+function parseLineNumber(msg: string): number | null {
+  // Match patterns like "l.42", "line 42", ":42:"
+  const patterns = [
+    /\bl\.(\d+)\b/,
+    /\bline\s+(\d+)\b/i,
+    /:(\d+):/,
+  ];
+  for (const pat of patterns) {
+    const m = msg.match(pat);
+    if (m) return parseInt(m[1], 10);
+  }
+  return null;
+}
+
 export default function PreviewPane() {
-  const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log } =
+  const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight } =
     useEditorStore();
+  const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
+  const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'log'>('pdf');
+  const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
+
+  const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const canvas = target.closest('canvas');
+    if (!canvas) return;
+
+    const pageInfo = pageGeometryRef.current.find((p) => p.canvas === canvas);
+    if (!pageInfo) return;
+
+    const rect = canvas.getBoundingClientRect();
+    // Convert click coordinates to PDF coordinates (scale back)
+    const x = (e.clientX - rect.left) / pageInfo.scale;
+    const y = (e.clientY - rect.top) / pageInfo.scale;
+
+    try {
+      const result = await api.syncTexInverse(pageInfo.page, x, y);
+      if (result && result.line > 0) {
+        // Open file if needed and jump to line
+        const store = useEditorStore.getState();
+        if (result.file && result.file !== store.activeTabPath) {
+          try {
+            const content = await api.readFile(result.file);
+            store.openFile(result.file, content);
+          } catch {}
+        }
+        store.requestScrollToLine(result.line);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!pdfData || !containerRef.current || activeTab !== 'pdf') return;
@@ -30,6 +78,7 @@ export default function PreviewPane() {
 
       // Clear previous pages
       container.innerHTML = '';
+      pageGeometryRef.current = [];
 
       // Render each page
       for (let i = 1; i <= pdf.numPages; i++) {
@@ -37,18 +86,33 @@ export default function PreviewPane() {
         const scale = 1.5;
         const viewport = page.getViewport({ scale });
 
+        // Wrapper for positioning highlight overlays
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.margin = '0 auto 20px';
+        wrapper.style.width = `${viewport.width}px`;
+        wrapper.dataset.page = String(i);
+
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         canvas.style.display = 'block';
-        canvas.style.margin = '0 auto 20px';
         canvas.style.background = 'var(--paper)';
         canvas.style.border = '1px solid var(--border)';
         canvas.style.borderRadius = '2px';
         canvas.style.boxShadow =
           '0 1px 3px var(--paper-shadow), 0 8px 30px var(--paper-shadow), 0 20px 60px rgba(45,40,30,0.04)';
 
-        container.appendChild(canvas);
+        wrapper.appendChild(canvas);
+        container.appendChild(wrapper);
+
+        pageGeometryRef.current.push({
+          canvas,
+          page: i,
+          scale,
+          width: viewport.width,
+          height: viewport.height,
+        });
 
         const ctx = canvas.getContext('2d')!;
         await page.render({ canvasContext: ctx, viewport }).promise;
@@ -57,6 +121,52 @@ export default function PreviewPane() {
 
     renderPdf().catch(console.error);
   }, [pdfData, activeTab]);
+
+  // Render SyncTeX highlight overlay
+  useEffect(() => {
+    // Remove any existing highlights
+    document.querySelectorAll('.synctex-highlight').forEach((el) => el.remove());
+
+    if (!syncTexHighlight || !containerRef.current || activeTab !== 'pdf') return;
+
+    const { page, x, y, h, w } = syncTexHighlight;
+    const pageInfo = pageGeometryRef.current.find((p) => p.page === page);
+    if (!pageInfo) return;
+
+    const wrapper = pageInfo.canvas.parentElement;
+    if (!wrapper) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'synctex-highlight';
+    overlay.style.position = 'absolute';
+    overlay.style.left = `${x * pageInfo.scale}px`;
+    overlay.style.top = `${y * pageInfo.scale}px`;
+    overlay.style.width = `${Math.max(w * pageInfo.scale, 200)}px`;
+    overlay.style.height = `${Math.max(h * pageInfo.scale, 16)}px`;
+    overlay.style.background = 'rgba(124, 111, 240, 0.25)';
+    overlay.style.border = '2px solid rgba(124, 111, 240, 0.6)';
+    overlay.style.borderRadius = '2px';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.transition = 'opacity 0.3s';
+    wrapper.appendChild(overlay);
+
+    // Scroll the highlight into view
+    overlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Fade out after 3 seconds
+    const timer = setTimeout(() => {
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        overlay.remove();
+        setSyncTexHighlight(null);
+      }, 300);
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+      overlay.remove();
+    };
+  }, [syncTexHighlight, activeTab, setSyncTexHighlight]);
 
   const statusText = (() => {
     if (compilationStatus === 'compiling') return 'compiling...';
@@ -140,11 +250,12 @@ export default function PreviewPane() {
         <div
           key="pdf"
           ref={containerRef}
+          onDoubleClick={handleInverseSync}
           style={{
             flex: 1,
             overflow: 'auto',
             padding: '30px 20px',
-            background: 'linear-gradient(135deg, #f0ece4 0%, #e8e4db 100%)',
+            background: 'var(--bg-sidebar)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -192,16 +303,46 @@ export default function PreviewPane() {
         >
           {errors.length > 0 && (
             <div style={{ color: 'var(--red)', marginBottom: 12 }}>
-              {errors.map((e, i) => (
-                <div key={i}>{e}</div>
-              ))}
+              {errors.map((e, i) => {
+                const lineNum = parseLineNumber(e);
+                return (
+                  <div
+                    key={i}
+                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
+                    style={{
+                      cursor: lineNum ? 'pointer' : 'default',
+                      textDecoration: lineNum ? 'underline' : 'none',
+                      textDecorationStyle: 'dotted',
+                      padding: '1px 0',
+                    }}
+                    title={lineNum ? `Go to line ${lineNum}` : undefined}
+                  >
+                    {e}
+                  </div>
+                );
+              })}
             </div>
           )}
           {warnings.length > 0 && (
             <div style={{ color: 'var(--orange)', marginBottom: 12 }}>
-              {warnings.map((w, i) => (
-                <div key={i}>{w}</div>
-              ))}
+              {warnings.map((w, i) => {
+                const lineNum = parseLineNumber(w);
+                return (
+                  <div
+                    key={i}
+                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
+                    style={{
+                      cursor: lineNum ? 'pointer' : 'default',
+                      textDecoration: lineNum ? 'underline' : 'none',
+                      textDecorationStyle: 'dotted',
+                      padding: '1px 0',
+                    }}
+                    title={lineNum ? `Go to line ${lineNum}` : undefined}
+                  >
+                    {w}
+                  </div>
+                );
+              })}
             </div>
           )}
           {log || 'No compilation log yet.'}

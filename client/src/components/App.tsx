@@ -21,6 +21,12 @@ export default function App() {
     doCompile();
   }, [saveNow, doCompile]);
 
+  // Initialize theme on mount
+  useEffect(() => {
+    const theme = useEditorStore.getState().theme;
+    document.documentElement.dataset.theme = theme;
+  }, []);
+
   // Load projects, file tree, and open main.tex on mount
   useEffect(() => {
     const init = async () => {

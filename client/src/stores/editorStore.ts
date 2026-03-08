@@ -3,6 +3,15 @@ import type { EditorView } from '@codemirror/view';
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
 export type ActivePanel = 'symbols' | 'snippets' | null;
+export type Theme = 'light' | 'dark';
+
+export interface SyncTexHighlight {
+  page: number;
+  x: number;
+  y: number;
+  h: number;
+  w: number;
+}
 
 export interface FileTab {
   path: string;
@@ -40,6 +49,19 @@ interface EditorState {
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
+
+  // Theme
+  theme: Theme;
+
+  // Vim mode
+  vimMode: boolean;
+
+  // Cursor position
+  cursorLine: number;
+  cursorCol: number;
+
+  // SyncTeX highlight
+  syncTexHighlight: SyncTexHighlight | null;
 
   // Project actions
   setCurrentProject: (name: string | null) => void;
@@ -80,6 +102,18 @@ interface EditorState {
   requestScrollToLine: (line: number) => void;
   clearScrollToLine: () => void;
 
+  // Theme
+  toggleTheme: () => void;
+
+  // Vim mode
+  toggleVimMode: () => void;
+
+  // Cursor
+  setCursorPosition: (line: number, col: number) => void;
+
+  // SyncTeX
+  setSyncTexHighlight: (highlight: SyncTexHighlight | null) => void;
+
   // Backward compat — derived getters
   content: string;
   filePath: string;
@@ -89,6 +123,21 @@ interface EditorState {
   setContent: (content: string) => void;
   setDirty: (dirty: boolean) => void;
   setFilePath: (filePath: string) => void;
+}
+
+function getInitialTheme(): Theme {
+  try {
+    const stored = localStorage.getItem('texlab-theme');
+    if (stored === 'dark' || stored === 'light') return stored;
+  } catch {}
+  return 'light';
+}
+
+function getInitialVimMode(): boolean {
+  try {
+    return localStorage.getItem('texlab-vim') === 'true';
+  } catch {}
+  return false;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -108,6 +157,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activePanel: null,
   editorView: null,
   scrollToLine: null,
+  theme: getInitialTheme(),
+  vimMode: getInitialVimMode(),
+  cursorLine: 1,
+  cursorCol: 1,
+  syncTexHighlight: null,
 
   // Derived state (computed from active tab)
   content: '',
@@ -133,6 +187,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       scrollToLine: null,
       projectRoot: null,
+      syncTexHighlight: null,
     }),
 
   openFile: (path, content) => {
@@ -237,6 +292,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),
+
+  toggleTheme: () => {
+    const newTheme = get().theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = newTheme;
+    try { localStorage.setItem('texlab-theme', newTheme); } catch {}
+    set({ theme: newTheme });
+  },
+
+  toggleVimMode: () => {
+    const newVim = !get().vimMode;
+    try { localStorage.setItem('texlab-vim', String(newVim)); } catch {}
+    set({ vimMode: newVim });
+  },
+
+  setCursorPosition: (cursorLine, cursorCol) => set({ cursorLine, cursorCol }),
+
+  setSyncTexHighlight: (syncTexHighlight) => set({ syncTexHighlight }),
 
   // Legacy setters for backward compat
   setContent: (content) => {

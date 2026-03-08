@@ -40,6 +40,31 @@ body {
   overflow: hidden;
 }
 
+:root[data-theme="dark"] {
+  --bg-warm: #12121c;
+  --bg-panel: #0d0d14;
+  --bg-editor: #1a1a26;
+  --bg-sidebar: #10101a;
+  --bg-hover: #1e1e2e;
+  --bg-active: #252538;
+  --border: #2a2a3e;
+  --border-strong: #3a3a52;
+  --text-primary: #c8c8d8;
+  --text-secondary: #6a6a88;
+  --text-dim: #44445a;
+  --accent: #7c6ff0;
+  --accent-light: #9a8ff5;
+  --accent-bg: rgba(124, 111, 240, 0.08);
+  --green: #5ccf8a;
+  --blue: #5cc8cf;
+  --red: #e06060;
+  --purple: #b088e0;
+  --orange: #e8a855;
+  --teal: #5cc8cf;
+  --paper: #1a1a26;
+  --paper-shadow: rgba(0, 0, 0, 0.3);
+}
+
 ::-webkit-scrollbar { width: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
