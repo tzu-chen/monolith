@@ -1,5 +1,5 @@
-import { StateField, EditorState } from '@codemirror/state';
-import { EditorView, Decoration, DecorationSet, WidgetType } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import katex from 'katex';
 
 interface MathMatch {
@@ -72,15 +72,12 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
 
   for (let l = cursorLine; l >= 1; l--) {
     const text = doc.line(l).text;
-    // Check if this line has a standalone $$ (opening)
     if (text.includes('$$')) {
-      // Count $$ occurrences on the line
       const ddCount = (text.match(/\$\$/g) || []).length;
       if (ddCount === 1) {
         openLine = l;
         break;
       } else if (ddCount >= 2) {
-        // Both open and close on the same line — handled by single-line extraction
         return null;
       }
     }
@@ -88,7 +85,6 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
 
   if (openLine === -1) return null;
 
-  // Search downward from opening line for a closing $$
   for (let l = openLine + 1; l <= totalLines; l++) {
     const text = doc.line(l).text;
     if (text.includes('$$')) {
@@ -98,22 +94,18 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
   }
 
   if (closeLine === -1) {
-    // No closing found — show preview of what we have so far (cursor must be inside)
     if (cursorLine < openLine) return null;
     closeLine = cursorLine;
   }
 
-  // Cursor must be within the math block
   if (cursorLine < openLine || cursorLine > closeLine) return null;
 
-  // Gather math content
   const lines: string[] = [];
   for (let l = openLine; l <= closeLine; l++) {
     lines.push(doc.line(l).text);
   }
 
   let content = lines.join('\n');
-  // Strip the $$ delimiters
   content = content.replace(/^\$\$/, '').replace(/\$\$$/, '').trim();
 
   if (content.length === 0) return null;
@@ -121,94 +113,104 @@ function extractMultiLineMath(state: EditorState, cursorLine: number): { math: s
   return { math: content, displayMode: true, lineFrom: openLine };
 }
 
-class MathWidget extends WidgetType {
-  constructor(
-    private readonly mathExpressions: MathMatch[]
-  ) {
-    super();
-  }
-
-  eq(other: MathWidget): boolean {
-    if (this.mathExpressions.length !== other.mathExpressions.length) return false;
-    return this.mathExpressions.every(
-      (m, i) => m.math === other.mathExpressions[i].math && m.displayMode === other.mathExpressions[i].displayMode
-    );
-  }
-
-  toDOM(): HTMLElement {
-    const container = document.createElement('div');
-    container.className = 'cm-math-preview';
-
-    for (const expr of this.mathExpressions) {
-      const wrapper = document.createElement('div');
-      wrapper.className = expr.displayMode ? 'cm-math-preview-display' : 'cm-math-preview-inline';
-      try {
-        katex.render(expr.math, wrapper, {
-          throwOnError: false,
-          displayMode: expr.displayMode,
-          output: 'html',
-        });
-      } catch {
-        wrapper.textContent = expr.math;
-      }
-      container.appendChild(wrapper);
-    }
-
-    return container;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
-  }
-}
-
-function buildDecorations(state: EditorState): DecorationSet {
+function getMathForCursor(state: EditorState): { matches: MathMatch[]; anchorLineFrom: number } | null {
   const cursor = state.selection.main.head;
   const cursorLine = state.doc.lineAt(cursor);
-  const lineText = cursorLine.text;
 
-  // First try single-line math extraction
-  const singleLineMatches = extractMathFromLine(lineText);
-
+  const singleLineMatches = extractMathFromLine(cursorLine.text);
   if (singleLineMatches.length > 0) {
-    const widget = new MathWidget(singleLineMatches);
-    const deco = Decoration.widget({
-      widget,
-      block: true,
-      side: -1,
-    });
-    return Decoration.set([deco.range(cursorLine.from)]);
+    return { matches: singleLineMatches, anchorLineFrom: cursorLine.from };
   }
 
-  // Try multi-line display math
   const multiLine = extractMultiLineMath(state, cursorLine.number);
   if (multiLine) {
-    const widget = new MathWidget([{ math: multiLine.math, displayMode: multiLine.displayMode }]);
     const targetLine = state.doc.line(multiLine.lineFrom);
-    const deco = Decoration.widget({
-      widget,
-      block: true,
-      side: -1,
-    });
-    return Decoration.set([deco.range(targetLine.from)]);
+    return {
+      matches: [{ math: multiLine.math, displayMode: multiLine.displayMode }],
+      anchorLineFrom: targetLine.from,
+    };
   }
 
-  return Decoration.none;
+  return null;
 }
 
-const mathPreviewField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildDecorations(state);
-  },
-  update(value, tr) {
-    if (tr.docChanged || tr.selection) {
-      return buildDecorations(tr.state);
-    }
-    return value;
-  },
-  provide(field) {
-    return EditorView.decorations.from(field);
-  },
-});
+class MathPreviewPlugin {
+  private container: HTMLDivElement;
+  private lastMathKey = '';
 
-export const mathPreview = mathPreviewField;
+  constructor(private view: EditorView) {
+    this.container = document.createElement('div');
+    this.container.className = 'cm-math-preview';
+    this.container.style.display = 'none';
+    this.container.style.position = 'absolute';
+    view.dom.style.position = 'relative';
+    view.dom.appendChild(this.container);
+    this.reposition();
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
+      this.reposition();
+    }
+  }
+
+  private reposition() {
+    const result = getMathForCursor(this.view.state);
+
+    if (!result) {
+      this.container.style.display = 'none';
+      this.lastMathKey = '';
+      return;
+    }
+
+    // Build a key from math content to avoid re-rendering KaTeX when unchanged
+    const mathKey = result.matches.map(m => `${m.displayMode}:${m.math}`).join('|');
+
+    if (mathKey !== this.lastMathKey) {
+      this.lastMathKey = mathKey;
+      this.container.innerHTML = '';
+
+      for (const expr of result.matches) {
+        const wrapper = document.createElement('div');
+        wrapper.className = expr.displayMode ? 'cm-math-preview-display' : 'cm-math-preview-inline';
+        try {
+          katex.render(expr.math, wrapper, {
+            throwOnError: false,
+            displayMode: expr.displayMode,
+            output: 'html',
+          });
+        } catch {
+          wrapper.textContent = expr.math;
+        }
+        this.container.appendChild(wrapper);
+      }
+    }
+
+    // Position above the anchor line
+    const lineCoords = this.view.coordsAtPos(result.anchorLineFrom);
+    const editorRect = this.view.dom.getBoundingClientRect();
+
+    if (!lineCoords) {
+      this.container.style.display = 'none';
+      return;
+    }
+
+    // Show temporarily to measure height
+    this.container.style.display = '';
+    this.container.style.visibility = 'hidden';
+    const previewHeight = this.container.offsetHeight;
+    this.container.style.visibility = '';
+
+    const top = lineCoords.top - editorRect.top - previewHeight - 4;
+    const left = this.view.defaultCharacterWidth * 2;
+
+    this.container.style.top = `${Math.max(0, top)}px`;
+    this.container.style.left = `${left}px`;
+  }
+
+  destroy() {
+    this.container.remove();
+  }
+}
+
+export const mathPreview = ViewPlugin.fromClass(MathPreviewPlugin);
