@@ -22,6 +22,8 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const setEditorView = useEditorStore((s) => s.setEditorView);
   const theme = useEditorStore((s) => s.theme);
   const vimMode = useEditorStore((s) => s.vimMode);
+  const fontSize = useEditorStore((s) => s.fontSize);
+  const fontFamily = useEditorStore((s) => s.fontFamily);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
 
@@ -31,8 +33,10 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
   const createView = useCallback(
     (doc: string, parent: HTMLElement): EditorView => {
-      const currentTheme = useEditorStore.getState().theme;
-      const currentVim = useEditorStore.getState().vimMode;
+      const s = useEditorStore.getState();
+      const currentTheme = s.theme;
+      const currentVim = s.vimMode;
+      const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
 
       const saveKeymap = keymap.of([
         {
@@ -83,7 +87,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
       const state = EditorState.create({
         doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont), updateListener, syncTexHandler],
       });
 
       return new EditorView({ state, parent });
@@ -109,6 +113,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     const cached = stateCache.current.get(activeTabPath);
     const currentTheme = useEditorStore.getState().theme;
     const currentVim = useEditorStore.getState().vimMode;
+    const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
 
     if (cached) {
       // Restore cached state (preserves undo history)
@@ -159,7 +164,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Recreate state with cached doc + extensions
       const state = EditorState.create({
         doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont), updateListener, syncTexHandler],
         selection: cached.selection,
       });
 
@@ -183,13 +188,13 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     };
   }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reconfigure theme dynamically
+  // Reconfigure theme dynamically (also triggered by font changes)
   useEffect(() => {
     if (!viewRef.current) return;
     viewRef.current.dispatch({
-      effects: getThemeReconfiguration(theme),
+      effects: getThemeReconfiguration(theme, { fontSize, fontFamily }),
     });
-  }, [theme]);
+  }, [theme, fontSize, fontFamily]);
 
   // Reconfigure vim mode dynamically
   useEffect(() => {

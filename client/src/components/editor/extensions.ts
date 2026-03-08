@@ -6,8 +6,9 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { Extension, Compartment } from '@codemirror/state';
 import { vim } from '@replit/codemirror-vim';
 import { latexLanguage } from './latex-lang';
-import { lightEditorTheme, lightHighlightStyle } from '../../themes/light';
-import { darkEditorTheme, darkHighlightStyle } from '../../themes/dark';
+import { createLightEditorTheme, lightHighlightStyle } from '../../themes/light';
+import type { FontSettings } from '../../themes/light';
+import { createDarkEditorTheme, darkHighlightStyle } from '../../themes/dark';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
 import type { Theme } from '../../stores/editorStore';
@@ -15,14 +16,16 @@ import type { Theme } from '../../stores/editorStore';
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 
-function getThemeExtensions(theme: Theme): Extension {
+const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
+
+function getThemeExtensions(theme: Theme, font: FontSettings = defaultFont): Extension {
   if (theme === 'dark') {
-    return [darkEditorTheme, darkHighlightStyle];
+    return [createDarkEditorTheme(font), darkHighlightStyle];
   }
-  return [lightEditorTheme, lightHighlightStyle];
+  return [createLightEditorTheme(font), lightHighlightStyle];
 }
 
-export function createExtensions(theme: Theme = 'light', vimMode: boolean = false): Extension[] {
+export function createExtensions(theme: Theme = 'light', vimMode: boolean = false, font: FontSettings = defaultFont): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
     lineNumbers(),
@@ -34,7 +37,7 @@ export function createExtensions(theme: Theme = 'light', vimMode: boolean = fals
     indentOnInput(),
     highlightSelectionMatches(),
     latexLanguage,
-    themeCompartment.of(getThemeExtensions(theme)),
+    themeCompartment.of(getThemeExtensions(theme, font)),
     latexSnippetCompletion,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
     autoCloseEnv,
@@ -48,9 +51,11 @@ export function createExtensions(theme: Theme = 'light', vimMode: boolean = fals
   ];
 }
 
-export function getThemeReconfiguration(theme: Theme) {
-  return themeCompartment.reconfigure(getThemeExtensions(theme));
+export function getThemeReconfiguration(theme: Theme, font: FontSettings = defaultFont) {
+  return themeCompartment.reconfigure(getThemeExtensions(theme, font));
 }
+
+export type { FontSettings };
 
 export function getVimReconfiguration(vimMode: boolean) {
   return vimCompartment.reconfigure(vimMode ? vim() : []);

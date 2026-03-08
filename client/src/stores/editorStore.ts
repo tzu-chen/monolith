@@ -60,6 +60,10 @@ interface EditorState {
   // View mode
   viewMode: ViewMode;
 
+  // Editor font settings
+  fontSize: number;
+  fontFamily: string;
+
   // Cursor position
   cursorLine: number;
   cursorCol: number;
@@ -115,6 +119,10 @@ interface EditorState {
   // View mode
   cycleViewMode: () => void;
 
+  // Font settings
+  setFontSize: (size: number) => void;
+  setFontFamily: (family: string) => void;
+
   // Cursor
   setCursorPosition: (line: number, col: number) => void;
 
@@ -147,6 +155,25 @@ function getInitialVimMode(): boolean {
   return false;
 }
 
+function getInitialFontSize(): number {
+  try {
+    const stored = localStorage.getItem('texlab-font-size');
+    if (stored) {
+      const size = parseFloat(stored);
+      if (size >= 8 && size <= 32) return size;
+    }
+  } catch {}
+  return 13.5;
+}
+
+function getInitialFontFamily(): string {
+  try {
+    const stored = localStorage.getItem('texlab-font-family');
+    if (stored) return stored;
+  } catch {}
+  return "'Source Code Pro', monospace";
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
   projectRoot: null,
@@ -167,6 +194,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   theme: getInitialTheme(),
   vimMode: getInitialVimMode(),
   viewMode: 'both' as ViewMode,
+  fontSize: getInitialFontSize(),
+  fontFamily: getInitialFontFamily(),
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -318,6 +347,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const current = get().viewMode;
     const next = current === 'both' ? 'editor' : current === 'editor' ? 'pdf' : 'both';
     set({ viewMode: next });
+  },
+
+  setFontSize: (size) => {
+    const clamped = Math.min(32, Math.max(8, size));
+    try { localStorage.setItem('texlab-font-size', String(clamped)); } catch {}
+    set({ fontSize: clamped });
+  },
+
+  setFontFamily: (family) => {
+    try { localStorage.setItem('texlab-font-family', family); } catch {}
+    set({ fontFamily: family });
   },
 
   setCursorPosition: (cursorLine, cursorCol) => set({ cursorLine, cursorCol }),
