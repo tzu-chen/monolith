@@ -25,7 +25,7 @@ function parseLineNumber(msg: string): number | null {
 }
 
 export default function PreviewPane() {
-  const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight } =
+  const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
     useEditorStore();
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
@@ -102,6 +102,9 @@ export default function PreviewPane() {
         canvas.style.borderRadius = '2px';
         canvas.style.boxShadow =
           '0 1px 3px var(--paper-shadow), 0 8px 30px var(--paper-shadow), 0 20px 60px rgba(45,40,30,0.04)';
+        if (theme === 'dark') {
+          canvas.style.filter = 'invert(1) hue-rotate(180deg)';
+        }
 
         wrapper.appendChild(canvas);
         container.appendChild(wrapper);
@@ -120,7 +123,7 @@ export default function PreviewPane() {
     };
 
     renderPdf().catch(console.error);
-  }, [pdfData, activeTab]);
+  }, [pdfData, activeTab, theme]);
 
   // Render SyncTeX highlight overlay
   useEffect(() => {
