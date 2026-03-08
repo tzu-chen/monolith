@@ -4,6 +4,7 @@ import type { EditorView } from '@codemirror/view';
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
 export type ActivePanel = 'symbols' | 'snippets' | null;
 export type Theme = 'light' | 'dark';
+export type ViewMode = 'both' | 'editor' | 'pdf';
 
 export interface SyncTexHighlight {
   page: number;
@@ -55,6 +56,9 @@ interface EditorState {
 
   // Vim mode
   vimMode: boolean;
+
+  // View mode
+  viewMode: ViewMode;
 
   // Cursor position
   cursorLine: number;
@@ -108,6 +112,9 @@ interface EditorState {
   // Vim mode
   toggleVimMode: () => void;
 
+  // View mode
+  cycleViewMode: () => void;
+
   // Cursor
   setCursorPosition: (line: number, col: number) => void;
 
@@ -159,6 +166,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   scrollToLine: null,
   theme: getInitialTheme(),
   vimMode: getInitialVimMode(),
+  viewMode: 'both' as ViewMode,
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -304,6 +312,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const newVim = !get().vimMode;
     try { localStorage.setItem('texlab-vim', String(newVim)); } catch {}
     set({ vimMode: newVim });
+  },
+
+  cycleViewMode: () => {
+    const current = get().viewMode;
+    const next = current === 'both' ? 'editor' : current === 'editor' ? 'pdf' : 'both';
+    set({ viewMode: next });
   },
 
   setCursorPosition: (cursorLine, cursorCol) => set({ cursorLine, cursorCol }),
