@@ -93,15 +93,12 @@ export function createDarkEditorTheme(font: FontSettings) {
   '.cm-snippetFieldPosition': {
     border: '1px solid #7c6ff0',
   },
-  '.cm-math-preview': {
-    zIndex: '10',
-    pointerEvents: 'none',
-    backgroundColor: 'rgba(18, 18, 28, 0.95)',
-    backdropFilter: 'blur(4px)',
+  '.cm-tooltip.cm-math-preview': {
+    backgroundColor: '#12121c',
     border: '1px solid #2a2a3e',
     borderRadius: '6px',
     padding: '8px 14px',
-    maxWidth: 'calc(100% - 80px)',
+    maxWidth: '600px',
     overflowX: 'auto',
     color: '#c8c8d8',
     fontSize: '15px',
