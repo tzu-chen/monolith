@@ -134,13 +134,15 @@ export default function PreviewPane() {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         canvas.style.display = 'block';
-        canvas.style.background = 'var(--paper)';
-        canvas.style.border = '1px solid var(--border)';
         canvas.style.borderRadius = '2px';
-        canvas.style.boxShadow =
-          '0 1px 3px var(--paper-shadow), 0 8px 30px var(--paper-shadow), 0 20px 60px rgba(45,40,30,0.04)';
         if (theme === 'dark') {
           canvas.style.filter = 'invert(1) hue-rotate(180deg)';
+          canvas.style.background = 'white';
+        } else {
+          canvas.style.background = 'var(--paper)';
+          canvas.style.border = '1px solid var(--border)';
+          canvas.style.boxShadow =
+            '0 1px 3px var(--paper-shadow), 0 8px 30px var(--paper-shadow), 0 20px 60px rgba(45,40,30,0.04)';
         }
 
         wrapper.appendChild(canvas);
