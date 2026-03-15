@@ -1,5 +1,5 @@
 {
-  "name": "texlab-server",
+  "name": "monolith-server",
   "private": true,
   "type": "module",
   "scripts": {

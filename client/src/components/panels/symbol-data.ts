@@ -18,8 +18,8 @@ export function findSymbolByCommand(command: string): SymbolEntry | undefined {
   return undefined;
 }
 
-export const CUSTOM_SYMBOLS_KEY = 'texlab-custom-symbols';
-export const RECENT_SYMBOLS_KEY = 'texlab-recent-symbols';
+export const CUSTOM_SYMBOLS_KEY = 'monolith-custom-symbols';
+export const RECENT_SYMBOLS_KEY = 'monolith-recent-symbols';
 
 export function loadCustomSymbols(): SymbolEntry[] {
   try {

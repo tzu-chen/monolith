@@ -1,11 +1,11 @@
-# TeXLab — Project Specification
+# Monolith — Project Specification
 
 A local LaTeX editor web app with live PDF preview, powered by CodeMirror 6 and Tectonic.
 
 ## Architecture
 
 ```
-texlab/
+monolith/
 ├── client/                  # React (Vite) frontend
 │   ├── src/
 │   │   ├── components/

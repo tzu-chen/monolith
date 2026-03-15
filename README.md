@@ -1,4 +1,4 @@
-# TeXLab
+# Monolith
 
 A local LaTeX editor with live PDF preview, built as a full-stack web application. Edit LaTeX documents in a modern code editor and see compiled output instantly.
 
@@ -79,7 +79,7 @@ npm start       # Build client + start server (serves from client/dist)
 │       ├── routes/      # API route handlers (compile, files, projects, synctex)
 │       └── services/    # Business logic (tectonic, watcher, synctex)
 ├── package.json         # npm workspace root
-└── texlab-spec.md       # Architecture specification
+└── monolith-spec.md     # Architecture specification
 ```
 
 ## API Endpoints

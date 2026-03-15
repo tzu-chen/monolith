@@ -142,7 +142,7 @@ interface EditorState {
 
 function getInitialTheme(): Theme {
   try {
-    const stored = localStorage.getItem('texlab-theme');
+    const stored = localStorage.getItem('monolith-theme');
     if (stored === 'dark' || stored === 'light') return stored;
   } catch {}
   return 'light';
@@ -150,14 +150,14 @@ function getInitialTheme(): Theme {
 
 function getInitialVimMode(): boolean {
   try {
-    return localStorage.getItem('texlab-vim') === 'true';
+    return localStorage.getItem('monolith-vim') === 'true';
   } catch {}
   return false;
 }
 
 function getInitialFontSize(): number {
   try {
-    const stored = localStorage.getItem('texlab-font-size');
+    const stored = localStorage.getItem('monolith-font-size');
     if (stored) {
       const size = parseFloat(stored);
       if (size >= 8 && size <= 32) return size;
@@ -168,7 +168,7 @@ function getInitialFontSize(): number {
 
 function getInitialFontFamily(): string {
   try {
-    const stored = localStorage.getItem('texlab-font-family');
+    const stored = localStorage.getItem('monolith-font-family');
     if (stored) return stored;
   } catch {}
   return "'Source Code Pro', monospace";
@@ -333,13 +333,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   toggleTheme: () => {
     const newTheme = get().theme === 'light' ? 'dark' : 'light';
     document.documentElement.dataset.theme = newTheme;
-    try { localStorage.setItem('texlab-theme', newTheme); } catch {}
+    try { localStorage.setItem('monolith-theme', newTheme); } catch {}
     set({ theme: newTheme });
   },
 
   toggleVimMode: () => {
     const newVim = !get().vimMode;
-    try { localStorage.setItem('texlab-vim', String(newVim)); } catch {}
+    try { localStorage.setItem('monolith-vim', String(newVim)); } catch {}
     set({ vimMode: newVim });
   },
 
@@ -351,12 +351,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setFontSize: (size) => {
     const clamped = Math.min(32, Math.max(8, size));
-    try { localStorage.setItem('texlab-font-size', String(clamped)); } catch {}
+    try { localStorage.setItem('monolith-font-size', String(clamped)); } catch {}
     set({ fontSize: clamped });
   },
 
   setFontFamily: (family) => {
-    try { localStorage.setItem('texlab-font-family', family); } catch {}
+    try { localStorage.setItem('monolith-font-family', family); } catch {}
     set({ fontFamily: family });
   },
 
