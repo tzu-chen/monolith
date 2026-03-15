@@ -9,6 +9,48 @@ export interface SymbolCategory {
   symbols: SymbolEntry[];
 }
 
+/** Look up a SymbolEntry by its command string across all built-in categories. */
+export function findSymbolByCommand(command: string): SymbolEntry | undefined {
+  for (const cat of symbolCategories) {
+    const found = cat.symbols.find((s) => s.command === command);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export const CUSTOM_SYMBOLS_KEY = 'texlab-custom-symbols';
+export const RECENT_SYMBOLS_KEY = 'texlab-recent-symbols';
+
+export function loadCustomSymbols(): SymbolEntry[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SYMBOLS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomSymbols(symbols: SymbolEntry[]): void {
+  try {
+    localStorage.setItem(CUSTOM_SYMBOLS_KEY, JSON.stringify(symbols));
+  } catch {}
+}
+
+export function loadRecentSymbols(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SYMBOLS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentSymbols(commands: string[]): void {
+  try {
+    localStorage.setItem(RECENT_SYMBOLS_KEY, JSON.stringify(commands));
+  } catch {}
+}
+
 export const symbolCategories: SymbolCategory[] = [
   {
     name: 'Greek',
