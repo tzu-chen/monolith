@@ -5,8 +5,8 @@ export interface LatexSnippet {
   preview: string;
 }
 
-export const CUSTOM_SNIPPETS_KEY = 'texlab-custom-snippets';
-export const RECENT_SNIPPETS_KEY = 'texlab-recent-snippets';
+export const CUSTOM_SNIPPETS_KEY = 'monolith-custom-snippets';
+export const RECENT_SNIPPETS_KEY = 'monolith-recent-snippets';
 
 export function loadCustomSnippets(): LatexSnippet[] {
   try {

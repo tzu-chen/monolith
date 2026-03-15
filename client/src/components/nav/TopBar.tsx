@@ -68,7 +68,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
         >
           τ
         </div>
-        TeXLab
+        Monolith
       </div>
 
       {/* Project Switcher */}

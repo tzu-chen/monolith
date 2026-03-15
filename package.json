@@ -1,5 +1,5 @@
 {
-  "name": "texlab",
+  "name": "monolith",
   "private": true,
   "workspaces": ["client", "server"],
   "scripts": {

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TeXLab is a local LaTeX editor web app with live PDF preview. It uses an npm workspaces monorepo with two packages: `client` (React/Vite) and `server` (Express/Node.js). LaTeX compilation is handled by Tectonic, an external binary.
+Monolith is a local LaTeX editor web app with live PDF preview. It uses an npm workspaces monorepo with two packages: `client` (React/Vite) and `server` (Express/Node.js). LaTeX compilation is handled by Tectonic, an external binary.
 
 ## Commands
 

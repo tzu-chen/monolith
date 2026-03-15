@@ -53,11 +53,11 @@ if (fs.existsSync(CLIENT_DIST)) {
 }
 
 const server = app.listen(PORT, () => {
-  console.log(`[texlab] Server listening on http://localhost:${PORT}`);
-  console.log(`[texlab] Projects root: ${PROJECTS_ROOT}`);
-  console.log(`[texlab] Active project: ${getCurrent().projectName ?? '(none)'}`);
+  console.log(`[monolith] Server listening on http://localhost:${PORT}`);
+  console.log(`[monolith] Projects root: ${PROJECTS_ROOT}`);
+  console.log(`[monolith] Active project: ${getCurrent().projectName ?? '(none)'}`);
   if (fs.existsSync(CLIENT_DIST)) {
-    console.log(`[texlab] Serving client from ${CLIENT_DIST}`);
+    console.log(`[monolith] Serving client from ${CLIENT_DIST}`);
   }
 });
 
@@ -66,7 +66,7 @@ setupWebSocket(server);
 
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`[texlab] Port ${PORT} is already in use. Kill the existing process or set a different port via PORT env var.`);
+    console.error(`[monolith] Port ${PORT} is already in use. Kill the existing process or set a different port via PORT env var.`);
     process.exit(1);
   } else {
     throw err;
