@@ -1,12 +1,13 @@
 import { autocompletion, CompletionContext, snippet } from '@codemirror/autocomplete';
-import { latexSnippets } from './latex-snippets';
+import { latexSnippets, loadCustomSnippets } from './latex-snippets';
 
 function snippetCompletions(context: CompletionContext) {
   const word = context.matchBefore(/[a-zA-Z]+/);
   if (!word || word.from === word.to) return null;
 
   const typed = context.state.doc.sliceString(word.from, word.to).toLowerCase();
-  const matching = latexSnippets.filter((s) =>
+  const allSnippets = [...latexSnippets, ...loadCustomSnippets()];
+  const matching = allSnippets.filter((s) =>
     s.label.toLowerCase().startsWith(typed)
   );
   if (matching.length === 0) return null;

@@ -5,6 +5,39 @@ export interface LatexSnippet {
   preview: string;
 }
 
+export const CUSTOM_SNIPPETS_KEY = 'texlab-custom-snippets';
+export const RECENT_SNIPPETS_KEY = 'texlab-recent-snippets';
+
+export function loadCustomSnippets(): LatexSnippet[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SNIPPETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomSnippets(snippets: LatexSnippet[]): void {
+  try {
+    localStorage.setItem(CUSTOM_SNIPPETS_KEY, JSON.stringify(snippets));
+  } catch {}
+}
+
+export function loadRecentSnippets(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SNIPPETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentSnippets(labels: string[]): void {
+  try {
+    localStorage.setItem(RECENT_SNIPPETS_KEY, JSON.stringify(labels));
+  } catch {}
+}
+
 export const latexSnippets: LatexSnippet[] = [
   {
     label: 'beq',
