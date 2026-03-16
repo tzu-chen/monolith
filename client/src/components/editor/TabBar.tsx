@@ -1,4 +1,5 @@
 import { useEditorStore } from '../../stores/editorStore';
+import { CloseIcon } from '../shared/Icons';
 
 export default function TabBar() {
   const openTabs = useEditorStore((s) => s.openTabs);
@@ -95,7 +96,7 @@ export default function TabBar() {
                   (e.target as HTMLElement).style.color = 'var(--text-dim)';
                 }}
               >
-                ×
+                <CloseIcon size={12} />
               </span>
             </div>
           );

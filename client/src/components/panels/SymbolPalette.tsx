@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { CloseIcon } from '../shared/Icons';
 import {
   symbolCategories,
   findSymbolByCommand,
@@ -344,7 +345,7 @@ export default function SymbolPalette() {
                     padding: 0,
                   }}
                 >
-                  ×
+                  <CloseIcon size={10} />
                 </button>
               )}
             </div>

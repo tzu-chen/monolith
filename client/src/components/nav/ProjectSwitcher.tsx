@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
+import { ChevronUp, ChevronDown, DotIcon, EditIcon, CloseIcon } from '../shared/Icons';
 
 export default function ProjectSwitcher() {
   const currentProject = useEditorStore((s) => s.currentProject);
@@ -189,7 +190,7 @@ export default function ProjectSwitcher() {
           {currentProject || 'No project'}
         </span>
         <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
-          {open ? '▴' : '▾'}
+          {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
         </span>
       </button>
 
@@ -332,7 +333,7 @@ export default function ProjectSwitcher() {
                     }}
                   >
                     {name === currentProject && (
-                      <span style={{ fontSize: 10 }}>●</span>
+                      <DotIcon size={10} />
                     )}
                     <span
                       style={{
@@ -365,7 +366,7 @@ export default function ProjectSwitcher() {
                           (e.currentTarget as HTMLElement).style.background = 'none';
                         }}
                       >
-                        ✎
+                        <EditIcon size={11} />
                       </button>
                       <button
                         title="Delete project"
@@ -382,7 +383,7 @@ export default function ProjectSwitcher() {
                           (e.currentTarget as HTMLElement).style.background = 'none';
                         }}
                       >
-                        ✕
+                        <CloseIcon size={11} />
                       </button>
                     </span>
                   </div>
