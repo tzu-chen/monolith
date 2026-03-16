@@ -3,6 +3,7 @@ import TabBar from './editor/TabBar';
 import PreviewPane from './preview/PreviewPane';
 import SplitPane from './shared/SplitPane';
 import Sidebar from './sidebar/Sidebar';
+import { ChevronLeft, ChevronRight } from './shared/Icons';
 import { useEditorStore } from '../stores/editorStore';
 
 interface LayoutProps {
@@ -36,7 +37,7 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
             flexShrink: 0,
           }}
         >
-          {sidebarVisible ? '◀' : '▶'}
+          {sidebarVisible ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
         </button>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <TabBar />

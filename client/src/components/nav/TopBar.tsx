@@ -1,6 +1,7 @@
 import { useEditorStore } from '../../stores/editorStore';
 import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
+import { PanelIcon, MinusIcon, PlusIcon, SunIcon, MoonIcon, SpinnerIcon, PlayIcon } from '../shared/Icons';
 
 interface TopBarProps {
   onCompile: () => void;
@@ -116,9 +117,9 @@ export default function TopBar({ onCompile }: TopBarProps) {
             gap: 3,
           }}
         >
-          <span style={{ opacity: viewMode === 'pdf' ? 0.3 : 1 }}>&#9636;</span>
+          <span style={{ opacity: viewMode === 'pdf' ? 0.3 : 1 }}><PanelIcon size={10} side="left" /></span>
           <span style={{ opacity: viewMode !== 'both' ? 0.3 : 1 }}>|</span>
-          <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}>&#9636;</span>
+          <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}><PanelIcon size={10} side="right" /></span>
         </div>
 
         {/* Font family */}
@@ -171,7 +172,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
               fontWeight: 600,
             }}
           >
-            −
+            <MinusIcon size={10} />
           </div>
           <div
             style={{
@@ -200,7 +201,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
               fontWeight: 600,
             }}
           >
-            +
+            <PlusIcon size={10} />
           </div>
         </div>
 
@@ -242,7 +243,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
             border: '1px solid var(--border)',
           }}
         >
-          {theme === 'light' ? '☾' : '☀'}
+          {theme === 'light' ? <MoonIcon size={14} /> : <SunIcon size={14} />}
         </div>
 
         <span
@@ -273,7 +274,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
             fontWeight: 500,
           }}
         >
-          {compilationStatus === 'compiling' ? '⟳ Compiling' : '▶ Compile'}
+          {compilationStatus === 'compiling' ? <><SpinnerIcon size={12} style={{ marginRight: 4 }} /> Compiling</> : <><PlayIcon size={10} style={{ marginRight: 4 }} /> Compile</>}
         </button>
       </div>
     </div>

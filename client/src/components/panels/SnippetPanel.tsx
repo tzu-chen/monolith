@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
+import { CloseIcon } from '../shared/Icons';
 import {
   latexSnippets,
   loadCustomSnippets,
@@ -349,7 +350,7 @@ export default function SnippetPanel() {
                         fontFamily: 'inherit',
                       }}
                     >
-                      ×
+                      <CloseIcon size={10} />
                     </button>
                   )}
                 </td>

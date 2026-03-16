@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
+import { ChevronDown, ChevronRight, DiamondIcon, ArrowUp, ArrowRight, PlusIcon, CloseIcon } from '../shared/Icons';
 
 interface TreeNode {
   name: string;
@@ -58,22 +60,24 @@ function findNode(tree: TreeNode[], path: string): TreeNode | null {
 function FileIcon({ isDir, isOpen }: { isDir: boolean; isOpen?: boolean }) {
   if (isDir) {
     return (
-      <span style={{ fontSize: 12, width: 16, textAlign: 'center', flexShrink: 0 }}>
-        {isOpen ? '▾' : '▸'}
+      <span style={{ width: 16, textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       </span>
     );
   }
   return (
     <span
       style={{
-        fontSize: 11,
         width: 16,
         textAlign: 'center',
         flexShrink: 0,
         color: 'var(--text-dim)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      ◇
+      <DiamondIcon size={10} />
     </span>
   );
 }
@@ -172,7 +176,7 @@ function InlineInput({
   onCancel,
   style: extraStyle,
 }: {
-  icon: string;
+  icon: ReactNode;
   initialValue?: string;
   placeholder?: string;
   onSubmit: (value: string) => void;
@@ -302,7 +306,7 @@ function TreeItem({
   if (isRenaming) {
     return (
       <InlineInput
-        icon={node.isDir ? '▸' : '◇'}
+        icon={node.isDir ? <ChevronRight size={11} /> : <DiamondIcon size={10} />}
         initialValue={node.name}
         onSubmit={(newName) => onRenameSubmit(node.path, newName)}
         onCancel={onRenameCancel}
@@ -365,7 +369,7 @@ function TreeItem({
               (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)';
             }}
           >
-            →
+            <ArrowRight size={11} />
           </span>
         )}
       </div>
@@ -593,7 +597,7 @@ export default function FileTree() {
             (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)';
           }}
         >
-          +
+          <PlusIcon size={12} />
         </button>
       </div>
 
@@ -700,7 +704,7 @@ export default function FileTree() {
           }}
           title="Go up one level"
         >
-          <span style={{ fontSize: 12, width: 16, textAlign: 'center', flexShrink: 0 }}>↑</span>
+          <span style={{ width: 16, textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ArrowUp size={12} /></span>
           <span>..</span>
         </div>
       )}
@@ -708,7 +712,7 @@ export default function FileTree() {
       {/* New file input */}
       {creatingFile && (
         <InlineInput
-          icon="◇"
+          icon={<DiamondIcon size={10} />}
           placeholder="filename.tex"
           onSubmit={handleNewFileSubmit}
           onCancel={() => setCreatingFile(false)}
@@ -718,7 +722,7 @@ export default function FileTree() {
       {/* New folder input */}
       {creatingFolder && (
         <InlineInput
-          icon="▸"
+          icon={<ChevronRight size={11} />}
           placeholder="folder name"
           onSubmit={handleNewFolderSubmit}
           onCancel={() => setCreatingFolder(false)}
