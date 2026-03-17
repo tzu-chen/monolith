@@ -136,7 +136,7 @@ export default function PreviewPane() {
         canvas.style.display = 'block';
         canvas.style.borderRadius = '2px';
         if (theme === 'dark') {
-          canvas.style.filter = 'invert(1) hue-rotate(180deg)';
+          canvas.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
           canvas.style.background = 'white';
         } else {
           canvas.style.background = 'var(--paper)';
