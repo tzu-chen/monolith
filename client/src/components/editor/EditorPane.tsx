@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
-import { createExtensions, getThemeReconfiguration, getVimReconfiguration } from './extensions';
+import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration } from './extensions';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
 
@@ -25,6 +25,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const fontSize = useEditorStore((s) => s.fontSize);
   const fontFamily = useEditorStore((s) => s.fontFamily);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
+  const lineWrap = useEditorStore((s) => s.lineWrap);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
 
   // Stable ref for onSave so we don't recreate the editor on every render
@@ -37,6 +38,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       const currentTheme = s.theme;
       const currentVim = s.vimMode;
       const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
+      const currentLineWrap = s.lineWrap;
 
       const saveKeymap = keymap.of([
         {
@@ -87,7 +89,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
       const state = EditorState.create({
         doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
       });
 
       return new EditorView({ state, parent });
@@ -114,6 +116,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     const currentTheme = useEditorStore.getState().theme;
     const currentVim = useEditorStore.getState().vimMode;
     const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
+    const currentLineWrap = useEditorStore.getState().lineWrap;
 
     if (cached) {
       // Restore cached state (preserves undo history)
@@ -164,7 +167,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Recreate state with cached doc + extensions
       const state = EditorState.create({
         doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
         selection: cached.selection,
       });
 
@@ -203,6 +206,14 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       effects: getVimReconfiguration(vimMode),
     });
   }, [vimMode]);
+
+  // Reconfigure line wrap dynamically
+  useEffect(() => {
+    if (!viewRef.current) return;
+    viewRef.current.dispatch({
+      effects: getLineWrapReconfiguration(lineWrap),
+    });
+  }, [lineWrap]);
 
   // Handle scroll-to-line requests from outline
   useEffect(() => {

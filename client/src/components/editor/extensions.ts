@@ -1,4 +1,4 @@
-import { keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from '@codemirror/view';
+import { keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers, EditorView } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
@@ -16,6 +16,7 @@ import type { Theme } from '../../stores/editorStore';
 
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
+export const lineWrapCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
 
@@ -26,9 +27,10 @@ function getThemeExtensions(theme: Theme, font: FontSettings = defaultFont): Ext
   return [createLightEditorTheme(font), lightHighlightStyle];
 }
 
-export function createExtensions(theme: Theme = 'light', vimMode: boolean = false, font: FontSettings = defaultFont): Extension[] {
+export function createExtensions(theme: Theme = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
+    lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
     lineNumbers(),
     highlightActiveLine(),
     highlightActiveLineGutter(),
@@ -61,4 +63,8 @@ export type { FontSettings };
 
 export function getVimReconfiguration(vimMode: boolean) {
   return vimCompartment.reconfigure(vimMode ? vim() : []);
+}
+
+export function getLineWrapReconfiguration(lineWrap: boolean) {
+  return lineWrapCompartment.reconfigure(lineWrap ? EditorView.lineWrapping : []);
 }

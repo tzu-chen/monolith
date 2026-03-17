@@ -66,6 +66,9 @@ interface EditorState {
   fontSize: number;
   fontFamily: string;
 
+  // Line wrap
+  lineWrap: boolean;
+
   // Cursor position
   cursorLine: number;
   cursorCol: number;
@@ -118,6 +121,9 @@ interface EditorState {
   // Vim mode
   toggleVimMode: () => void;
 
+  // Line wrap
+  toggleLineWrap: () => void;
+
   // View mode
   cycleViewMode: () => void;
 
@@ -157,6 +163,13 @@ function getInitialTheme(): Theme {
 function getInitialVimMode(): boolean {
   try {
     return localStorage.getItem('monolith-vim') === 'true';
+  } catch {}
+  return false;
+}
+
+function getInitialLineWrap(): boolean {
+  try {
+    return localStorage.getItem('monolith-line-wrap') === 'true';
   } catch {}
   return false;
 }
@@ -203,6 +216,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
   fontFamily: getInitialFontFamily(),
+  lineWrap: getInitialLineWrap(),
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -348,6 +362,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const newVim = !get().vimMode;
     try { localStorage.setItem('monolith-vim', String(newVim)); } catch {}
     set({ vimMode: newVim });
+  },
+
+  toggleLineWrap: () => {
+    const newWrap = !get().lineWrap;
+    try { localStorage.setItem('monolith-line-wrap', String(newWrap)); } catch {}
+    set({ lineWrap: newWrap });
   },
 
   cycleViewMode: () => {
