@@ -7,12 +7,20 @@ interface MathMatch {
   displayMode: boolean;
 }
 
+interface MathSpan extends MathMatch {
+  /** Start offset within the line (includes opening delimiter) */
+  from: number;
+  /** End offset within the line (includes closing delimiter) */
+  to: number;
+}
+
 /**
  * Extract math expressions from a line of text.
  * Handles both inline ($...$) and display ($$...$$) math.
+ * Returns position information so callers can check cursor containment.
  */
-function extractMathFromLine(lineText: string): MathMatch[] {
-  const matches: MathMatch[] = [];
+function extractMathFromLine(lineText: string): MathSpan[] {
+  const matches: MathSpan[] = [];
   let i = 0;
 
   while (i < lineText.length) {
@@ -23,7 +31,7 @@ function extractMathFromLine(lineText: string): MathMatch[] {
       if (end !== -1) {
         const math = lineText.slice(start, end).trim();
         if (math.length > 0) {
-          matches.push({ math, displayMode: true });
+          matches.push({ math, displayMode: true, from: i, to: end + 2 });
         }
         i = end + 2;
         continue;
@@ -44,7 +52,7 @@ function extractMathFromLine(lineText: string): MathMatch[] {
       if (end !== -1) {
         const math = lineText.slice(start, end).trim();
         if (math.length > 0) {
-          matches.push({ math, displayMode: false });
+          matches.push({ math, displayMode: false, from: i, to: end + 1 });
         }
         i = end + 1;
         continue;
@@ -119,10 +127,12 @@ interface MathResult {
 function getMathForCursor(state: EditorState): MathResult | null {
   const cursor = state.selection.main.head;
   const cursorLine = state.doc.lineAt(cursor);
+  const cursorOffset = cursor - cursorLine.from;
 
-  const singleLineMatches = extractMathFromLine(cursorLine.text);
-  if (singleLineMatches.length > 0) {
-    return { matches: singleLineMatches, anchorPos: cursorLine.from };
+  const allSpans = extractMathFromLine(cursorLine.text);
+  const hitMatches = allSpans.filter(s => cursorOffset >= s.from && cursorOffset <= s.to);
+  if (hitMatches.length > 0) {
+    return { matches: hitMatches, anchorPos: cursorLine.from };
   }
 
   const multiLine = extractMultiLineMath(state, cursorLine.number);
