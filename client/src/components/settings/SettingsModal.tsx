@@ -16,6 +16,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const setFontFamily = useEditorStore((s) => s.setFontFamily);
   const vimMode = useEditorStore((s) => s.vimMode);
   const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
+  const lineWrap = useEditorStore((s) => s.lineWrap);
+  const toggleLineWrap = useEditorStore((s) => s.toggleLineWrap);
 
   // Track the scheme when modal opened so we can revert on cancel
   const initialSchemeRef = useRef(colorScheme);
@@ -242,6 +244,34 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           >
             VIM
             <span style={{ fontSize: 11, opacity: 0.7 }}>{vimMode ? 'ON' : 'OFF'}</span>
+          </div>
+        </div>
+
+        {/* Line Wrap Toggle */}
+        <div style={{ marginBottom: 28 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Line Wrap
+          </label>
+          <div
+            onClick={toggleLineWrap}
+            style={{
+              marginTop: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: `1px solid ${lineWrap ? currentScheme.colors.accent : currentScheme.colors.border}`,
+              background: lineWrap ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
+              color: lineWrap ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: "'Source Code Pro', monospace",
+            }}
+          >
+            WRAP
+            <span style={{ fontSize: 11, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 
