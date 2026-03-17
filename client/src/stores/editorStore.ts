@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { EditorView } from '@codemirror/view';
+import { getSchemeById, applyColorScheme } from '../colorSchemes';
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
 export type ActivePanel = 'symbols' | 'snippets' | null;
@@ -53,6 +54,7 @@ interface EditorState {
 
   // Theme
   theme: Theme;
+  colorScheme: string;
 
   // Vim mode
   vimMode: boolean;
@@ -111,7 +113,7 @@ interface EditorState {
   clearScrollToLine: () => void;
 
   // Theme
-  toggleTheme: () => void;
+  setColorScheme: (id: string) => void;
 
   // Vim mode
   toggleVimMode: () => void;
@@ -140,12 +142,16 @@ interface EditorState {
   setFilePath: (filePath: string) => void;
 }
 
-function getInitialTheme(): Theme {
+function getInitialColorScheme(): string {
   try {
-    const stored = localStorage.getItem('monolith-theme');
-    if (stored === 'dark' || stored === 'light') return stored;
+    const stored = localStorage.getItem('monolith-color-scheme');
+    if (stored) return stored;
   } catch {}
-  return 'light';
+  return 'default-light';
+}
+
+function getInitialTheme(): Theme {
+  return getSchemeById(getInitialColorScheme()).type;
 }
 
 function getInitialVimMode(): boolean {
@@ -192,6 +198,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   editorView: null,
   scrollToLine: null,
   theme: getInitialTheme(),
+  colorScheme: getInitialColorScheme(),
   vimMode: getInitialVimMode(),
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
@@ -330,11 +337,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),
 
-  toggleTheme: () => {
-    const newTheme = get().theme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = newTheme;
-    try { localStorage.setItem('monolith-theme', newTheme); } catch {}
-    set({ theme: newTheme });
+  setColorScheme: (id: string) => {
+    const scheme = getSchemeById(id);
+    applyColorScheme(scheme);
+    try { localStorage.setItem('monolith-color-scheme', id); } catch {}
+    set({ colorScheme: id, theme: scheme.type });
   },
 
   toggleVimMode: () => {

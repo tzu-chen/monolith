@@ -5,6 +5,7 @@ import Layout from './Layout';
 import SymbolPalette from './panels/SymbolPalette';
 import SnippetPanel from './panels/SnippetPanel';
 import { useEditorStore } from '../stores/editorStore';
+import { getSchemeById, applyColorScheme } from '../colorSchemes';
 import { useCompilation } from '../hooks/useCompilation';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
@@ -21,10 +22,10 @@ export default function App() {
     doCompile();
   }, [saveNow, doCompile]);
 
-  // Initialize theme on mount
+  // Initialize color scheme on mount
   useEffect(() => {
-    const theme = useEditorStore.getState().theme;
-    document.documentElement.dataset.theme = theme;
+    const schemeId = useEditorStore.getState().colorScheme;
+    applyColorScheme(getSchemeById(schemeId));
   }, []);
 
   // Load projects, file tree, and open main.tex on mount

@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
-import { PanelIcon, MinusIcon, PlusIcon, SunIcon, MoonIcon, SpinnerIcon, PlayIcon } from '../shared/Icons';
+import { PanelIcon, SpinnerIcon, PlayIcon, SettingsIcon } from '../shared/Icons';
+import SettingsModal from '../settings/SettingsModal';
 
 interface TopBarProps {
   onCompile: () => void;
@@ -11,16 +13,9 @@ export default function TopBar({ onCompile }: TopBarProps) {
   const compilationStatus = useEditorStore((s) => s.compilationStatus);
   const activePanel = useEditorStore((s) => s.activePanel);
   const setActivePanel = useEditorStore((s) => s.setActivePanel);
-  const theme = useEditorStore((s) => s.theme);
-  const toggleTheme = useEditorStore((s) => s.toggleTheme);
-  const vimMode = useEditorStore((s) => s.vimMode);
-  const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
   const viewMode = useEditorStore((s) => s.viewMode);
   const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
-  const fontSize = useEditorStore((s) => s.fontSize);
-  const setFontSize = useEditorStore((s) => s.setFontSize);
-  const fontFamily = useEditorStore((s) => s.fontFamily);
-  const setFontFamily = useEditorStore((s) => s.setFontFamily);
+  const [showSettings, setShowSettings] = useState(false);
 
   const togglePanel = (panel: ActivePanel) => {
     setActivePanel(activePanel === panel ? null : panel);
@@ -122,115 +117,11 @@ export default function TopBar({ onCompile }: TopBarProps) {
           <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}><PanelIcon size={10} side="right" /></span>
         </div>
 
-        {/* Font family */}
-        <select
-          value={fontFamily}
-          onChange={(e) => setFontFamily(e.target.value)}
-          title="Editor font family"
-          style={{
-            fontSize: 10,
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-warm)',
-            padding: '2px 4px',
-            borderRadius: 3,
-            border: '1px solid var(--border)',
-            fontFamily: "'Source Code Pro', monospace",
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          <option value="'Source Code Pro', monospace">Source Code Pro</option>
-          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-          <option value="'Fira Code', monospace">Fira Code</option>
-          <option value="'Cascadia Code', monospace">Cascadia Code</option>
-          <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
-          <option value="'Courier New', monospace">Courier New</option>
-          <option value="monospace">System Monospace</option>
-        </select>
-
-        {/* Font size */}
+        {/* Settings */}
         <div
+          onClick={() => setShowSettings(true)}
+          title="Settings"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            fontSize: 10,
-            color: 'var(--text-secondary)',
-            fontFamily: "'Source Code Pro', monospace",
-          }}
-        >
-          <div
-            onClick={() => setFontSize(fontSize - 0.5)}
-            title="Decrease font size"
-            style={{
-              background: 'var(--bg-warm)',
-              border: '1px solid var(--border)',
-              borderRadius: '3px 0 0 3px',
-              padding: '2px 5px',
-              cursor: 'pointer',
-              userSelect: 'none',
-              fontWeight: 600,
-            }}
-          >
-            <MinusIcon size={10} />
-          </div>
-          <div
-            style={{
-              background: 'var(--bg-warm)',
-              borderTop: '1px solid var(--border)',
-              borderBottom: '1px solid var(--border)',
-              padding: '2px 4px',
-              minWidth: 28,
-              textAlign: 'center',
-              fontWeight: 600,
-            }}
-            title="Editor font size"
-          >
-            {fontSize}
-          </div>
-          <div
-            onClick={() => setFontSize(fontSize + 0.5)}
-            title="Increase font size"
-            style={{
-              background: 'var(--bg-warm)',
-              border: '1px solid var(--border)',
-              borderRadius: '0 3px 3px 0',
-              padding: '2px 5px',
-              cursor: 'pointer',
-              userSelect: 'none',
-              fontWeight: 600,
-            }}
-          >
-            <PlusIcon size={10} />
-          </div>
-        </div>
-
-        {/* Vim toggle */}
-        <div
-          onClick={toggleVimMode}
-          title={vimMode ? 'Disable Vim mode' : 'Enable Vim mode'}
-          style={{
-            fontSize: 10,
-            color: vimMode ? 'var(--accent)' : 'var(--text-dim)',
-            background: vimMode ? 'var(--accent-bg)' : 'var(--bg-warm)',
-            padding: '2px 6px',
-            borderRadius: 3,
-            border: `1px solid ${vimMode ? 'var(--accent)' : 'var(--border)'}`,
-            fontFamily: "'Source Code Pro', monospace",
-            fontWeight: 600,
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          VIM
-        </div>
-
-        {/* Theme toggle */}
-        <div
-          onClick={toggleTheme}
-          title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-          style={{
-            fontSize: 14,
             cursor: 'pointer',
             userSelect: 'none',
             width: 26,
@@ -241,9 +132,10 @@ export default function TopBar({ onCompile }: TopBarProps) {
             borderRadius: 4,
             background: 'var(--bg-warm)',
             border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
           }}
         >
-          {theme === 'light' ? <MoonIcon size={14} /> : <SunIcon size={14} />}
+          <SettingsIcon size={14} />
         </div>
 
         <span
@@ -277,6 +169,7 @@ export default function TopBar({ onCompile }: TopBarProps) {
           {compilationStatus === 'compiling' ? <><SpinnerIcon size={12} style={{ marginRight: 4 }} /> Compiling</> : <><PlayIcon size={10} style={{ marginRight: 4 }} /> Compile</>}
         </button>
       </div>
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
