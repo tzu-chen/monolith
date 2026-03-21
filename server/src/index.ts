@@ -10,7 +10,7 @@ import { initProjectContext, getCurrent } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '3005', 10);
 const PROJECTS_ROOT = path.resolve(process.env.PROJECTS_ROOT || path.join(import.meta.dirname, '../../projects'));
 const CLIENT_DIST = path.resolve(import.meta.dirname, '../../client/dist');
 

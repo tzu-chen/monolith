@@ -9,7 +9,7 @@ Monolith is a local LaTeX editor web app with live PDF preview. It uses an npm w
 ```bash
 npm install              # Install all dependencies
 npm run dev              # Start both client and server (dev mode)
-npm run dev:server       # Start server only (port 3001, tsx watch)
+npm run dev:server       # Start server only (port 3005, tsx watch)
 npm run dev:client       # Start client only (port 5173, Vite HMR)
 npm run build            # Build client for production
 npm start                # Build + start production server
