@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as api from '../../lib/api';
+import { PlayIcon, SpinnerIcon } from '../shared/Icons';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -44,7 +45,11 @@ function zoomToScale(zoom: ZoomOption, containerWidth: number, pageWidth: number
   return parseInt(zoom) / 100;
 }
 
-export default function PreviewPane() {
+interface PreviewPaneProps {
+  onCompile: () => void;
+}
+
+export default function PreviewPane({ onCompile }: PreviewPaneProps) {
   const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
     useEditorStore();
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
@@ -290,22 +295,50 @@ export default function PreviewPane() {
         <div
           style={{
             marginLeft: 'auto',
-            fontSize: 11,
-            color: statusColor,
             display: 'flex',
             alignItems: 'center',
-            gap: 5,
+            gap: 10,
           }}
         >
-          <span
+          <div
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: statusColor,
+              fontSize: 11,
+              color: statusColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
             }}
-          />
-          {statusText}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: statusColor,
+              }}
+            />
+            {statusText}
+          </div>
+          <button
+            onClick={onCompile}
+            disabled={compilationStatus === 'compiling'}
+            style={{
+              fontSize: 12,
+              color: 'white',
+              background: compilationStatus === 'compiling' ? 'var(--accent-light)' : 'var(--accent)',
+              border: '1px solid var(--accent)',
+              padding: '4px 12px',
+              borderRadius: 6,
+              cursor: compilationStatus === 'compiling' ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            {compilationStatus === 'compiling' ? <><SpinnerIcon size={12} /> Compiling</> : <><PlayIcon size={10} /> Compile</>}
+          </button>
         </div>
       </div>
 

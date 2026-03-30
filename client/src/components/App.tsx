@@ -69,10 +69,10 @@ export default function App() {
 
   return (
     <>
-      <TopBar onCompile={doCompile} />
+      <TopBar />
       {activePanel === 'symbols' && <SymbolPalette />}
       {activePanel === 'snippets' && <SnippetPanel />}
-      <Layout onSave={handleSave} onManualSave={saveNow} />
+      <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} />
       <BottomBar />
     </>
   );

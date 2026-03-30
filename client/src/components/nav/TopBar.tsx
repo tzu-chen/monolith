@@ -2,15 +2,10 @@ import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
-import { PanelIcon, SpinnerIcon, PlayIcon, SettingsIcon } from '../shared/Icons';
+import { PanelIcon, SettingsIcon, CodeIcon, OmegaIcon, SnippetIcon } from '../shared/Icons';
 import SettingsModal from '../settings/SettingsModal';
 
-interface TopBarProps {
-  onCompile: () => void;
-}
-
-export default function TopBar({ onCompile }: TopBarProps) {
-  const compilationStatus = useEditorStore((s) => s.compilationStatus);
+export default function TopBar() {
   const activePanel = useEditorStore((s) => s.activePanel);
   const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const viewMode = useEditorStore((s) => s.viewMode);
@@ -34,48 +29,30 @@ export default function TopBar({ onCompile }: TopBarProps) {
         flexShrink: 0,
       }}
     >
-      {/* Logo */}
-      <div
-        style={{
-          fontFamily: "'Source Serif 4', serif",
-          fontSize: 16,
-          fontWeight: 700,
-          color: 'var(--accent)',
-          letterSpacing: -0.3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <div
-          style={{
-            width: 22,
-            height: 22,
-            background: 'var(--accent)',
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: 12,
-            fontFamily: "'Source Code Pro', monospace",
-            fontWeight: 600,
-          }}
-        >
-          τ
-        </div>
-        Monolith
-      </div>
+      {/* Icon Rail */}
+      <nav style={{ display: 'flex', gap: 2 }}>
+        <IconRailButton
+          icon={<CodeIcon size={18} />}
+          active={!activePanel}
+          onClick={() => setActivePanel(null)}
+          title="Editor"
+        />
+        <IconRailButton
+          icon={<OmegaIcon size={18} />}
+          active={activePanel === 'symbols'}
+          onClick={() => togglePanel('symbols')}
+          title="Symbols"
+        />
+        <IconRailButton
+          icon={<SnippetIcon size={18} />}
+          active={activePanel === 'snippets'}
+          onClick={() => togglePanel('snippets')}
+          title="Snippets"
+        />
+      </nav>
 
       {/* Project Switcher */}
       <ProjectSwitcher />
-
-      {/* Nav */}
-      <div style={{ display: 'flex', gap: 2 }}>
-        <NavItem label="Editor" active={!activePanel} onClick={() => setActivePanel(null)} />
-        <NavItem label="Symbols" active={activePanel === 'symbols'} onClick={() => togglePanel('symbols')} />
-        <NavItem label="Snippets" active={activePanel === 'snippets'} onClick={() => togglePanel('snippets')} />
-      </div>
 
       {/* Right side */}
       <div
@@ -151,44 +128,37 @@ export default function TopBar({ onCompile }: TopBarProps) {
         >
           ⌘S
         </span>
-        <button
-          onClick={onCompile}
-          disabled={compilationStatus === 'compiling'}
-          style={{
-            fontSize: 12,
-            color: 'white',
-            background: compilationStatus === 'compiling' ? 'var(--accent-light)' : 'var(--accent)',
-            border: '1px solid var(--accent)',
-            padding: '5px 14px',
-            borderRadius: 6,
-            cursor: compilationStatus === 'compiling' ? 'wait' : 'pointer',
-            fontFamily: 'inherit',
-            fontWeight: 500,
-          }}
-        >
-          {compilationStatus === 'compiling' ? <><SpinnerIcon size={12} style={{ marginRight: 4 }} /> Compiling</> : <><PlayIcon size={10} style={{ marginRight: 4 }} /> Compile</>}
-        </button>
       </div>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
 
-function NavItem({ label, active, onClick }: { label: string; active?: boolean; onClick?: () => void }) {
+function IconRailButton({ icon, active, onClick, title }: {
+  icon: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+  title?: string;
+}) {
   return (
-    <div
+    <button
       onClick={onClick}
+      title={title}
       style={{
-        fontSize: 12.5,
-        color: active ? 'var(--accent)' : 'var(--text-secondary)',
-        padding: '6px 12px',
+        width: 36,
+        height: 36,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         borderRadius: 5,
         cursor: 'pointer',
-        fontWeight: active ? 500 : 400,
-        background: active ? 'var(--accent-bg)' : 'transparent',
+        border: 'none',
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? 'white' : 'var(--text-secondary)',
+        transition: 'background 0.2s, color 0.2s',
       }}
     >
-      {label}
-    </div>
+      {icon}
+    </button>
   );
 }
