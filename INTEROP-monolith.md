@@ -2,10 +2,9 @@
 
 Cross-app integration spec for Monolith. This documents the endpoints and data shapes that sibling apps (Navigate, Scribe, Granary) may call or reference.
 
-**Base URL:** `http://localhost:3001/api`  
-**WebSocket:** `ws://localhost:3001/ws`  
-**Port:** 3001 (server), 5173 (Vite dev)  
-**Note:** Monolith shares port 3001 by default with Navigate/Scribe — run one at a time, or override `PORT` env var.
+**Base URL:** `http://localhost:3005/api`  
+**WebSocket:** `ws://localhost:3005/ws`  
+**Port:** 3005 (server), 5173 (Vite dev)  
 
 ---
 
