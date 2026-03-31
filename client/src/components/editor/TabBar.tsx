@@ -12,7 +12,7 @@ export default function TabBar() {
   return (
     <div
       style={{
-        height: 34,
+        height: 40,
         background: 'var(--bg-panel)',
         borderBottom: '1px solid var(--border)',
         display: 'flex',
@@ -42,7 +42,7 @@ export default function TabBar() {
                 alignItems: 'center',
                 gap: 6,
                 padding: '0 12px',
-                fontSize: 12,
+                fontSize: 17,
                 cursor: 'pointer',
                 borderRight: '1px solid var(--border)',
                 background: isActive ? 'var(--bg-editor)' : 'transparent',
@@ -79,7 +79,7 @@ export default function TabBar() {
                   closeTab(tab.path);
                 }}
                 style={{
-                  fontSize: 14,
+                  fontSize: 17,
                   lineHeight: 1,
                   color: 'var(--text-dim)',
                   cursor: 'pointer',

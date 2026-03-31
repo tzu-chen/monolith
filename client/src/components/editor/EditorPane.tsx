@@ -238,7 +238,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
           justifyContent: 'center',
           backgroundColor: 'var(--bg-editor)',
           color: 'var(--text-dim)',
-          fontSize: 14,
+          fontSize: 18,
         }}
       >
         Open a file from the sidebar to start editing

@@ -94,7 +94,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Color Scheme Section */}
         <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Color Scheme
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
@@ -124,12 +124,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                   {/* Name and type */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: scheme.colors.textPrimary }}>
+                    <span style={{ fontSize: 16, fontWeight: 500, color: scheme.colors.textPrimary }}>
                       {scheme.name}
                     </span>
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 14,
                         padding: '1px 5px',
                         borderRadius: 3,
                         background: scheme.colors.bgActive,
@@ -150,7 +150,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Font Family Section */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Editor Font
           </label>
           <select
@@ -160,7 +160,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               display: 'block',
               width: '100%',
               marginTop: 8,
-              fontSize: 13,
+              fontSize: 17,
               padding: '6px 8px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.border}`,
@@ -183,7 +183,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Font Size Section */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Font Size
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -221,7 +221,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Vim Mode Toggle */}
         <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Vim Mode
           </label>
           <div
@@ -237,19 +237,19 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               background: vimMode ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
               color: vimMode ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 17,
               fontWeight: 500,
               fontFamily: "'Source Code Pro', monospace",
             }}
           >
             VIM
-            <span style={{ fontSize: 11, opacity: 0.7 }}>{vimMode ? 'ON' : 'OFF'}</span>
+            <span style={{ fontSize: 15, opacity: 0.7 }}>{vimMode ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 
         {/* Line Wrap Toggle */}
         <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Line Wrap
           </label>
           <div
@@ -265,13 +265,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               background: lineWrap ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
               color: lineWrap ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 17,
               fontWeight: 500,
               fontFamily: "'Source Code Pro', monospace",
             }}
           >
             WRAP
-            <span style={{ fontSize: 11, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
+            <span style={{ fontSize: 15, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 
@@ -280,7 +280,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           <button
             onClick={handleCancel}
             style={{
-              fontSize: 13,
+              fontSize: 17,
               padding: '6px 16px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.border}`,
@@ -295,7 +295,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           <button
             onClick={handleSave}
             style={{
-              fontSize: 13,
+              fontSize: 17,
               padding: '6px 16px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.accent}`,

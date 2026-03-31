@@ -25,7 +25,7 @@ export async function compileTex(
     const proc = spawn('tectonic', [
       '-X', 'compile',
       '--synctex',
-      '--outdir', buildDir,
+      '--keep-intermediates',
       mainFilePath,
     ], {
       cwd: projectRoot,
@@ -58,8 +58,23 @@ export async function compileTex(
       if (code === 0) {
         try {
           const baseName = path.basename(mainFile, path.extname(mainFile));
-          const pdfPath = path.join(buildDir, `${baseName}.pdf`);
-          const pdfBuffer = await fs.readFile(pdfPath);
+          const srcDir = path.dirname(mainFilePath);
+          const pdfSrc = path.join(srcDir, `${baseName}.pdf`);
+          const synctexSrc = path.join(srcDir, `${baseName}.synctex.gz`);
+
+          // Move outputs to build dir
+          const pdfDest = path.join(buildDir, `${baseName}.pdf`);
+          const synctexDest = path.join(buildDir, `${baseName}.synctex.gz`);
+          await fs.rename(pdfSrc, pdfDest).catch(() => {});
+          await fs.rename(synctexSrc, synctexDest).catch(() => {});
+
+          // Clean up intermediate files from source dir
+          const intermediates = ['.aux', '.bbl', '.blg', '.log', '.out', '.toc', '.lof', '.lot'];
+          for (const ext of intermediates) {
+            await fs.unlink(path.join(srcDir, `${baseName}${ext}`)).catch(() => {});
+          }
+
+          const pdfBuffer = await fs.readFile(pdfDest);
           const pdf = pdfBuffer.toString('base64');
           resolve({ success: true, pdf, log, errors, warnings });
         } catch (err) {

@@ -2,8 +2,7 @@ import { useCallback, useEffect } from 'react';
 import TopBar from './nav/TopBar';
 import BottomBar from './nav/BottomBar';
 import Layout from './Layout';
-import SymbolPalette from './panels/SymbolPalette';
-import SnippetPanel from './panels/SnippetPanel';
+import ReferenceBrowser from './panels/ReferenceBrowser';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
 import { useCompilation } from '../hooks/useCompilation';
@@ -70,9 +69,11 @@ export default function App() {
   return (
     <>
       <TopBar />
-      {activePanel === 'symbols' && <SymbolPalette />}
-      {activePanel === 'snippets' && <SnippetPanel />}
-      <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} />
+      {activePanel === 'references' ? (
+        <ReferenceBrowser />
+      ) : (
+        <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} />
+      )}
       <BottomBar />
     </>
   );

@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import EditorPane from './editor/EditorPane';
 import TabBar from './editor/TabBar';
 import PreviewPane from './preview/PreviewPane';
 import SplitPane from './shared/SplitPane';
 import Sidebar from './sidebar/Sidebar';
-import { ChevronLeft, ChevronRight } from './shared/Icons';
+import SymbolPalette from './panels/SymbolPalette';
+import SnippetPanel from './panels/SnippetPanel';
+import { ChevronLeft, ChevronRight, OmegaIcon, SnippetIcon } from './shared/Icons';
 import { useEditorStore } from '../stores/editorStore';
 
 interface LayoutProps {
@@ -14,14 +17,35 @@ interface LayoutProps {
 
 const SIDEBAR_WIDTH = 220;
 
+type EditorDropdown = 'symbols' | 'snippets' | null;
+
 function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSave: () => void }) {
   const sidebarVisible = useEditorStore((s) => s.sidebarVisible);
   const toggleSidebar = useEditorStore((s) => s.toggleSidebar);
   const dirty = useEditorStore((s) => s.dirty);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
+  const [dropdown, setDropdown] = useState<EditorDropdown>(null);
+
+  const toggleDropdown = (d: EditorDropdown) => {
+    setDropdown(dropdown === d ? null : d);
+  };
+
+  const toolbarBtnStyle = (active: boolean): React.CSSProperties => ({
+    background: active ? 'var(--accent)' : 'none',
+    border: 'none',
+    padding: '4px 6px',
+    cursor: 'pointer',
+    color: active ? 'white' : 'var(--text-dim)',
+    lineHeight: 1,
+    flexShrink: 0,
+    borderRadius: 4,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  });
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <button
           onClick={toggleSidebar}
@@ -32,7 +56,7 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
             padding: '6px 8px',
             cursor: 'pointer',
             color: 'var(--text-secondary)',
-            fontSize: 13,
+            fontSize: 17,
             fontFamily: 'inherit',
             lineHeight: 1,
             flexShrink: 0,
@@ -43,6 +67,20 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <TabBar />
         </div>
+        <button
+          onClick={() => toggleDropdown('symbols')}
+          title="Symbols"
+          style={toolbarBtnStyle(dropdown === 'symbols')}
+        >
+          <OmegaIcon size={16} />
+        </button>
+        <button
+          onClick={() => toggleDropdown('snippets')}
+          title="Snippets"
+          style={toolbarBtnStyle(dropdown === 'snippets')}
+        >
+          <SnippetIcon size={16} />
+        </button>
         {activeTabPath && (
           <button
             onClick={onManualSave}
@@ -53,7 +91,7 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
               padding: '4px 10px',
               cursor: 'pointer',
               color: dirty ? 'var(--accent)' : 'var(--text-dim)',
-              fontSize: 12,
+              fontSize: 17,
               fontFamily: 'inherit',
               lineHeight: 1,
               flexShrink: 0,
@@ -65,7 +103,24 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
           </button>
         )}
       </div>
-      <EditorPane onSave={onSave} />
+      {/* Editor area with optional dropdown overlay */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <EditorPane onSave={onSave} />
+        {dropdown && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 10,
+              background: 'var(--bg-panel)',
+              overflow: 'auto',
+            }}
+          >
+            {dropdown === 'symbols' && <SymbolPalette />}
+            {dropdown === 'snippets' && <SnippetPanel />}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -148,7 +148,7 @@ function ContextMenu({
           onClick={() => onAction(item.action)}
           style={{
             padding: '5px 14px',
-            fontSize: 12,
+            fontSize: 17,
             cursor: 'pointer',
             color: item.action === 'delete' ? 'var(--error, #e06c75)' : 'var(--text-primary)',
           }}
@@ -207,7 +207,7 @@ function InlineInput({
     <div style={{ padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4, ...extraStyle }}>
       <span
         style={{
-          fontSize: 11,
+          fontSize: 16,
           width: 16,
           textAlign: 'center',
           flexShrink: 0,
@@ -228,7 +228,7 @@ function InlineInput({
         placeholder={placeholder}
         style={{
           flex: 1,
-          fontSize: 12,
+          fontSize: 17,
           padding: '2px 4px',
           border: '1px solid var(--border-strong)',
           borderRadius: 3,
@@ -334,7 +334,7 @@ function TreeItem({
           gap: 4,
           padding: '3px 8px',
           paddingLeft: 8 + depth * 14,
-          fontSize: 12,
+          fontSize: 17,
           cursor: 'pointer',
           color: isActive ? 'var(--accent)' : 'var(--text-primary)',
           background: isActive ? 'var(--accent-bg)' : 'transparent',
@@ -356,7 +356,7 @@ function TreeItem({
             }}
             title="Open folder"
             style={{
-              fontSize: 11,
+              fontSize: 16,
               color: 'var(--text-dim)',
               flexShrink: 0,
               padding: '0 2px',
@@ -559,7 +559,7 @@ export default function FileTree() {
       <div
         style={{
           padding: '8px 12px 4px',
-          fontSize: 10,
+          fontSize: 15,
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: 0.8,
@@ -584,7 +584,7 @@ export default function FileTree() {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            fontSize: 14,
+            fontSize: 17,
             lineHeight: 1,
             color: 'var(--text-dim)',
             padding: '0 2px',
@@ -606,7 +606,7 @@ export default function FileTree() {
         <div
           style={{
             padding: '0 12px 4px',
-            fontSize: 10,
+            fontSize: 15,
             color: 'var(--text-dim)',
             fontFamily: "'Source Code Pro', monospace",
             overflow: 'hidden',
@@ -627,7 +627,7 @@ export default function FileTree() {
             alignItems: 'center',
             gap: 2,
             padding: '3px 8px',
-            fontSize: 11,
+            fontSize: 16,
             color: 'var(--text-secondary)',
             borderBottom: '1px solid var(--border)',
             marginBottom: 2,
@@ -691,7 +691,7 @@ export default function FileTree() {
             alignItems: 'center',
             gap: 4,
             padding: '3px 8px',
-            fontSize: 12,
+            fontSize: 17,
             cursor: 'pointer',
             color: 'var(--text-secondary)',
             whiteSpace: 'nowrap',

@@ -26,7 +26,7 @@ export default function Outline() {
       <div
         style={{
           padding: '8px 12px 4px',
-          fontSize: 10,
+          fontSize: 15,
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: 0.8,
@@ -42,7 +42,7 @@ export default function Outline() {
           style={{
             padding: '3px 8px',
             paddingLeft: 8 + (INDENT_PER_LEVEL[entry.level] ?? 0),
-            fontSize: 12,
+            fontSize: 17,
             color: 'var(--text-secondary)',
             cursor: 'pointer',
             whiteSpace: 'nowrap',

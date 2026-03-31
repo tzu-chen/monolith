@@ -153,7 +153,7 @@ export default function ProjectSwitcher() {
     border: 'none',
     cursor: 'pointer',
     padding: '2px 4px',
-    fontSize: 11,
+    fontSize: 16,
     color: 'var(--text-dim)',
     borderRadius: 3,
     lineHeight: 1,
@@ -168,7 +168,7 @@ export default function ProjectSwitcher() {
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          fontSize: 12.5,
+          fontSize: 17,
           color: 'var(--text-primary)',
           background: open ? 'var(--bg-hover)' : 'transparent',
           border: '1px solid var(--border)',
@@ -189,7 +189,7 @@ export default function ProjectSwitcher() {
         >
           {currentProject || 'No project'}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
+        <span style={{ fontSize: 15, color: 'var(--text-dim)', flexShrink: 0 }}>
           {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
         </span>
       </button>
@@ -220,7 +220,7 @@ export default function ProjectSwitcher() {
                   <div
                     style={{
                       padding: '6px 12px',
-                      fontSize: 12,
+                      fontSize: 17,
                       background: 'var(--bg-hover)',
                     }}
                   >
@@ -231,7 +231,7 @@ export default function ProjectSwitcher() {
                       <button
                         onClick={() => handleDelete(name)}
                         style={{
-                          fontSize: 11,
+                          fontSize: 16,
                           padding: '3px 8px',
                           background: '#c44',
                           color: 'white',
@@ -246,7 +246,7 @@ export default function ProjectSwitcher() {
                       <button
                         onClick={() => setConfirmDelete(null)}
                         style={{
-                          fontSize: 11,
+                          fontSize: 16,
                           padding: '3px 8px',
                           background: 'var(--bg-editor)',
                           color: 'var(--text-primary)',
@@ -281,7 +281,7 @@ export default function ProjectSwitcher() {
                         }}
                         style={{
                           flex: 1,
-                          fontSize: 12,
+                          fontSize: 17,
                           padding: '3px 6px',
                           border: '1px solid var(--border-strong)',
                           borderRadius: 4,
@@ -294,7 +294,7 @@ export default function ProjectSwitcher() {
                       <button
                         onClick={() => handleRename(name)}
                         style={{
-                          fontSize: 11,
+                          fontSize: 16,
                           padding: '3px 8px',
                           background: 'var(--accent)',
                           color: 'white',
@@ -314,7 +314,7 @@ export default function ProjectSwitcher() {
                     onClick={() => handleSwitch(name)}
                     style={{
                       padding: '7px 12px',
-                      fontSize: 12.5,
+                      fontSize: 17,
                       cursor: 'pointer',
                       color: name === currentProject ? 'var(--accent)' : 'var(--text-primary)',
                       background: name === currentProject ? 'var(--accent-bg)' : 'transparent',
@@ -394,7 +394,7 @@ export default function ProjectSwitcher() {
 
           {/* Error display */}
           {error && !creating && (
-            <div style={{ fontSize: 11, color: '#c44', padding: '4px 12px' }}>{error}</div>
+            <div style={{ fontSize: 16, color: '#c44', padding: '4px 12px' }}>{error}</div>
           )}
 
           {/* Separator + New Project */}
@@ -425,7 +425,7 @@ export default function ProjectSwitcher() {
                     placeholder="project-name"
                     style={{
                       flex: 1,
-                      fontSize: 12,
+                      fontSize: 17,
                       padding: '4px 6px',
                       border: '1px solid var(--border-strong)',
                       borderRadius: 4,
@@ -438,7 +438,7 @@ export default function ProjectSwitcher() {
                   <button
                     onClick={handleCreate}
                     style={{
-                      fontSize: 11,
+                      fontSize: 16,
                       padding: '4px 8px',
                       background: 'var(--accent)',
                       color: 'white',
@@ -452,7 +452,7 @@ export default function ProjectSwitcher() {
                   </button>
                 </div>
                 {error && (
-                  <div style={{ fontSize: 11, color: '#c44', marginTop: 4 }}>{error}</div>
+                  <div style={{ fontSize: 16, color: '#c44', marginTop: 4 }}>{error}</div>
                 )}
               </div>
             ) : (
@@ -460,7 +460,7 @@ export default function ProjectSwitcher() {
                 onClick={() => setCreating(true)}
                 style={{
                   padding: '7px 12px',
-                  fontSize: 12.5,
+                  fontSize: 17,
                   cursor: 'pointer',
                   color: 'var(--text-secondary)',
                 }}

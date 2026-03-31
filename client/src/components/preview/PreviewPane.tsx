@@ -245,7 +245,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         <div
           onClick={() => setActiveTab('pdf')}
           style={{
-            fontSize: 12,
+            fontSize: 17,
             color: activeTab === 'pdf' ? 'var(--accent)' : 'var(--text-dim)',
             padding: '4px 10px',
             borderRadius: 4,
@@ -259,7 +259,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         <div
           onClick={() => setActiveTab('log')}
           style={{
-            fontSize: 12,
+            fontSize: 17,
             color: activeTab === 'log' ? 'var(--accent)' : 'var(--text-dim)',
             padding: '4px 10px',
             borderRadius: 4,
@@ -275,7 +275,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
             value={zoomLevel}
             onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
             style={{
-              fontSize: 11,
+              fontSize: 16,
               padding: '2px 4px',
               borderRadius: 4,
               border: '1px solid var(--border)',
@@ -302,7 +302,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         >
           <div
             style={{
-              fontSize: 11,
+              fontSize: 16,
               color: statusColor,
               display: 'flex',
               alignItems: 'center',
@@ -323,7 +323,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
             onClick={onCompile}
             disabled={compilationStatus === 'compiling'}
             style={{
-              fontSize: 12,
+              fontSize: 17,
               color: 'white',
               background: compilationStatus === 'compiling' ? 'var(--accent-light)' : 'var(--accent)',
               border: '1px solid var(--accent)',
@@ -362,7 +362,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
             <div
               style={{
                 color: 'var(--text-dim)',
-                fontSize: 14,
+                fontSize: 18,
                 marginTop: 60,
                 textAlign: 'center',
               }}
@@ -375,7 +375,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
             <div
               style={{
                 color: 'var(--text-dim)',
-                fontSize: 14,
+                fontSize: 18,
                 marginTop: 60,
               }}
             >
@@ -391,7 +391,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
             overflow: 'auto',
             padding: 16,
             fontFamily: "'Source Code Pro', monospace",
-            fontSize: 12,
+            fontSize: 17,
             lineHeight: 1.6,
             whiteSpace: 'pre-wrap',
             color: 'var(--text-secondary)',

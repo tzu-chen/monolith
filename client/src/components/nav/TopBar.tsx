@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
-import { PanelIcon, SettingsIcon, CodeIcon, OmegaIcon, SnippetIcon } from '../shared/Icons';
+import { PanelIcon, SettingsIcon, CodeIcon, BookIcon } from '../shared/Icons';
 import SettingsModal from '../settings/SettingsModal';
 
 export default function TopBar() {
@@ -38,16 +38,10 @@ export default function TopBar() {
           title="Editor"
         />
         <IconRailButton
-          icon={<OmegaIcon size={18} />}
-          active={activePanel === 'symbols'}
-          onClick={() => togglePanel('symbols')}
-          title="Symbols"
-        />
-        <IconRailButton
-          icon={<SnippetIcon size={18} />}
-          active={activePanel === 'snippets'}
-          onClick={() => togglePanel('snippets')}
-          title="Snippets"
+          icon={<BookIcon size={18} />}
+          active={activePanel === 'references'}
+          onClick={() => togglePanel('references')}
+          title="References"
         />
       </nav>
 
@@ -74,7 +68,7 @@ export default function TopBar() {
                 : 'Show both'
           }
           style={{
-            fontSize: 10,
+            fontSize: 15,
             color: 'var(--text-secondary)',
             background: 'var(--bg-warm)',
             padding: '2px 6px',
@@ -95,39 +89,33 @@ export default function TopBar() {
         </div>
 
         {/* Settings */}
-        <div
+        <button
           onClick={() => setShowSettings(true)}
           title="Settings"
           style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-secondary)',
             cursor: 'pointer',
-            userSelect: 'none',
-            width: 26,
-            height: 26,
+            fontSize: 20,
+            padding: '4px 8px',
+            borderRadius: 4,
+            lineHeight: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: 4,
-            background: 'var(--bg-warm)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-secondary)',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
+            (e.currentTarget as HTMLElement).style.background = 'var(--bg-warm)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
+            (e.currentTarget as HTMLElement).style.background = 'none';
           }}
         >
-          <SettingsIcon size={14} />
-        </div>
-
-        <span
-          style={{
-            fontSize: 10,
-            color: 'var(--text-dim)',
-            background: 'var(--bg-warm)',
-            padding: '2px 6px',
-            borderRadius: 3,
-            border: '1px solid var(--border)',
-            fontFamily: "'Source Code Pro', monospace",
-          }}
-        >
-          ⌘S
-        </span>
+          <SettingsIcon size={18} />
+        </button>
       </div>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>

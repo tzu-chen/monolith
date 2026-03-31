@@ -117,8 +117,8 @@ export default function SymbolPalette() {
   }, [recentCommands.length, customSymbols.length, activeCategory]);
 
   const inputStyle: React.CSSProperties = {
-    fontSize: 11,
-    padding: '2px 6px',
+    fontSize: 16,
+    padding: '4px 8px',
     border: '1px solid var(--border)',
     borderRadius: 3,
     background: 'var(--bg-editor)',
@@ -130,12 +130,11 @@ export default function SymbolPalette() {
   return (
     <div
       style={{
-        height: 180,
-        borderBottom: '1px solid var(--border)',
+        flex: 1,
         background: 'var(--bg-panel)',
         display: 'flex',
         flexDirection: 'column',
-        flexShrink: 0,
+        overflow: 'hidden',
       }}
     >
       {/* Header row: search + category tabs + add button */}
@@ -154,9 +153,9 @@ export default function SymbolPalette() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
-            width: 120,
-            fontSize: 11,
-            padding: '3px 6px',
+            width: 140,
+            fontSize: 16,
+            padding: '5px 8px',
             border: '1px solid var(--border)',
             borderRadius: 3,
             background: 'var(--bg-editor)',
@@ -172,8 +171,8 @@ export default function SymbolPalette() {
                 key={name}
                 onClick={() => setActiveCategory(name)}
                 style={{
-                  fontSize: 10,
-                  padding: '2px 7px',
+                  fontSize: 15,
+                  padding: '3px 10px',
                   borderRadius: 3,
                   border: '1px solid var(--border)',
                   cursor: 'pointer',
@@ -193,9 +192,9 @@ export default function SymbolPalette() {
           onClick={() => setShowAddForm(!showAddForm)}
           title="Add custom symbol"
           style={{
-            fontSize: 14,
-            width: 24,
-            height: 22,
+            fontSize: 18,
+            width: 28,
+            height: 26,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -217,10 +216,10 @@ export default function SymbolPalette() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 6,
             padding: '4px 10px',
             borderBottom: '1px solid var(--border)',
-            fontSize: 11,
+            fontSize: 16,
           }}
         >
           <input
@@ -248,8 +247,8 @@ export default function SymbolPalette() {
           <button
             onClick={handleAddCustom}
             style={{
-              fontSize: 10,
-              padding: '2px 8px',
+              fontSize: 15,
+              padding: '3px 10px',
               border: '1px solid var(--border)',
               borderRadius: 3,
               background: 'var(--accent)',
@@ -263,8 +262,8 @@ export default function SymbolPalette() {
           <button
             onClick={() => setShowAddForm(false)}
             style={{
-              fontSize: 10,
-              padding: '2px 8px',
+              fontSize: 15,
+              padding: '3px 10px',
               border: '1px solid var(--border)',
               borderRadius: 3,
               background: 'transparent',
@@ -355,7 +354,7 @@ export default function SymbolPalette() {
           <div
             style={{
               color: 'var(--text-dim)',
-              fontSize: 11,
+              fontSize: 16,
               padding: 10,
             }}
           >

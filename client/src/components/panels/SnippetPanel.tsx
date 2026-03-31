@@ -100,8 +100,8 @@ export default function SnippetPanel() {
     customSnippets.some((s) => s.label === label);
 
   const inputStyle: React.CSSProperties = {
-    fontSize: 11,
-    padding: '2px 6px',
+    fontSize: 16,
+    padding: '4px 8px',
     border: '1px solid var(--border)',
     borderRadius: 3,
     background: 'var(--bg-editor)',
@@ -113,12 +113,11 @@ export default function SnippetPanel() {
   return (
     <div
       style={{
-        height: 180,
-        borderBottom: '1px solid var(--border)',
+        flex: 1,
         background: 'var(--bg-panel)',
         display: 'flex',
         flexDirection: 'column',
-        flexShrink: 0,
+        overflow: 'hidden',
       }}
     >
       {/* Header with tabs and add button */}
@@ -129,17 +128,17 @@ export default function SnippetPanel() {
           gap: 6,
           padding: '4px 10px',
           borderBottom: '1px solid var(--border)',
-          fontSize: 11,
+          fontSize: 16,
         }}
       >
-        <div style={{ display: 'flex', gap: 1 }}>
+        <div style={{ display: 'flex', gap: 2 }}>
           {(['All', 'Recent'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{
-                fontSize: 10,
-                padding: '2px 8px',
+                fontSize: 15,
+                padding: '3px 10px',
                 borderRadius: 3,
                 border: '1px solid var(--border)',
                 cursor: 'pointer',
@@ -159,9 +158,9 @@ export default function SnippetPanel() {
           onClick={() => setShowAddForm(!showAddForm)}
           title="Add custom snippet"
           style={{
-            fontSize: 14,
-            width: 24,
-            height: 22,
+            fontSize: 18,
+            width: 28,
+            height: 26,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -186,7 +185,7 @@ export default function SnippetPanel() {
             gap: 4,
             padding: '4px 10px',
             borderBottom: '1px solid var(--border)',
-            fontSize: 11,
+            fontSize: 16,
           }}
         >
           <input
@@ -214,8 +213,8 @@ export default function SnippetPanel() {
           <button
             onClick={handleAddCustom}
             style={{
-              fontSize: 10,
-              padding: '2px 8px',
+              fontSize: 15,
+              padding: '3px 10px',
               border: '1px solid var(--border)',
               borderRadius: 3,
               background: 'var(--accent)',
@@ -229,8 +228,8 @@ export default function SnippetPanel() {
           <button
             onClick={() => setShowAddForm(false)}
             style={{
-              fontSize: 10,
-              padding: '2px 8px',
+              fontSize: 15,
+              padding: '3px 10px',
               border: '1px solid var(--border)',
               borderRadius: 3,
               background: 'transparent',
@@ -256,7 +255,7 @@ export default function SnippetPanel() {
           style={{
             width: '100%',
             borderCollapse: 'collapse',
-            fontSize: 11,
+            fontSize: 16,
           }}
         >
           <thead>
@@ -304,7 +303,7 @@ export default function SnippetPanel() {
                     padding: '3px 6px',
                     fontFamily: "'Source Code Pro', monospace",
                     color: 'var(--text-secondary)',
-                    fontSize: 10,
+                    fontSize: 15,
                     whiteSpace: 'pre',
                     maxWidth: 260,
                     overflow: 'hidden',
@@ -322,8 +321,8 @@ export default function SnippetPanel() {
                   <button
                     onClick={() => insertSnippet(snip)}
                     style={{
-                      fontSize: 10,
-                      padding: '1px 8px',
+                      fontSize: 15,
+                      padding: '2px 10px',
                       border: '1px solid var(--border)',
                       borderRadius: 3,
                       background: 'transparent',
@@ -339,8 +338,8 @@ export default function SnippetPanel() {
                       onClick={() => deleteCustom(snip.label)}
                       title="Remove custom snippet"
                       style={{
-                        fontSize: 10,
-                        padding: '1px 5px',
+                        fontSize: 15,
+                        padding: '2px 6px',
                         marginLeft: 2,
                         border: '1px solid var(--border)',
                         borderRadius: 3,
@@ -363,7 +362,7 @@ export default function SnippetPanel() {
                   style={{
                     padding: 10,
                     color: 'var(--text-dim)',
-                    fontSize: 11,
+                    fontSize: 16,
                   }}
                 >
                   {tab === 'Recent'

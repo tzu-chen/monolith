@@ -17,13 +17,13 @@ export default function BottomBar() {
   return (
     <div
       style={{
-        height: 26,
+        height: 36,
         background: 'var(--bg-panel)',
         borderTop: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 14px',
-        fontSize: 11,
+        fontSize: 16,
         color: 'var(--text-dim)',
         gap: 18,
         flexShrink: 0,

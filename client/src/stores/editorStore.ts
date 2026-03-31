@@ -3,7 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
-export type ActivePanel = 'symbols' | 'snippets' | null;
+export type ActivePanel = 'symbols' | 'snippets' | 'references' | null;
 export type Theme = 'light' | 'dark';
 export type ViewMode = 'both' | 'editor' | 'pdf';
 
