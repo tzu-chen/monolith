@@ -6,13 +6,12 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { Extension, Compartment } from '@codemirror/state';
 import { vim } from '@replit/codemirror-vim';
 import { latexLanguage } from './latex-lang';
-import { createLightEditorTheme, lightHighlightStyle } from '../../themes/light';
 import type { FontSettings } from '../../themes/light';
-import { createDarkEditorTheme, darkHighlightStyle } from '../../themes/dark';
+import { createEditorTheme, createHighlightStyle } from '../../themes/editor-theme';
+import { getSchemeById } from '../../colorSchemes';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
 import { mathPreview } from './math-preview';
-import type { Theme } from '../../stores/editorStore';
 
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
@@ -20,14 +19,12 @@ export const lineWrapCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
 
-function getThemeExtensions(theme: Theme, font: FontSettings = defaultFont): Extension {
-  if (theme === 'dark') {
-    return [createDarkEditorTheme(font), darkHighlightStyle];
-  }
-  return [createLightEditorTheme(font), lightHighlightStyle];
+function getThemeExtensions(colorScheme: string, font: FontSettings = defaultFont): Extension {
+  const scheme = getSchemeById(colorScheme);
+  return [createEditorTheme(scheme, font), createHighlightStyle(scheme)];
 }
 
-export function createExtensions(theme: Theme = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false): Extension[] {
+export function createExtensions(colorScheme: string = 'default-light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
     lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
@@ -40,7 +37,7 @@ export function createExtensions(theme: Theme = 'light', vimMode: boolean = fals
     indentOnInput(),
     highlightSelectionMatches(),
     latexLanguage,
-    themeCompartment.of(getThemeExtensions(theme, font)),
+    themeCompartment.of(getThemeExtensions(colorScheme, font)),
     latexSnippetCompletion,
     mathPreview,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
@@ -55,8 +52,8 @@ export function createExtensions(theme: Theme = 'light', vimMode: boolean = fals
   ];
 }
 
-export function getThemeReconfiguration(theme: Theme, font: FontSettings = defaultFont) {
-  return themeCompartment.reconfigure(getThemeExtensions(theme, font));
+export function getThemeReconfiguration(colorScheme: string, font: FontSettings = defaultFont) {
+  return themeCompartment.reconfigure(getThemeExtensions(colorScheme, font));
 }
 
 export type { FontSettings };

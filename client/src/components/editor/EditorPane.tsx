@@ -20,7 +20,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const clearScrollToLine = useEditorStore((s) => s.clearScrollToLine);
   const updateContent = useEditorStore((s) => s.updateContent);
   const setEditorView = useEditorStore((s) => s.setEditorView);
-  const theme = useEditorStore((s) => s.theme);
+  const colorScheme = useEditorStore((s) => s.colorScheme);
   const vimMode = useEditorStore((s) => s.vimMode);
   const fontSize = useEditorStore((s) => s.fontSize);
   const fontFamily = useEditorStore((s) => s.fontFamily);
@@ -35,7 +35,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const createView = useCallback(
     (doc: string, parent: HTMLElement): EditorView => {
       const s = useEditorStore.getState();
-      const currentTheme = s.theme;
+      const currentColorScheme = s.colorScheme;
       const currentVim = s.vimMode;
       const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
       const currentLineWrap = s.lineWrap;
@@ -89,7 +89,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
       const state = EditorState.create({
         doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
       });
 
       return new EditorView({ state, parent });
@@ -113,7 +113,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
     // Check if we have a cached state for this file
     const cached = stateCache.current.get(activeTabPath);
-    const currentTheme = useEditorStore.getState().theme;
+    const currentColorScheme = useEditorStore.getState().colorScheme;
     const currentVim = useEditorStore.getState().vimMode;
     const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
     const currentLineWrap = useEditorStore.getState().lineWrap;
@@ -167,7 +167,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Recreate state with cached doc + extensions
       const state = EditorState.create({
         doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentTheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
         selection: cached.selection,
       });
 
@@ -191,13 +191,13 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     };
   }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reconfigure theme dynamically (also triggered by font changes)
+  // Reconfigure theme dynamically (also triggered by font/color scheme changes)
   useEffect(() => {
     if (!viewRef.current) return;
     viewRef.current.dispatch({
-      effects: getThemeReconfiguration(theme, { fontSize, fontFamily }),
+      effects: getThemeReconfiguration(colorScheme, { fontSize, fontFamily }),
     });
-  }, [theme, fontSize, fontFamily]);
+  }, [colorScheme, fontSize, fontFamily]);
 
   // Reconfigure vim mode dynamically
   useEffect(() => {
