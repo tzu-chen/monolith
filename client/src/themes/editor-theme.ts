@@ -22,6 +22,10 @@ export function createEditorTheme(scheme: ColorScheme, font: FontSettings) {
       color: colors.textPrimary,
       fontSize: `${font.fontSize}px`,
       fontFamily: font.fontFamily,
+      height: '100%',
+    },
+    '.cm-scroller': {
+      overflow: 'auto',
     },
     '.cm-content': {
       fontFamily: font.fontFamily,

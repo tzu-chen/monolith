@@ -250,8 +250,8 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     <div
       ref={containerRef}
       style={{
-        flex: 1,
-        overflow: 'auto',
+        height: '100%',
+        overflow: 'hidden',
         backgroundColor: 'var(--bg-editor)',
       }}
     />
