@@ -47,11 +47,17 @@ export async function compileTex(
       const errors: string[] = [];
       const warnings: string[] = [];
 
+      const suppressedWarnings = [
+        /internal consistency problem when checking if .+ changed/,
+      ];
+
       for (const line of log.split('\n')) {
         if (/error/i.test(line) && line.trim()) {
           errors.push(line.trim());
         } else if (/warning/i.test(line) && line.trim()) {
-          warnings.push(line.trim());
+          if (!suppressedWarnings.some(re => re.test(line))) {
+            warnings.push(line.trim());
+          }
         }
       }
 
