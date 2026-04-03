@@ -11,11 +11,12 @@ import { createEditorTheme, createHighlightStyle } from '../../themes/editor-the
 import { getSchemeById } from '../../colorSchemes';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
-import { mathPreview } from './math-preview';
+import { mathPreview, preambleMacrosFacet } from './math-preview';
 
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const lineWrapCompartment = new Compartment();
+export const preambleCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
 
@@ -24,7 +25,7 @@ function getThemeExtensions(colorScheme: string, font: FontSettings = defaultFon
   return [createEditorTheme(scheme, font), createHighlightStyle(scheme)];
 }
 
-export function createExtensions(colorScheme: string = 'default-light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false): Extension[] {
+export function createExtensions(colorScheme: string = 'default-light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = ''): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
     lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
@@ -38,6 +39,7 @@ export function createExtensions(colorScheme: string = 'default-light', vimMode:
     highlightSelectionMatches(),
     latexLanguage,
     themeCompartment.of(getThemeExtensions(colorScheme, font)),
+    preambleCompartment.of(preambleMacrosFacet.of(preambleMacros)),
     latexSnippetCompletion,
     mathPreview,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
@@ -64,4 +66,8 @@ export function getVimReconfiguration(vimMode: boolean) {
 
 export function getLineWrapReconfiguration(lineWrap: boolean) {
   return lineWrapCompartment.reconfigure(lineWrap ? EditorView.lineWrapping : []);
+}
+
+export function getPreambleReconfiguration(macros: string) {
+  return preambleCompartment.reconfigure(preambleMacrosFacet.of(macros));
 }

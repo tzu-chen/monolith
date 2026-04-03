@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 import * as api from '../lib/api';
+import { extractMacroDefinitions } from '../components/editor/math-preview';
 
 interface FileChangeMessage {
   type: 'file_changed';
@@ -56,6 +57,14 @@ export function useFileWatcher() {
             } catch {
               // No main.tex in this project
             }
+
+            // Load preamble macros for math preview
+            try {
+              const preamble = await api.readFile('preamble.tex');
+              store.setPreambleMacros(extractMacroDefinitions(preamble));
+            } catch {
+              // No preamble.tex
+            }
             return;
           }
 
@@ -64,6 +73,16 @@ export function useFileWatcher() {
           // Refresh file tree on any file system change
           const files = await api.listFiles();
           useEditorStore.getState().setFileTree(files);
+
+          // Re-fetch preamble macros when preamble.tex changes
+          if (msg.path === 'preamble.tex' && (msg.event === 'change' || msg.event === 'add')) {
+            try {
+              const preamble = await api.readFile('preamble.tex');
+              useEditorStore.getState().setPreambleMacros(extractMacroDefinitions(preamble));
+            } catch {}
+          } else if (msg.path === 'preamble.tex' && msg.event === 'unlink') {
+            useEditorStore.getState().setPreambleMacros('');
+          }
 
           // If a currently open file was changed externally, reload its content
           if (msg.event === 'change') {

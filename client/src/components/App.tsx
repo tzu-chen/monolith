@@ -9,6 +9,7 @@ import { useCompilation } from '../hooks/useCompilation';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
 import * as api from '../lib/api';
+import { extractMacroDefinitions } from './editor/math-preview';
 
 export default function App() {
   const { doCompile } = useCompilation();
@@ -55,6 +56,14 @@ export default function App() {
           store.openFile('main.tex', content);
         } catch {
           // main.tex doesn't exist — no file opened by default
+        }
+
+        // Load preamble macros for math preview
+        try {
+          const preamble = await api.readFile('preamble.tex');
+          store.setPreambleMacros(extractMacroDefinitions(preamble));
+        } catch {
+          // No preamble.tex — no custom macros
         }
       } catch (err) {
         console.error('Failed to initialize:', err);

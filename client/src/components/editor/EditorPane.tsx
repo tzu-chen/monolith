@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
-import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration } from './extensions';
+import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration, getPreambleReconfiguration } from './extensions';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
 
@@ -27,6 +27,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const lineWrap = useEditorStore((s) => s.lineWrap);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
+  const preambleMacros = useEditorStore((s) => s.preambleMacros);
 
   // Stable ref for onSave so we don't recreate the editor on every render
   const onSaveRef = useRef(onSave);
@@ -39,6 +40,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       const currentVim = s.vimMode;
       const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
       const currentLineWrap = s.lineWrap;
+      const currentPreambleMacros = s.preambleMacros;
 
       const saveKeymap = keymap.of([
         {
@@ -89,7 +91,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
       const state = EditorState.create({
         doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros), updateListener, syncTexHandler],
       });
 
       return new EditorView({ state, parent });
@@ -117,6 +119,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     const currentVim = useEditorStore.getState().vimMode;
     const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
     const currentLineWrap = useEditorStore.getState().lineWrap;
+    const currentPreambleMacros = useEditorStore.getState().preambleMacros;
 
     if (cached) {
       // Restore cached state (preserves undo history)
@@ -167,7 +170,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Recreate state with cached doc + extensions
       const state = EditorState.create({
         doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros), updateListener, syncTexHandler],
         selection: cached.selection,
       });
 
@@ -214,6 +217,14 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       effects: getLineWrapReconfiguration(lineWrap),
     });
   }, [lineWrap]);
+
+  // Reconfigure preamble macros for math preview
+  useEffect(() => {
+    if (!viewRef.current) return;
+    viewRef.current.dispatch({
+      effects: getPreambleReconfiguration(preambleMacros),
+    });
+  }, [preambleMacros]);
 
   // Handle scroll-to-line requests from outline
   useEffect(() => {

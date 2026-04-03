@@ -76,6 +76,9 @@ interface EditorState {
   // SyncTeX highlight
   syncTexHighlight: SyncTexHighlight | null;
 
+  // Preamble macros for math preview
+  preambleMacros: string;
+
   // Project actions
   setCurrentProject: (name: string | null) => void;
   setProjectRoot: (path: string | null) => void;
@@ -136,6 +139,9 @@ interface EditorState {
 
   // SyncTeX
   setSyncTexHighlight: (highlight: SyncTexHighlight | null) => void;
+
+  // Preamble macros
+  setPreambleMacros: (macros: string) => void;
 
   // Backward compat — derived getters
   content: string;
@@ -220,6 +226,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
+  preambleMacros: '',
 
   // Derived state (computed from active tab)
   content: '',
@@ -246,6 +253,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       scrollToLine: null,
       projectRoot: null,
       syncTexHighlight: null,
+      preambleMacros: '',
     }),
 
   openFile: (path, content) => {
@@ -390,6 +398,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setCursorPosition: (cursorLine, cursorCol) => set({ cursorLine, cursorCol }),
 
   setSyncTexHighlight: (syncTexHighlight) => set({ syncTexHighlight }),
+
+  setPreambleMacros: (preambleMacros) => set({ preambleMacros }),
 
   // Legacy setters for backward compat
   setContent: (content) => {

@@ -1,6 +1,50 @@
-import { StateField, EditorState } from '@codemirror/state';
+import { StateField, EditorState, Facet } from '@codemirror/state';
 import { showTooltip, Tooltip, EditorView, ViewUpdate } from '@codemirror/view';
 import katex from 'katex';
+
+/**
+ * Facet that holds preamble macro definitions (e.g. \newcommand lines)
+ * to be prepended to math expressions when rendering with KaTeX.
+ */
+export const preambleMacrosFacet = Facet.define<string, string>({
+  combine: (values) => values[0] ?? '',
+});
+
+/**
+ * Extract \newcommand, \renewcommand, \providecommand, \DeclareMathOperator,
+ * and \def definitions from preamble content. Handles multi-line definitions
+ * via brace-matching.
+ */
+export function extractMacroDefinitions(preamble: string): string {
+  const lines = preamble.split('\n');
+  const macroLines: string[] = [];
+  const starters = ['\\newcommand', '\\renewcommand', '\\providecommand', '\\DeclareMathOperator', '\\def'];
+
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trimStart();
+    if (starters.some((s) => trimmed.startsWith(s))) {
+      let combined = lines[i];
+      let braceCount = 0;
+      for (const ch of combined) {
+        if (ch === '{') braceCount++;
+        if (ch === '}') braceCount--;
+      }
+      while (braceCount > 0 && i + 1 < lines.length) {
+        i++;
+        combined += '\n' + lines[i];
+        for (const ch of lines[i]) {
+          if (ch === '{') braceCount++;
+          if (ch === '}') braceCount--;
+        }
+      }
+      macroLines.push(combined);
+    }
+    i++;
+  }
+
+  return macroLines.join('\n');
+}
 
 interface MathMatch {
   math: string;
@@ -147,13 +191,15 @@ function getMathForCursor(state: EditorState): MathResult | null {
   return null;
 }
 
-function renderMath(container: HTMLElement, matches: MathMatch[]) {
+function renderMath(container: HTMLElement, matches: MathMatch[], macros: string) {
   container.innerHTML = '';
   for (const expr of matches) {
     const wrapper = document.createElement('div');
     wrapper.className = expr.displayMode ? 'cm-math-preview-display' : 'cm-math-preview-inline';
     try {
-      katex.render(expr.math, wrapper, {
+      // Prepend preamble macro definitions so KaTeX can resolve custom commands
+      const mathWithMacros = macros ? macros + '\n' + expr.math : expr.math;
+      katex.render(mathWithMacros, wrapper, {
         throwOnError: false,
         displayMode: expr.displayMode,
         output: 'html',
@@ -184,8 +230,9 @@ const mathTooltipField = StateField.define<MathResult | null>({
       const result = state.field(field);
       if (!result) return null;
 
-      // Capture matches for closure
+      // Capture matches and macros for closure
       const currentMatches = result.matches;
+      const macros = state.facet(preambleMacrosFacet);
 
       return {
         pos: result.anchorPos,
@@ -194,8 +241,9 @@ const mathTooltipField = StateField.define<MathResult | null>({
         create(): { dom: HTMLElement; update: (update: ViewUpdate) => void } {
           const dom = document.createElement('div');
           dom.className = 'cm-math-preview';
-          renderMath(dom, currentMatches);
+          renderMath(dom, currentMatches, macros);
           let lastKey = mathKey(currentMatches);
+          let lastMacros = macros;
 
           return {
             dom,
@@ -203,9 +251,11 @@ const mathTooltipField = StateField.define<MathResult | null>({
               const newResult = update.state.field(field);
               if (!newResult) return;
               const newKey = mathKey(newResult.matches);
-              if (newKey !== lastKey) {
+              const newMacros = update.state.facet(preambleMacrosFacet);
+              if (newKey !== lastKey || newMacros !== lastMacros) {
                 lastKey = newKey;
-                renderMath(dom, newResult.matches);
+                lastMacros = newMacros;
+                renderMath(dom, newResult.matches, newMacros);
               }
             },
           };
