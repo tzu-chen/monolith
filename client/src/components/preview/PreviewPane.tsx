@@ -59,6 +59,8 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
   const [zoomLevel, setZoomLevel] = useState<ZoomOption>('fit-width');
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
+  const savedScrollRatioRef = useRef<number | null>(null);
+  const hasRenderedRef = useRef(false);
 
   const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -91,7 +93,10 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
 
   // Load the PDF document when pdfData changes
   useEffect(() => {
-    if (!pdfData) return;
+    if (!pdfData) {
+      hasRenderedRef.current = false;
+      return;
+    }
 
     const loadPdf = async () => {
       const binaryStr = atob(pdfData);
@@ -118,6 +123,13 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
       const baseViewport = firstPage.getViewport({ scale: 1 });
       const containerWidth = container.clientWidth;
       const scale = zoomToScale(zoomLevel, containerWidth, baseViewport.width);
+
+      // Save scroll position before clearing
+      if (hasRenderedRef.current && container.scrollHeight > 0) {
+        savedScrollRatioRef.current = container.scrollTop / container.scrollHeight;
+      } else {
+        savedScrollRatioRef.current = null;
+      }
 
       // Clear previous pages
       container.innerHTML = '';
@@ -164,6 +176,13 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         const ctx = canvas.getContext('2d')!;
         await page.render({ canvasContext: ctx, viewport }).promise;
       }
+
+      // Restore scroll position after recompilation (skip if SyncTeX will handle scrolling)
+      if (savedScrollRatioRef.current !== null && !useEditorStore.getState().syncTexHighlight) {
+        container.scrollTop = savedScrollRatioRef.current * container.scrollHeight;
+        savedScrollRatioRef.current = null;
+      }
+      hasRenderedRef.current = true;
     };
 
     renderPdf().catch(console.error);
