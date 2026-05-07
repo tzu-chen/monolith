@@ -86,6 +86,23 @@ export async function renameFile(from: string, to: string): Promise<void> {
   }
 }
 
+export async function transferFile(
+  from: string,
+  toProject: string,
+  options: { toPath?: string; mode?: 'copy' | 'move'; overwrite?: boolean } = {}
+): Promise<{ from: string; toProject: string; to: string; mode: 'copy' | 'move' }> {
+  const res = await fetch('/api/files/transfer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, toProject, ...options }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to transfer ${from} to ${toProject}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 // Project management
 export async function listProjects(): Promise<string[]> {
   const res = await fetch('/api/projects');

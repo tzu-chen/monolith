@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
+import { getProjectsRoot } from '../projectContext.js';
 
 export function createFilesRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
@@ -96,6 +97,80 @@ export function createFilesRouter(getProjectRoot: () => string | null): Router {
       res.json({ from, to, renamed: true });
     } catch (err) {
       res.status(500).json({ error: `Failed to rename: ${err}` });
+    }
+  });
+
+  // Transfer (copy or move) a file or directory to another project
+  router.post('/transfer', async (req: Request, res: Response) => {
+    try {
+      const projectRoot = getProjectRoot();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
+      const { from, toProject, toPath, mode = 'copy', overwrite = false } = req.body;
+      if (!from || typeof from !== 'string') {
+        res.status(400).json({ error: 'Body must include "from" string' });
+        return;
+      }
+      if (!toProject || typeof toProject !== 'string') {
+        res.status(400).json({ error: 'Body must include "toProject" string' });
+        return;
+      }
+      if (mode !== 'copy' && mode !== 'move') {
+        res.status(400).json({ error: 'mode must be "copy" or "move"' });
+        return;
+      }
+
+      const fromPathFull = safePath(from, projectRoot);
+      if (!fromPathFull) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+
+      const projectsRoot = getProjectsRoot();
+      const targetProjectRoot = path.join(projectsRoot, toProject);
+      if (!targetProjectRoot.startsWith(projectsRoot + path.sep)) {
+        res.status(403).json({ error: 'Invalid target project name' });
+        return;
+      }
+      try {
+        const stat = await fs.stat(targetProjectRoot);
+        if (!stat.isDirectory()) {
+          res.status(404).json({ error: `Target project "${toProject}" does not exist` });
+          return;
+        }
+      } catch {
+        res.status(404).json({ error: `Target project "${toProject}" does not exist` });
+        return;
+      }
+      if (path.resolve(targetProjectRoot) === path.resolve(projectRoot)) {
+        res.status(400).json({ error: 'Target project must differ from current project' });
+        return;
+      }
+
+      const destRel = (typeof toPath === 'string' && toPath) ? toPath : from;
+      const toPathFull = safePath(destRel, targetProjectRoot);
+      if (!toPathFull) {
+        res.status(403).json({ error: 'Path traversal not allowed' });
+        return;
+      }
+
+      if (!overwrite) {
+        try {
+          await fs.access(toPathFull);
+          res.status(409).json({ error: 'Destination already exists' });
+          return;
+        } catch {
+          // doesn't exist — fine
+        }
+      }
+
+      await fs.mkdir(path.dirname(toPathFull), { recursive: true });
+      await fs.cp(fromPathFull, toPathFull, { recursive: true, force: !!overwrite, errorOnExist: !overwrite });
+      if (mode === 'move') {
+        await fs.rm(fromPathFull, { recursive: true });
+      }
+      res.json({ from, toProject, to: destRel, mode, transferred: true });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to transfer: ${err}` });
     }
   });
 

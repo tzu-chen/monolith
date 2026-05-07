@@ -92,21 +92,31 @@ interface ContextMenuState {
 
 function ContextMenu({
   menu,
+  projects,
+  currentProject,
   onClose,
   onAction,
+  onTransfer,
 }: {
   menu: ContextMenuState;
+  projects: string[];
+  currentProject: string | null;
   onClose: () => void;
   onAction: (action: string) => void;
+  onTransfer: (toProject: string, mode: 'copy' | 'move') => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [submenu, setSubmenu] = useState<'copy' | 'move' | null>(null);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (submenu) setSubmenu(null);
+        else onClose();
+      }
     };
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
@@ -114,44 +124,99 @@ function ContextMenu({
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [onClose]);
+  }, [onClose, submenu]);
 
-  const items: { label: string; action: string }[] = [];
+  const containerStyle: React.CSSProperties = {
+    position: 'fixed',
+    left: menu.x,
+    top: menu.y,
+    background: 'var(--bg-panel)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 4,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    zIndex: 1000,
+    minWidth: 160,
+    padding: '4px 0',
+  };
+
+  const itemStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
+    padding: '5px 14px',
+    fontSize: 17,
+    cursor: 'pointer',
+    color: 'var(--text-primary)',
+    ...extra,
+  });
+
+  if (submenu) {
+    const otherProjects = projects.filter((p) => p !== currentProject);
+    return (
+      <div ref={ref} style={containerStyle}>
+        <div
+          onClick={() => setSubmenu(null)}
+          style={itemStyle({
+            color: 'var(--text-dim)',
+            borderBottom: '1px solid var(--border)',
+            marginBottom: 2,
+          })}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'transparent';
+          }}
+        >
+          ← {submenu === 'copy' ? 'Copy to project' : 'Move to project'}
+        </div>
+        {otherProjects.length === 0 ? (
+          <div style={itemStyle({ color: 'var(--text-dim)', cursor: 'default' })}>
+            No other projects
+          </div>
+        ) : (
+          otherProjects.map((p) => (
+            <div
+              key={p}
+              onClick={() => onTransfer(p, submenu)}
+              style={itemStyle()}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent';
+              }}
+            >
+              {p}
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  type Item = { label: string; action?: string; submenu?: 'copy' | 'move'; danger?: boolean };
+  const items: Item[] = [];
   if (!menu.node || menu.node.isDir) {
     items.push({ label: 'New File', action: 'newFile' });
     items.push({ label: 'New Folder', action: 'newFolder' });
   }
   if (menu.node) {
     items.push({ label: 'Rename', action: 'rename' });
-    items.push({ label: 'Delete', action: 'delete' });
+    items.push({ label: 'Copy to project…', submenu: 'copy' });
+    items.push({ label: 'Move to project…', submenu: 'move' });
+    items.push({ label: 'Delete', action: 'delete', danger: true });
   }
 
   return (
-    <div
-      ref={ref}
-      style={{
-        position: 'fixed',
-        left: menu.x,
-        top: menu.y,
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 4,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        zIndex: 1000,
-        minWidth: 130,
-        padding: '4px 0',
-      }}
-    >
+    <div ref={ref} style={containerStyle}>
       {items.map((item) => (
         <div
-          key={item.action}
-          onClick={() => onAction(item.action)}
-          style={{
-            padding: '5px 14px',
-            fontSize: 17,
-            cursor: 'pointer',
-            color: item.action === 'delete' ? 'var(--error, #e06c75)' : 'var(--text-primary)',
+          key={item.action ?? `submenu-${item.submenu}`}
+          onClick={() => {
+            if (item.submenu) setSubmenu(item.submenu);
+            else if (item.action) onAction(item.action);
           }}
+          style={itemStyle({
+            color: item.danger ? 'var(--error, #e06c75)' : 'var(--text-primary)',
+          })}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
           }}
@@ -394,6 +459,8 @@ function TreeItem({
 export default function FileTree() {
   const fileTree = useEditorStore((s) => s.fileTree);
   const projectRoot = useEditorStore((s) => s.projectRoot);
+  const projects = useEditorStore((s) => s.projects);
+  const currentProject = useEditorStore((s) => s.currentProject);
   const [currentDir, setCurrentDir] = useState('');
   const [creatingFile, setCreatingFile] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -523,6 +590,35 @@ export default function FileTree() {
     // Reset the input so the same file can be uploaded again
     e.target.value = '';
   }, [currentDir]);
+
+  const handleTransfer = useCallback(async (toProject: string, mode: 'copy' | 'move') => {
+    const node = contextMenu?.node;
+    setContextMenu(null);
+    if (!node) return;
+    try {
+      try {
+        await api.transferFile(node.path, toProject, { mode });
+      } catch (err: any) {
+        const msg = String(err?.message || err);
+        if (msg.includes('Destination already exists') || msg.includes('409')) {
+          const ok = window.confirm(
+            `"${node.path}" already exists in "${toProject}". Overwrite?`
+          );
+          if (!ok) return;
+          await api.transferFile(node.path, toProject, { mode, overwrite: true });
+        } else {
+          throw err;
+        }
+      }
+      if (mode === 'move') {
+        closeTabsUnderPath(node.path);
+        await refreshFileTree();
+      }
+    } catch (err) {
+      console.error(`Failed to ${mode} to project:`, err);
+      window.alert(`Failed to ${mode} to "${toProject}": ${err}`);
+    }
+  }, [contextMenu]);
 
   // Context menu action: may target a directory (for "new file"/"new folder" inside it)
   const handleContextAction = useCallback((action: string) => {
@@ -747,8 +843,11 @@ export default function FileTree() {
       {contextMenu && (
         <ContextMenu
           menu={contextMenu}
+          projects={projects}
+          currentProject={currentProject}
           onClose={() => setContextMenu(null)}
           onAction={handleContextAction}
+          onTransfer={handleTransfer}
         />
       )}
     </div>
