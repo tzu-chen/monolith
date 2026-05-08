@@ -135,6 +135,8 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
       container.innerHTML = '';
       pageGeometryRef.current = [];
 
+      const outputScale = window.devicePixelRatio || 1;
+
       // Render each page
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -148,9 +150,11 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         wrapper.dataset.page = String(i);
 
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
         canvas.style.display = 'block';
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
         canvas.style.borderRadius = '2px';
         if (theme === 'dark') {
           canvas.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
@@ -174,7 +178,8 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
         });
 
         const ctx = canvas.getContext('2d')!;
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined;
+        await page.render({ canvasContext: ctx, viewport, transform }).promise;
       }
 
       // Restore scroll position after recompilation (skip if SyncTeX will handle scrolling)
