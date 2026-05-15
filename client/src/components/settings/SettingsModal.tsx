@@ -1,15 +1,173 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
-import { COLOR_SCHEMES, getSchemeById, applyColorScheme } from '../../colorSchemes';
+import {
+  COLOR_SCHEMES,
+  getSchemeById,
+  applyColorScheme,
+  type ColorScheme,
+} from '../../colorSchemes';
 import { MinusIcon, PlusIcon, CloseIcon } from '../shared/Icons';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
+interface ToggleProps {
+  on: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+  accent: string;
+  off: string;
+}
+
+function Toggle({ on, onClick, ariaLabel, accent, off }: ToggleProps) {
+  return (
+    <button
+      onClick={onClick}
+      role="switch"
+      aria-checked={on}
+      aria-label={ariaLabel}
+      style={{
+        position: 'relative',
+        width: 40,
+        height: 22,
+        background: on ? accent : off,
+        border: 'none',
+        borderRadius: 11,
+        cursor: 'pointer',
+        transition: 'background 0.2s',
+        flexShrink: 0,
+        padding: 0,
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: 2,
+          width: 18,
+          height: 18,
+          background: '#fff',
+          borderRadius: '50%',
+          transition: 'transform 0.2s',
+          transform: on ? 'translateX(18px)' : 'translateX(0)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+        }}
+      />
+    </button>
+  );
+}
+
+interface CardProps {
+  scheme: ColorScheme;
+  active: boolean;
+  onClick: () => void;
+  currentScheme: ColorScheme;
+}
+
+function SchemeCard({ scheme, active, onClick, currentScheme }: CardProps) {
+  const c = scheme.colors;
+  const ring = currentScheme.colors.accent;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 8,
+        padding: 10,
+        background: active ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
+        border: `2px solid ${active ? ring : currentScheme.colors.border}`,
+        borderRadius: 10,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        boxShadow: active ? `0 0 0 1px ${ring}` : 'none',
+        width: '100%',
+        fontFamily: 'inherit',
+      }}
+    >
+      {/* Preview */}
+      <div
+        style={{
+          width: '100%',
+          height: 64,
+          borderRadius: 6,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          background: c.bgWarm,
+          border: `1px solid ${c.border}`,
+        }}
+      >
+        {/* Top bar */}
+        <div
+          style={{
+            height: 14,
+            background: c.bgPanel,
+            borderBottom: `1px solid ${c.border}`,
+            flexShrink: 0,
+          }}
+        />
+        {/* Body */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            gap: 6,
+            padding: 6,
+            alignItems: 'center',
+          }}
+        >
+          {/* "Editor" card */}
+          <div
+            style={{
+              flex: 1,
+              height: '100%',
+              background: c.bgEditor,
+              border: `1px solid ${c.border}`,
+              borderRadius: 3,
+              padding: '5px 6px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              justifyContent: 'center',
+            }}
+          >
+            <div style={{ height: 3, width: '80%', borderRadius: 1, background: c.textPrimary }} />
+            <div style={{ height: 3, width: '55%', borderRadius: 1, background: c.textSecondary }} />
+          </div>
+          {/* Accent stripe */}
+          <div
+            style={{
+              width: 8,
+              height: 26,
+              borderRadius: 2,
+              background: c.accent,
+              flexShrink: 0,
+            }}
+          />
+        </div>
+      </div>
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: currentScheme.colors.textPrimary,
+          letterSpacing: 0.2,
+        }}
+      >
+        {scheme.name}
+      </span>
+    </button>
+  );
+}
+
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const colorScheme = useEditorStore((s) => s.colorScheme);
   const setColorScheme = useEditorStore((s) => s.setColorScheme);
+  const autoSwitch = useEditorStore((s) => s.autoSwitch);
+  const setAutoSwitch = useEditorStore((s) => s.setAutoSwitch);
   const fontSize = useEditorStore((s) => s.fontSize);
   const setFontSize = useEditorStore((s) => s.setFontSize);
   const fontFamily = useEditorStore((s) => s.fontFamily);
@@ -19,30 +177,51 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const lineWrap = useEditorStore((s) => s.lineWrap);
   const toggleLineWrap = useEditorStore((s) => s.toggleLineWrap);
 
-  // Track the scheme when modal opened so we can revert on cancel
+  // Snapshot to revert on cancel
   const initialSchemeRef = useRef(colorScheme);
+  const initialAutoRef = useRef(autoSwitch);
   const [selectedScheme, setSelectedScheme] = useState(colorScheme);
+  const [previewAutoOn, setPreviewAutoOn] = useState(autoSwitch.enabled);
 
-  // Preview scheme instantly when clicked
   const handleSchemeClick = (id: string) => {
     setSelectedScheme(id);
-    const scheme = getSchemeById(id);
-    applyColorScheme(scheme);
+    setPreviewAutoOn(false);
+    applyColorScheme(getSchemeById(id));
+  };
+
+  const handleAutoToggle = () => {
+    const next = !previewAutoOn;
+    setPreviewAutoOn(next);
+    if (next) {
+      // Preview the time-of-day scheme without persisting yet
+      const hour = new Date().getHours();
+      const id =
+        hour >= autoSwitch.dayStartHour && hour < autoSwitch.nightStartHour
+          ? autoSwitch.lightSchemeId
+          : autoSwitch.darkSchemeId;
+      setSelectedScheme(id);
+      applyColorScheme(getSchemeById(id));
+    }
   };
 
   const handleSave = () => {
-    setColorScheme(selectedScheme);
+    if (previewAutoOn) {
+      setAutoSwitch({ ...autoSwitch, enabled: true });
+    } else {
+      if (autoSwitch.enabled) {
+        setAutoSwitch({ ...autoSwitch, enabled: false });
+      }
+      setColorScheme(selectedScheme);
+    }
     onClose();
   };
 
   const handleCancel = () => {
-    // Revert to the scheme that was active when modal opened
-    const original = getSchemeById(initialSchemeRef.current);
-    applyColorScheme(original);
+    applyColorScheme(getSchemeById(initialSchemeRef.current));
+    setPreviewAutoOn(initialAutoRef.current.enabled);
     onClose();
   };
 
-  // Close on Escape
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleCancel();
@@ -52,6 +231,22 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentScheme = getSchemeById(selectedScheme);
+  const labelStyle = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: currentScheme.colors.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  };
+  const rowStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 14px',
+    background: currentScheme.colors.bgEditor,
+    border: `1px solid ${currentScheme.colors.border}`,
+    borderRadius: 8,
+  };
 
   return (
     <div
@@ -73,14 +268,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           border: `1px solid ${currentScheme.colors.border}`,
           borderRadius: 12,
           padding: 28,
-          width: 540,
-          maxHeight: '80vh',
+          width: 480,
+          maxHeight: '85vh',
           overflow: 'auto',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, color: currentScheme.colors.textPrimary, margin: 0 }}>
             Settings
           </h2>
@@ -92,67 +287,56 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
         </div>
 
-        {/* Color Scheme Section */}
-        <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Color Scheme
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-            {COLOR_SCHEMES.map((scheme) => {
-              const isActive = selectedScheme === scheme.id;
-              return (
-                <div
-                  key={scheme.id}
-                  onClick={() => handleSchemeClick(scheme.id)}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    border: `2px solid ${isActive ? currentScheme.colors.accent : currentScheme.colors.border}`,
-                    background: scheme.colors.bgWarm,
-                    cursor: 'pointer',
-                    transition: 'border-color 0.15s',
-                  }}
-                >
-                  {/* Color swatches */}
-                  <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.bgEditor, border: `1px solid ${scheme.colors.border}` }} />
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.bgPanel }} />
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.accent }} />
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.textPrimary }} />
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.green }} />
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: scheme.colors.purple }} />
-                  </div>
-                  {/* Name and type */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 16, fontWeight: 500, color: scheme.colors.textPrimary }}>
-                      {scheme.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        padding: '1px 5px',
-                        borderRadius: 3,
-                        background: scheme.colors.bgActive,
-                        color: scheme.colors.textSecondary,
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      {scheme.type}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+        {/* Appearance Section */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>Appearance</label>
+
+          {/* Auto switch row */}
+          <div style={{ ...rowStyle, marginTop: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: currentScheme.colors.textPrimary }}>
+                Auto switch
+              </span>
+              <span style={{ fontSize: 12, color: currentScheme.colors.textSecondary }}>
+                Light by day, dark by night
+              </span>
+            </div>
+            <Toggle
+              on={previewAutoOn}
+              onClick={handleAutoToggle}
+              ariaLabel="Auto theme switching"
+              accent={currentScheme.colors.accent}
+              off={currentScheme.colors.border}
+            />
+          </div>
+
+          {/* Theme cards */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 12,
+              marginTop: 12,
+              opacity: previewAutoOn ? 0.55 : 1,
+              pointerEvents: previewAutoOn ? 'none' : 'auto',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {COLOR_SCHEMES.map((scheme) => (
+              <SchemeCard
+                key={scheme.id}
+                scheme={scheme}
+                active={selectedScheme === scheme.id}
+                onClick={() => handleSchemeClick(scheme.id)}
+                currentScheme={currentScheme}
+              />
+            ))}
           </div>
         </div>
 
         {/* Font Family Section */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Editor Font
-          </label>
+          <label style={labelStyle}>Editor Font</label>
           <select
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value)}
@@ -160,7 +344,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               display: 'block',
               width: '100%',
               marginTop: 8,
-              fontSize: 17,
+              fontSize: 15,
               padding: '6px 8px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.border}`,
@@ -183,9 +367,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Font Size Section */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Font Size
-          </label>
+          <label style={labelStyle}>Font Size</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <div
               onClick={() => setFontSize(fontSize - 0.5)}
@@ -220,10 +402,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Vim Mode Toggle */}
-        <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Vim Mode
-          </label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Vim Mode</label>
           <div
             onClick={toggleVimMode}
             style={{
@@ -237,21 +417,19 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               background: vimMode ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
               color: vimMode ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
               cursor: 'pointer',
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: 500,
               fontFamily: "'Source Code Pro', monospace",
             }}
           >
             VIM
-            <span style={{ fontSize: 15, opacity: 0.7 }}>{vimMode ? 'ON' : 'OFF'}</span>
+            <span style={{ fontSize: 13, opacity: 0.7 }}>{vimMode ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 
         {/* Line Wrap Toggle */}
-        <div style={{ marginBottom: 28 }}>
-          <label style={{ fontSize: 16, fontWeight: 600, color: currentScheme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Line Wrap
-          </label>
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>Line Wrap</label>
           <div
             onClick={toggleLineWrap}
             style={{
@@ -265,13 +443,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               background: lineWrap ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
               color: lineWrap ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
               cursor: 'pointer',
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: 500,
               fontFamily: "'Source Code Pro', monospace",
             }}
           >
             WRAP
-            <span style={{ fontSize: 15, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
+            <span style={{ fontSize: 13, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 
@@ -280,7 +458,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           <button
             onClick={handleCancel}
             style={{
-              fontSize: 17,
+              fontSize: 15,
               padding: '6px 16px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.border}`,
@@ -295,7 +473,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           <button
             onClick={handleSave}
             style={{
-              fontSize: 17,
+              fontSize: 15,
               padding: '6px 16px',
               borderRadius: 6,
               border: `1px solid ${currentScheme.colors.accent}`,

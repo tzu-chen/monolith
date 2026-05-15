@@ -1,6 +1,35 @@
 import { create } from 'zustand';
 import type { EditorView } from '@codemirror/view';
-import { getSchemeById, applyColorScheme } from '../colorSchemes';
+import {
+  getSchemeById,
+  applyColorScheme,
+  coerceSchemeId,
+  DEFAULT_LIGHT_SCHEME_ID,
+  DEFAULT_DARK_SCHEME_ID,
+} from '../colorSchemes';
+
+export interface AutoSwitchSettings {
+  enabled: boolean;
+  lightSchemeId: string;
+  darkSchemeId: string;
+  dayStartHour: number;
+  nightStartHour: number;
+}
+
+const DEFAULT_AUTO_SWITCH: AutoSwitchSettings = {
+  enabled: false,
+  lightSchemeId: DEFAULT_LIGHT_SCHEME_ID,
+  darkSchemeId: DEFAULT_DARK_SCHEME_ID,
+  dayStartHour: 7,
+  nightStartHour: 19,
+};
+
+export function getSchemeForCurrentTime(s: AutoSwitchSettings): string {
+  const hour = new Date().getHours();
+  return hour >= s.dayStartHour && hour < s.nightStartHour
+    ? s.lightSchemeId
+    : s.darkSchemeId;
+}
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
 export type ActivePanel = 'symbols' | 'snippets' | 'references' | null;
@@ -55,6 +84,7 @@ interface EditorState {
   // Theme
   theme: Theme;
   colorScheme: string;
+  autoSwitch: AutoSwitchSettings;
 
   // Vim mode
   vimMode: boolean;
@@ -120,6 +150,8 @@ interface EditorState {
 
   // Theme
   setColorScheme: (id: string) => void;
+  setAutoSwitch: (settings: AutoSwitchSettings) => void;
+  applyAutoSwitchScheme: () => void;
 
   // Vim mode
   toggleVimMode: () => void;
@@ -154,12 +186,30 @@ interface EditorState {
   setFilePath: (filePath: string) => void;
 }
 
+function getInitialAutoSwitch(): AutoSwitchSettings {
+  try {
+    const raw = localStorage.getItem('monolith-theme-auto');
+    if (!raw) return DEFAULT_AUTO_SWITCH;
+    const parsed = JSON.parse(raw);
+    const merged = { ...DEFAULT_AUTO_SWITCH, ...parsed };
+    return {
+      ...merged,
+      lightSchemeId: coerceSchemeId(merged.lightSchemeId, DEFAULT_LIGHT_SCHEME_ID),
+      darkSchemeId: coerceSchemeId(merged.darkSchemeId, DEFAULT_DARK_SCHEME_ID),
+    };
+  } catch {
+    return DEFAULT_AUTO_SWITCH;
+  }
+}
+
 function getInitialColorScheme(): string {
+  const auto = getInitialAutoSwitch();
+  if (auto.enabled) return getSchemeForCurrentTime(auto);
   try {
     const stored = localStorage.getItem('monolith-color-scheme');
-    if (stored) return stored;
+    if (stored) return coerceSchemeId(stored);
   } catch {}
-  return 'default-light';
+  return DEFAULT_LIGHT_SCHEME_ID;
 }
 
 function getInitialTheme(): Theme {
@@ -218,6 +268,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   scrollToLine: null,
   theme: getInitialTheme(),
   colorScheme: getInitialColorScheme(),
+  autoSwitch: getInitialAutoSwitch(),
   vimMode: getInitialVimMode(),
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
@@ -362,8 +413,39 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setColorScheme: (id: string) => {
     const scheme = getSchemeById(id);
     applyColorScheme(scheme);
-    try { localStorage.setItem('monolith-color-scheme', id); } catch {}
-    set({ colorScheme: id, theme: scheme.type });
+    try { localStorage.setItem('monolith-color-scheme', scheme.id); } catch {}
+    const state = get();
+    if (state.autoSwitch.enabled) {
+      const next = { ...state.autoSwitch, enabled: false };
+      try { localStorage.setItem('monolith-theme-auto', JSON.stringify(next)); } catch {}
+      set({ colorScheme: scheme.id, theme: scheme.type, autoSwitch: next });
+    } else {
+      set({ colorScheme: scheme.id, theme: scheme.type });
+    }
+  },
+
+  setAutoSwitch: (settings: AutoSwitchSettings) => {
+    try { localStorage.setItem('monolith-theme-auto', JSON.stringify(settings)); } catch {}
+    if (settings.enabled) {
+      const id = getSchemeForCurrentTime(settings);
+      const scheme = getSchemeById(id);
+      applyColorScheme(scheme);
+      try { localStorage.setItem('monolith-color-scheme', scheme.id); } catch {}
+      set({ autoSwitch: settings, colorScheme: scheme.id, theme: scheme.type });
+    } else {
+      set({ autoSwitch: settings });
+    }
+  },
+
+  applyAutoSwitchScheme: () => {
+    const state = get();
+    if (!state.autoSwitch.enabled) return;
+    const id = getSchemeForCurrentTime(state.autoSwitch);
+    if (id === state.colorScheme) return;
+    const scheme = getSchemeById(id);
+    applyColorScheme(scheme);
+    try { localStorage.setItem('monolith-color-scheme', scheme.id); } catch {}
+    set({ colorScheme: scheme.id, theme: scheme.type });
   },
 
   toggleVimMode: () => {

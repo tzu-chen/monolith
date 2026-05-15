@@ -22,11 +22,21 @@ export default function App() {
     doCompile();
   }, [saveNow, doCompile]);
 
-  // Initialize color scheme on mount
+  // Initialize color scheme on mount, and tick auto-switch each minute
+  const autoSwitchEnabled = useEditorStore((s) => s.autoSwitch.enabled);
   useEffect(() => {
     const schemeId = useEditorStore.getState().colorScheme;
     applyColorScheme(getSchemeById(schemeId));
   }, []);
+
+  useEffect(() => {
+    if (!autoSwitchEnabled) return;
+    useEditorStore.getState().applyAutoSwitchScheme();
+    const id = window.setInterval(() => {
+      useEditorStore.getState().applyAutoSwitchScheme();
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [autoSwitchEnabled]);
 
   // Load projects, file tree, and open main.tex on mount
   useEffect(() => {

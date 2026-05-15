@@ -25,7 +25,7 @@ function getThemeExtensions(colorScheme: string, font: FontSettings = defaultFon
   return [createEditorTheme(scheme, font), createHighlightStyle(scheme)];
 }
 
-export function createExtensions(colorScheme: string = 'default-light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = ''): Extension[] {
+export function createExtensions(colorScheme: string = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = ''): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
     lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
