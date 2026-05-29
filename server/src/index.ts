@@ -12,7 +12,15 @@ import { setupWebSocket } from './ws.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3005', 10);
-const PROJECTS_ROOT = path.resolve(process.env.PROJECTS_ROOT || path.join(import.meta.dirname, '../../projects'));
+// Explicit PROJECTS_ROOT wins; otherwise fall back to the shared suite root when
+// SUITE_DATA_ROOT is set, else the original in-repo location (copied verbatim).
+const PROJECTS_ROOT = path.resolve(
+  process.env.PROJECTS_ROOT ||
+  (process.env.SUITE_DATA_ROOT
+    ? path.join(process.env.SUITE_DATA_ROOT, 'monolith', 'projects')
+    : path.join(import.meta.dirname, '../../projects'))
+);
+console.log(`[monolith] projects root: ${PROJECTS_ROOT}`);
 const CLIENT_DIST = path.resolve(import.meta.dirname, '../../client/dist');
 
 // Ensure projects root exists

@@ -41,5 +41,5 @@ npm start                # Build + start production server
 - PDF is returned as base64 from the compile endpoint
 - File watching uses chokidar, changes broadcast via WebSocket to all clients
 - SyncTeX parsing is done server-side from Tectonic's .synctex.gz output
-- Projects are directories under `PROJECTS_ROOT` (default `./projects/`)
+- Projects are directories under `PROJECTS_ROOT` (resolved in `server/src/index.ts`). Precedence: explicit `PROJECTS_ROOT` env var → else `$SUITE_DATA_ROOT/monolith/projects` when `SUITE_DATA_ROOT` is set → else the legacy in-repo `./projects/` (byte-for-byte). `SUITE_DATA_ROOT` is the suite-wide data-centralization variable.
 - Client dev server proxies `/api` and `/ws` to the backend via Vite config
