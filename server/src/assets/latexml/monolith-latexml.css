@@ -227,8 +227,7 @@ math[display="block"] {
 /* ----- Lists ------------------------------------------------------------ */
 
 .ltx_itemize,
-.ltx_enumerate,
-.ltx_description {
+.ltx_enumerate {
   margin: 0.8rem 0 1.2rem;
   padding-left: 1.6rem;
 }
@@ -240,6 +239,29 @@ math[display="block"] {
 .ltx_item > .ltx_tag {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* Description lists: LaTeXML emits <dl class="ltx_description"> with the bold
+   term in <dt class="ltx_item"> and the body in <dd class="ltx_item">. The
+   browser's default 40px <dd> indent leaves the body floating far to the right
+   of its term. Lay each pair out as an aligned hanging-label grid instead: the
+   term column is sized to its content but capped so a long term wraps rather
+   than shoving the body off-screen. */
+.ltx_description {
+  display: grid;
+  grid-template-columns: fit-content(12rem) 1fr;
+  gap: 0.5rem 0.8em;
+  align-items: baseline;
+  margin: 0.8rem 0 1.2rem;
+  padding-left: 1.6rem;
+}
+
+.ltx_description > .ltx_item {
+  margin: 0;
+}
+
+.ltx_description > dd.ltx_item > .ltx_para > .ltx_p:last-child {
+  margin-bottom: 0;
 }
 
 /* ----- Theorem-like environments → cards ------------------------------- */
@@ -331,9 +353,13 @@ math[display="block"] {
   margin-left: 0.3em;
 }
 
-/* QED box */
+/* QED tombstone — flush right on the proof's final line. LaTeXML emits a bare
+   ∎ glyph with no element of its own, so monolith-theme.js wraps it in a
+   .ltx_qed span for us to align here. */
 .ltx_proof .ltx_qed,
 .ltx_qed {
+  float: right;
+  margin-left: 0.5em;
   color: var(--accent);
 }
 
@@ -650,6 +676,166 @@ blockquote,
   max-height: 60vh;
   opacity: 1;
   overflow: auto;
+}
+
+/* ----- Reading-progress bar (added by monolith-theme.js) --------------- */
+
+.monolith-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  z-index: 50;
+  pointer-events: none;
+  transition: width 0.08s linear;
+}
+
+/* ----- Heading permalink anchors (added by monolith-theme.js) ---------- */
+
+.ltx_title_section,
+.ltx_title_subsection,
+.ltx_title_subsubsection {
+  position: relative;
+}
+
+.monolith-anchor {
+  margin-left: 0.4em;
+  font-weight: 400;
+  color: var(--text-dim);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.ltx_title_section:hover .monolith-anchor,
+.ltx_title_subsection:hover .monolith-anchor,
+.ltx_title_subsubsection:hover .monolith-anchor,
+.monolith-anchor:focus {
+  opacity: 1;
+}
+
+.monolith-anchor:hover {
+  color: var(--accent);
+}
+
+.monolith-anchor.copied {
+  opacity: 1;
+  color: var(--green);
+}
+
+/* ----- External-link affordance ---------------------------------------- */
+
+/* LaTeXML tags out-of-document links with ltx_href / ltx_url; flag them with a
+   small outward arrow so they read differently from internal cross-references. */
+.ltx_document a.ltx_href::after,
+.ltx_document a.ltx_url::after {
+  content: "\202F↗";
+  font-size: 0.72em;
+  vertical-align: 0.18em;
+  color: var(--accent-light);
+}
+
+/* ----- Margin section numbers (wide screens only) ---------------------- */
+
+/* On a wide viewport there's room in the left margin, so hang the section
+   number out there for a clean, edited-print look. Below the breakpoint the
+   number stays inline (LaTeXML's default), so nothing clips on narrow screens. */
+@media (min-width: 64rem) {
+  .ltx_title_section > .ltx_tag_section,
+  .ltx_title_subsection > .ltx_tag_subsection {
+    position: absolute;
+    right: 100%;
+    margin-right: 0.7rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* ----- Drop-cap lead paragraph (tagged by monolith-theme.js) ----------- */
+
+.monolith-lead::first-letter {
+  float: left;
+  margin: 0.1rem 0.55rem 0 0;
+  padding: 0;
+  font-family: var(--ml-serif);
+  font-size: 3.1rem;
+  line-height: 0.82;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ----- Cross-reference hover previews (added by monolith-theme.js) ----- */
+
+.monolith-refpop {
+  position: fixed;
+  z-index: 60;
+  max-width: 34rem;
+  max-height: 42vh;
+  overflow: auto;
+  padding: 0.7rem 1.05rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px var(--paper-shadow), 0 8px 28px var(--paper-shadow);
+  font-size: 0.92em;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+}
+
+.monolith-refpop.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Strip the card chrome from a theorem cloned into the popover so it doesn't
+   nest a card inside a card. */
+.monolith-refpop .ltx_theorem,
+.monolith-refpop .ltx_proof {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+.monolith-refpop .ltx_equation {
+  margin: 0.2rem 0;
+}
+
+.monolith-refpop .ltx_p:last-child,
+.monolith-refpop .ltx_para:last-child .ltx_p:last-child {
+  margin-bottom: 0;
+}
+
+/* ----- Tufte-style sidenotes (added by monolith-theme.js) -------------- */
+
+.monolith-sidenote {
+  position: absolute;
+  left: 100%;
+  margin-left: 1.6rem;
+  width: 13rem;
+  font-family: var(--ml-sans);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.monolith-sidenote-num {
+  color: var(--accent);
+  font-weight: 650;
+  margin-right: 0.35em;
+}
+
+.monolith-sidenote .ltx_p {
+  margin: 0;
+  display: inline;
 }
 
 .knowl-content {

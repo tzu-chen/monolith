@@ -162,6 +162,9 @@
       try {
         localStorage.setItem(storageKey(id), nowCollapsed ? 'closed' : 'open');
       } catch (e) {}
+      // Collapsing changes document height and the position of any sidenotes
+      // below it; let the layout-sensitive helpers recompute.
+      window.dispatchEvent(new Event('monolith:layout'));
     });
   }
 
@@ -238,6 +241,261 @@
     });
   }
 
+  /* ---- 6. QED tombstone ------------------------------------------------ */
+
+  // LaTeXML ends a proof with a bare ∎ text node (no element), which CSS can't
+  // target. Wrap that glyph in a .ltx_qed span so the stylesheet can float it
+  // flush right. If a build already emits an .ltx_qed element, leave it be.
+  var QED = '∎'; // ∎
+  function setupQed() {
+    document.querySelectorAll('.ltx_proof').forEach(function (proof) {
+      if (proof.querySelector('.ltx_qed')) return;
+
+      var walker = document.createTreeWalker(proof, NodeFilter.SHOW_TEXT);
+      var node, target = null;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue.indexOf(QED) !== -1) target = node; // keep the last
+      }
+      if (!target) return;
+
+      var idx = target.nodeValue.lastIndexOf(QED);
+      var mark = target.splitText(idx); // mark starts at the glyph
+      mark.splitText(1); // mark is now exactly the glyph
+
+      var span = document.createElement('span');
+      span.className = 'ltx_qed';
+      span.textContent = QED;
+      mark.parentNode.replaceChild(span, mark);
+
+      // Drop the whitespace LaTeXML leaves before the mark so the floated span
+      // doesn't ride on a stray trailing space.
+      target.nodeValue = target.nodeValue.replace(/\s+$/, '');
+    });
+  }
+
+  /* ---- 7. Reading-progress bar ---------------------------------------- */
+
+  function setupProgress() {
+    var bar = document.createElement('div');
+    bar.className = 'monolith-progress';
+    document.body.appendChild(bar);
+
+    var ticking = false;
+    function update() {
+      ticking = false;
+      var doc = document.documentElement;
+      var st = window.pageYOffset || doc.scrollTop || document.body.scrollTop || 0;
+      var sh = (doc.scrollHeight || document.body.scrollHeight) - doc.clientHeight;
+      var pct = sh > 0 ? st / sh : 0;
+      bar.style.width = Math.max(0, Math.min(1, pct)) * 100 + '%';
+    }
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    window.addEventListener('monolith:layout', onScroll);
+    update();
+  }
+
+  /* ---- 8. Heading permalink anchors ----------------------------------- */
+
+  function setupHeadingAnchors() {
+    document.querySelectorAll(
+      '.ltx_title_section, .ltx_title_subsection, .ltx_title_subsubsection'
+    ).forEach(function (h) {
+      if (h.querySelector('.monolith-anchor')) return;
+      var id = ensureId(h, 'sec');
+      var a = document.createElement('a');
+      a.className = 'monolith-anchor';
+      a.href = '#' + id;
+      a.textContent = '¶'; // ¶
+      a.title = 'Copy link to this section';
+      a.setAttribute('aria-label', 'Link to this section');
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', '#' + id);
+        copyText(location.href.split('#')[0] + '#' + id).then(function () {
+          a.classList.add('copied');
+          setTimeout(function () { a.classList.remove('copied'); }, 1200);
+        }, function () {});
+      });
+      h.appendChild(a);
+    });
+  }
+
+  /* ---- 9. Drop-cap lead paragraph ------------------------------------- */
+
+  function tagLeadParagraph(scope) {
+    var paras = scope.querySelectorAll('.ltx_p');
+    for (var i = 0; i < paras.length; i++) {
+      var p = paras[i];
+      var text = (p.textContent || '').trim();
+      // A drop cap only reads well leading a substantial, letter-initial line.
+      if (text.length < 60 || !/^[A-Za-z]/.test(text)) continue;
+      if (p.closest('.ltx_theorem, .ltx_proof, .ltx_caption, .ltx_abstract, .ltx_bibliography')) {
+        continue;
+      }
+      p.classList.add('monolith-lead');
+      return;
+    }
+  }
+
+  function setupDropCaps() {
+    var sections = document.querySelectorAll('.ltx_section');
+    if (sections.length) {
+      sections.forEach(function (sec) { tagLeadParagraph(sec); });
+    } else {
+      tagLeadParagraph(document.querySelector('article.ltx_document') || document.body);
+    }
+  }
+
+  /* ---- 10. Cross-reference hover previews ----------------------------- */
+
+  function setupRefPreviews() {
+    var links = document.querySelectorAll('a.ltx_ref[href^="#"]');
+    if (!links.length) return;
+
+    var pop = document.createElement('div');
+    pop.className = 'monolith-refpop';
+    document.body.appendChild(pop);
+
+    var showTimer = null, hideTimer = null, current = null;
+
+    function build(target) {
+      while (pop.firstChild) pop.removeChild(pop.firstChild);
+      var src = target;
+      // Sectioning targets are whole sections — preview just their heading.
+      if (target.tagName === 'SECTION' ||
+          /\bltx_(sub)*section\b|\bltx_paragraph\b/.test(target.className)) {
+        var heading = target.querySelector('.ltx_title');
+        if (heading) src = heading;
+      }
+      var clone = src.cloneNode(true);
+      clone.querySelectorAll('.monolith-anchor, .monolith-copy-tex')
+        .forEach(function (n) { n.remove(); });
+      // Drop any title="" attrs so the browser's native tooltip can't pop over
+      // the preview from inside it.
+      if (clone.removeAttribute) clone.removeAttribute('title');
+      clone.querySelectorAll('[title]').forEach(function (n) { n.removeAttribute('title'); });
+      pop.appendChild(clone);
+    }
+
+    function place(link) {
+      var r = link.getBoundingClientRect();
+      var pw = pop.offsetWidth, ph = pop.offsetHeight;
+      var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+      var below = r.bottom + 8;
+      var top = (below + ph <= window.innerHeight || r.top < ph + 16)
+        ? below
+        : r.top - 8 - ph;
+      pop.style.left = left + 'px';
+      pop.style.top = Math.max(8, top) + 'px';
+    }
+
+    function show(link) {
+      var sel = link.getAttribute('href');
+      var target = sel && document.getElementById(sel.replace(/^#/, ''));
+      if (!target) return;
+      current = link;
+      build(target);
+      pop.classList.add('open');
+      place(link);
+    }
+
+    function hide() { pop.classList.remove('open'); current = null; }
+
+    links.forEach(function (link) {
+      if (link.closest('.ltx_cite') || link.closest('.monolith-toc')) return;
+      // The custom preview replaces LaTeXML's title="" hint; drop the native
+      // attribute so its browser tooltip doesn't obstruct the popover.
+      link.removeAttribute('title');
+      link.addEventListener('mouseenter', function () {
+        clearTimeout(hideTimer);
+        showTimer = setTimeout(function () { show(link); }, 140);
+      });
+      link.addEventListener('mouseleave', function () {
+        clearTimeout(showTimer);
+        hideTimer = setTimeout(hide, 220);
+      });
+    });
+
+    pop.addEventListener('mouseenter', function () { clearTimeout(hideTimer); });
+    pop.addEventListener('mouseleave', function () { hideTimer = setTimeout(hide, 180); });
+    window.addEventListener('scroll', function () { if (current) hide(); }, { passive: true });
+  }
+
+  /* ---- 11. Tufte-style sidenotes -------------------------------------- */
+
+  function buildSidenotes() {
+    var container = document.querySelector('article.ltx_document') ||
+      document.querySelector('.ltx_page_content');
+    if (!container) return;
+
+    container.querySelectorAll('.monolith-sidenote').forEach(function (n) { n.remove(); });
+
+    var notes = document.querySelectorAll('.ltx_note.ltx_role_footnote');
+    if (!notes.length) return;
+
+    if (getComputedStyle(container).position === 'static') {
+      container.style.position = 'relative';
+    }
+
+    var contRect = container.getBoundingClientRect();
+    var SIDE_W = 13 * 16, GAP = 1.6 * 16;
+    // Only float into the margin when there's actually room to the right of the
+    // content column; otherwise leave LaTeXML's default hover popups in place.
+    if (window.innerWidth - contRect.right < SIDE_W + GAP + 8) return;
+
+    var prevBottom = -Infinity;
+    notes.forEach(function (note) {
+      var mark = note.querySelector('.ltx_note_mark');
+      var content = note.querySelector('.ltx_note_content');
+      if (!mark || !content) return;
+
+      var aside = document.createElement('aside');
+      aside.className = 'monolith-sidenote';
+
+      var num = (mark.textContent || '').trim();
+      if (num) {
+        var numEl = document.createElement('span');
+        numEl.className = 'monolith-sidenote-num';
+        numEl.textContent = num;
+        aside.appendChild(numEl);
+      }
+      var body = content.cloneNode(true);
+      body.querySelectorAll('.ltx_note_mark, .ltx_tag_note').forEach(function (n) { n.remove(); });
+      while (body.firstChild) aside.appendChild(body.firstChild);
+
+      container.appendChild(aside);
+
+      var top = Math.max(mark.getBoundingClientRect().top - contRect.top, prevBottom + 12);
+      aside.style.top = top + 'px';
+      prevBottom = top + aside.offsetHeight;
+    });
+  }
+
+  function setupSidenotes() {
+    var raf = null;
+    function schedule() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(function () { try { buildSidenotes(); } catch (e) {} });
+    }
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(schedule, 150);
+    });
+    window.addEventListener('monolith:layout', schedule);
+    window.addEventListener('load', schedule);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(schedule).catch(function () {});
+    }
+    schedule();
+  }
+
   /* ---- boot ------------------------------------------------------------ */
 
   function init() {
@@ -245,6 +503,12 @@
     try { setupCollapsibles(); } catch (e) {}
     try { setupCopyTex(); } catch (e) {}
     try { setupKnowls(); } catch (e) {}
+    try { setupQed(); } catch (e) {}
+    try { setupProgress(); } catch (e) {}
+    try { setupHeadingAnchors(); } catch (e) {}
+    try { setupDropCaps(); } catch (e) {}
+    try { setupRefPreviews(); } catch (e) {}
+    try { setupSidenotes(); } catch (e) {}
     announceReady();
   }
 
