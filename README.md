@@ -6,6 +6,7 @@ A local LaTeX editor with live PDF preview, built as a full-stack web applicatio
 
 - **CodeMirror 6 editor** with LaTeX syntax highlighting, bracket matching, and autocomplete
 - **Live PDF preview** powered by pdf.js with dark mode and zoom controls
+- **HTML render mode** (LaTeXML) beside the PDF — semantic, themable web output with native MathML, a floating TOC, collapsible theorems/proofs, and copy-LaTeX on equations
 - **SyncTeX** forward/inverse search between source and PDF
 - **Multi-file projects** with tabbed editing and a file tree sidebar
 - **Symbol palette and snippet library** for quick LaTeX input
@@ -27,6 +28,7 @@ A local LaTeX editor with live PDF preview, built as a full-stack web applicatio
 | Real-time | WebSocket (ws) |
 | File Watching | chokidar 5 |
 | LaTeX Compiler | Tectonic (external) |
+| HTML Renderer | LaTeXML (external, optional) |
 | Package Management | npm workspaces |
 
 ## Prerequisites
@@ -36,6 +38,15 @@ A local LaTeX editor with live PDF preview, built as a full-stack web applicatio
   ```bash
   curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh
   ```
+- **LaTeXML** _(optional — only needed for the HTML render mode)_:
+  ```bash
+  apt install latexml      # Debian/Ubuntu
+  brew install latexml     # macOS
+  latexmlc --VERSION       # verify
+  ```
+  Without it, the editor and PDF preview work normally; the HTML preview shows an
+  install hint. See `latexml-integration-guide.md` and
+  `latexml-friendly-packages.md` for design notes and package compatibility.
 
 ## Getting Started
 
@@ -91,6 +102,8 @@ npm start       # Build client + start server (serves from client/dist)
 | GET | `/api/files/` | List files in project |
 | GET/PUT/POST/DELETE | `/api/files/:path` | File CRUD |
 | POST | `/api/compile` | Compile LaTeX via Tectonic |
+| POST | `/api/render-html` | Render LaTeX to HTML via LaTeXML |
+| GET | `/html/:project/*` | Serve generated HTML preview assets |
 | POST | `/api/synctex/forward` | Source → PDF position |
 | POST | `/api/synctex/inverse` | PDF position → source |
 | GET | `/api/health` | Server health check |

@@ -3,6 +3,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as api from '../../lib/api';
 import { PlayIcon, SpinnerIcon } from '../shared/Icons';
+import PreviewModeToggle from './PreviewModeToggle';
+import HtmlPreview from './HtmlPreview';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -47,15 +49,17 @@ function zoomToScale(zoom: ZoomOption, containerWidth: number, pageWidth: number
 
 interface PreviewPaneProps {
   onCompile: () => void;
+  onRenderHtml: () => void;
 }
 
-export default function PreviewPane({ onCompile }: PreviewPaneProps) {
+export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProps) {
   const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
     useEditorStore();
+  const previewMode = useEditorStore((s) => s.previewMode);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'pdf' | 'log'>('pdf');
+  const [showLog, setShowLog] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<ZoomOption>('fit-width');
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
@@ -112,7 +116,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
 
   // Render pages whenever the doc, zoom, tab, or theme changes
   useEffect(() => {
-    if (!pdfDoc || !containerRef.current || activeTab !== 'pdf') return;
+    if (!pdfDoc || !containerRef.current || showLog) return;
 
     const container = containerRef.current;
     const pdf = pdfDoc;
@@ -191,14 +195,14 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
     };
 
     renderPdf().catch(console.error);
-  }, [pdfDoc, activeTab, theme, zoomLevel]);
+  }, [pdfDoc, showLog, theme, zoomLevel]);
 
   // Render SyncTeX highlight overlay
   useEffect(() => {
     // Remove any existing highlights
     document.querySelectorAll('.synctex-highlight').forEach((el) => el.remove());
 
-    if (!syncTexHighlight || !containerRef.current || activeTab !== 'pdf') return;
+    if (!syncTexHighlight || !containerRef.current || showLog) return;
 
     const { page, x, y, h, w } = syncTexHighlight;
     const pageInfo = pageGeometryRef.current.find((p) => p.page === page);
@@ -237,7 +241,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
       clearTimeout(timer);
       overlay.remove();
     };
-  }, [syncTexHighlight, activeTab, setSyncTexHighlight]);
+  }, [syncTexHighlight, showLog, setSyncTexHighlight]);
 
   const statusText = (() => {
     if (compilationStatus === 'compiling') return 'compiling...';
@@ -250,6 +254,12 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
 
   const statusColor =
     compilationStatus === 'error' ? 'var(--red)' : 'var(--green)';
+
+  // The HTML (LaTeXML) renderer is a self-contained view. All PDF hooks above
+  // run unconditionally but no-op here (their container isn't mounted).
+  if (previewMode === 'html') {
+    return <HtmlPreview onRenderHtml={onRenderHtml} />;
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-warm)', overflow: 'hidden' }}>
@@ -266,35 +276,47 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
           flexShrink: 0,
         }}
       >
+        <PreviewModeToggle />
         <div
-          onClick={() => setActiveTab('pdf')}
+          onClick={() => setShowLog(false)}
           style={{
             fontSize: 17,
-            color: activeTab === 'pdf' ? 'var(--accent)' : 'var(--text-dim)',
+            color: !showLog ? 'var(--accent)' : 'var(--text-dim)',
             padding: '4px 10px',
             borderRadius: 4,
             cursor: 'pointer',
-            background: activeTab === 'pdf' ? 'var(--accent-bg)' : 'transparent',
-            fontWeight: activeTab === 'pdf' ? 500 : 400,
+            background: !showLog ? 'var(--accent-bg)' : 'transparent',
+            fontWeight: !showLog ? 500 : 400,
           }}
         >
-          PDF
+          View
         </div>
         <div
-          onClick={() => setActiveTab('log')}
+          onClick={() => setShowLog(true)}
           style={{
             fontSize: 17,
-            color: activeTab === 'log' ? 'var(--accent)' : 'var(--text-dim)',
+            color: showLog ? 'var(--accent)' : 'var(--text-dim)',
             padding: '4px 10px',
             borderRadius: 4,
             cursor: 'pointer',
-            background: activeTab === 'log' ? 'var(--accent-bg)' : 'transparent',
-            fontWeight: activeTab === 'log' ? 500 : 400,
+            background: showLog ? 'var(--accent-bg)' : 'transparent',
+            fontWeight: showLog ? 500 : 400,
           }}
         >
           Log
+          {(errors.length > 0 || warnings.length > 0) && (
+            <span
+              style={{
+                marginLeft: 5,
+                fontSize: 12,
+                color: errors.length > 0 ? 'var(--red)' : 'var(--orange)',
+              }}
+            >
+              {errors.length + warnings.length}
+            </span>
+          )}
         </div>
-        {activeTab === 'pdf' && (
+        {!showLog && (
           <select
             value={zoomLevel}
             onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
@@ -367,7 +389,7 @@ export default function PreviewPane({ onCompile }: PreviewPaneProps) {
       </div>
 
       {/* Content */}
-      {activeTab === 'pdf' ? (
+      {!showLog ? (
         <div
           key="pdf"
           ref={containerRef}

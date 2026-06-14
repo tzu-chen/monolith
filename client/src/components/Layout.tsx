@@ -13,6 +13,7 @@ interface LayoutProps {
   onSave: () => void;
   onManualSave: () => void;
   onCompile: () => void;
+  onRenderHtml: () => void;
 }
 
 const SIDEBAR_WIDTH = 220;
@@ -125,7 +126,7 @@ function EditorPanel({ onSave, onManualSave }: { onSave: () => void; onManualSav
   );
 }
 
-export default function Layout({ onSave, onManualSave, onCompile }: LayoutProps) {
+export default function Layout({ onSave, onManualSave, onCompile, onRenderHtml }: LayoutProps) {
   const sidebarVisible = useEditorStore((s) => s.sidebarVisible);
   const viewMode = useEditorStore((s) => s.viewMode);
 
@@ -152,7 +153,7 @@ export default function Layout({ onSave, onManualSave, onCompile }: LayoutProps)
       {viewMode === 'both' && (
         <SplitPane
           left={<EditorPanel onSave={onSave} onManualSave={onManualSave} />}
-          right={<PreviewPane onCompile={onCompile} />}
+          right={<PreviewPane onCompile={onCompile} onRenderHtml={onRenderHtml} />}
           defaultSplit={0.5}
         />
       )}
@@ -163,7 +164,7 @@ export default function Layout({ onSave, onManualSave, onCompile }: LayoutProps)
 
       {viewMode === 'pdf' && (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <PreviewPane onCompile={onCompile} />
+          <PreviewPane onCompile={onCompile} onRenderHtml={onRenderHtml} />
         </div>
       )}
     </div>

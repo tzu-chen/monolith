@@ -6,6 +6,7 @@ import ReferenceBrowser from './panels/ReferenceBrowser';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
 import { useCompilation } from '../hooks/useCompilation';
+import { useHtmlRender } from '../hooks/useHtmlRender';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
 import * as api from '../lib/api';
@@ -13,6 +14,7 @@ import { extractMacroDefinitions } from './editor/math-preview';
 
 export default function App() {
   const { doCompile } = useCompilation();
+  const { doRender } = useHtmlRender();
   const { saveNow } = useAutosave();
   const activePanel = useEditorStore((s) => s.activePanel);
 
@@ -91,7 +93,7 @@ export default function App() {
       {activePanel === 'references' ? (
         <ReferenceBrowser />
       ) : (
-        <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} />
+        <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} onRenderHtml={doRender} />
       )}
       <BottomBar />
     </>

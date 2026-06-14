@@ -1,0 +1,658 @@
+/*
+ * Monolith theme for LaTeXML HTML output.
+ *
+ * Layered ON TOP of LaTeXML's default ltx_* resources (we never pass
+ * --nodefaultresources). It restyles typography, spacing, colour, reading width
+ * and the semantic blocks (theorems, proofs, equations, code, bibliography).
+ *
+ * Colours come from CSS custom properties that the Monolith app forwards into
+ * the iframe (monolith-theme.js applies them), so the HTML preview tracks the
+ * editor's active colour scheme exactly. The values below are light-mode
+ * fallbacks used until the first theme message arrives.
+ */
+
+:root {
+  --paper: #fffef9;
+  --bg-warm: #faf8f4;
+  --bg-panel: #f3f0ea;
+  --bg-hover: #eeeae2;
+  --border: #e2ddd3;
+  --border-strong: #cdc6b8;
+  --text-primary: #2c2820;
+  --text-secondary: #6b6358;
+  --text-dim: #9e9588;
+  --accent: #8b5e3c;
+  --accent-light: #b07d56;
+  --accent-bg: rgba(139, 94, 60, 0.06);
+  --green: #4a8c5e;
+  --blue: #3d6b8e;
+  --red: #b04a4a;
+  --purple: #7a5a99;
+  --orange: #b07830;
+  --teal: #3d8080;
+  --paper-shadow: rgba(45, 40, 30, 0.08);
+
+  --ml-serif: 'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia,
+    'Times New Roman', serif;
+  --ml-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  --ml-mono: 'Source Code Pro', ui-monospace, 'SF Mono', Menlo, Consolas,
+    monospace;
+  --ml-measure: 46rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ----- Page frame ------------------------------------------------------- */
+
+body.ltx_document,
+.ltx_document {
+  background: var(--bg-warm);
+  color: var(--text-primary);
+  font-family: var(--ml-serif);
+  font-size: 18px;
+  line-height: 1.72;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* LaTeXML wraps everything in ltx_page_* containers. Centre the content
+   column and give it a comfortable measure, like a page of notes. */
+.ltx_page_main,
+.ltx_page_content {
+  background: transparent;
+}
+
+.ltx_document > .ltx_page_main,
+.ltx_page_content {
+  max-width: var(--ml-measure);
+  margin: 0 auto;
+  padding: 4rem 1.5rem 8rem;
+}
+
+/* The article body itself (single-page output) */
+article.ltx_document {
+  max-width: var(--ml-measure);
+  margin: 0 auto;
+  padding: 4rem 1.5rem 8rem;
+}
+
+::selection {
+  background: var(--accent-bg);
+}
+
+/* ----- Headings --------------------------------------------------------- */
+
+.ltx_title_document {
+  font-size: 2.4rem;
+  line-height: 1.18;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.6rem;
+  color: var(--text-primary);
+}
+
+.ltx_authors {
+  color: var(--text-secondary);
+  font-family: var(--ml-sans);
+  font-size: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.ltx_title_section {
+  font-size: 1.7rem;
+  font-weight: 620;
+  letter-spacing: -0.005em;
+  margin: 3rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 1.5rem;
+}
+
+.ltx_title_subsection {
+  font-size: 1.32rem;
+  font-weight: 600;
+  margin: 2.2rem 0 0.8rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.ltx_title_subsubsection {
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin: 1.8rem 0 0.6rem;
+  scroll-margin-top: 1.5rem;
+}
+
+/* LaTeXML prints section numbers in a tag span before the title text */
+.ltx_tag {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ltx_title .ltx_tag {
+  margin-right: 0.6em;
+}
+
+/* ----- Body text -------------------------------------------------------- */
+
+.ltx_p {
+  margin: 0 0 1.1rem;
+}
+
+.ltx_abstract {
+  margin: 1.5rem 0 2.5rem;
+  padding: 1.2rem 1.5rem;
+  background: var(--bg-panel);
+  border-radius: 10px;
+  font-size: 0.97em;
+}
+
+.ltx_abstract .ltx_title {
+  font-family: var(--ml-sans);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+/* ----- Links ------------------------------------------------------------ */
+
+a,
+.ltx_ref,
+.ltx_href {
+  color: var(--accent);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  transition: color 0.12s, text-decoration-color 0.12s;
+}
+
+a:hover,
+.ltx_ref:hover,
+.ltx_href:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--accent-light);
+}
+
+.ltx_cite .ltx_ref {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- Math ------------------------------------------------------------- */
+
+math {
+  color: var(--text-primary);
+  font-size: 1.02em;
+}
+
+/* Display equations: centred, with breathing room and a number on the right.
+   LaTeXML renders these as a table; we keep its layout but theme it. */
+.ltx_equation,
+.ltx_equationgroup {
+  margin: 1.4rem 0;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.ltx_equation {
+  position: relative;
+}
+
+table.ltx_equation,
+table.ltx_eqn_table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ltx_eqn_cell {
+  vertical-align: middle;
+}
+
+/* equation number tag */
+.ltx_equation .ltx_tag,
+.ltx_eqn_eqno .ltx_tag {
+  color: var(--text-dim);
+  font-size: 0.95em;
+}
+
+math[display="block"] {
+  margin: 1.3rem auto;
+}
+
+/* ----- Lists ------------------------------------------------------------ */
+
+.ltx_itemize,
+.ltx_enumerate,
+.ltx_description {
+  margin: 0.8rem 0 1.2rem;
+  padding-left: 1.6rem;
+}
+
+.ltx_item {
+  margin: 0.35rem 0;
+}
+
+.ltx_item > .ltx_tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ----- Theorem-like environments → cards ------------------------------- */
+
+/* All amsthm environments land as .ltx_theorem with a variant suffix; we style
+   the base as a card and tint by kind. */
+.ltx_theorem {
+  position: relative;
+  margin: 1.6rem 0;
+  padding: 1.05rem 1.3rem 1.05rem 1.5rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px var(--paper-shadow), 0 6px 22px var(--paper-shadow);
+}
+
+.ltx_theorem > .ltx_title,
+.ltx_theorem .ltx_title_theorem {
+  font-family: var(--ml-sans);
+  font-weight: 650;
+  font-size: 1rem;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.ltx_theorem .ltx_p {
+  margin-bottom: 0.6rem;
+}
+
+.ltx_theorem .ltx_p:last-child {
+  margin-bottom: 0;
+}
+
+/* Definitions / remarks / examples get their own hue via the variant class
+   LaTeXML emits (e.g. ltx_theorem_definition). */
+.ltx_theorem_definition {
+  border-left-color: var(--blue);
+}
+.ltx_theorem_definition > .ltx_title {
+  color: var(--blue);
+}
+
+.ltx_theorem_remark,
+.ltx_theorem_note {
+  border-left-color: var(--purple);
+  background: var(--bg-panel);
+  box-shadow: none;
+}
+.ltx_theorem_remark > .ltx_title,
+.ltx_theorem_note > .ltx_title {
+  color: var(--purple);
+}
+
+.ltx_theorem_example {
+  border-left-color: var(--teal);
+}
+.ltx_theorem_example > .ltx_title {
+  color: var(--teal);
+}
+
+/* Warnings / cautions, if defined as a theorem style named warning */
+.ltx_theorem_warning {
+  border-left-color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 7%, var(--paper));
+}
+.ltx_theorem_warning > .ltx_title {
+  color: var(--orange);
+}
+
+/* Proofs */
+.ltx_proof {
+  margin: 1.2rem 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.ltx_proof > .ltx_title {
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: inline;
+}
+
+.ltx_proof .ltx_p:first-of-type {
+  display: inline;
+  margin-left: 0.3em;
+}
+
+/* QED box */
+.ltx_proof .ltx_qed,
+.ltx_qed {
+  color: var(--accent);
+}
+
+/* ----- Collapsible blocks (added by monolith-theme.js) ------------------ */
+
+.monolith-collapse-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--ml-sans);
+  font-weight: 650;
+  font-size: 1rem;
+  color: inherit;
+}
+
+.ltx_theorem > .monolith-collapse-head {
+  color: var(--accent);
+}
+.ltx_theorem_definition > .monolith-collapse-head { color: var(--blue); }
+.ltx_theorem_remark > .monolith-collapse-head,
+.ltx_theorem_note > .monolith-collapse-head { color: var(--purple); }
+.ltx_theorem_example > .monolith-collapse-head { color: var(--teal); }
+.ltx_theorem_warning > .monolith-collapse-head { color: var(--orange); }
+.ltx_proof > .monolith-collapse-head {
+  font-style: italic;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.monolith-chevron {
+  display: inline-block;
+  font-size: 0.7em;
+  color: var(--text-dim);
+  transition: transform 0.18s ease;
+  transform: translateY(-0.12em);
+}
+
+.monolith-collapsed .monolith-chevron {
+  transform: translateY(-0.12em) rotate(-90deg);
+}
+
+.monolith-collapse-body {
+  overflow: hidden;
+  transition: opacity 0.18s ease;
+  margin-top: 0.5rem;
+}
+
+.monolith-collapsed > .monolith-collapse-body {
+  display: none;
+}
+
+/* ----- Tables (booktabs etc.) ------------------------------------------ */
+
+.ltx_tabular {
+  margin: 1.5rem auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  font-family: var(--ml-sans);
+}
+
+.ltx_tabular .ltx_td,
+.ltx_tabular .ltx_th {
+  padding: 0.45rem 0.9rem;
+}
+
+.ltx_th {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+/* booktabs rules map to ltx_border_* classes */
+.ltx_border_t { border-top: 1px solid var(--border-strong); }
+.ltx_border_b { border-bottom: 1px solid var(--border-strong); }
+.ltx_border_tt { border-top: 2px solid var(--text-secondary); }
+.ltx_border_bb { border-bottom: 2px solid var(--text-secondary); }
+
+/* ----- Figures & captions ---------------------------------------------- */
+
+.ltx_figure,
+.ltx_float {
+  margin: 1.8rem 0;
+  text-align: center;
+}
+
+.ltx_graphics,
+.ltx_figure img,
+img.ltx_graphics {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.ltx_caption {
+  font-family: var(--ml-sans);
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  margin-top: 0.7rem;
+  line-height: 1.5;
+}
+
+.ltx_caption .ltx_tag {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+/* ----- Code & verbatim -------------------------------------------------- */
+
+.ltx_verbatim,
+.ltx_listing,
+pre.ltx_verbatim {
+  font-family: var(--ml-mono);
+  font-size: 0.86em;
+  line-height: 1.55;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.3rem 0;
+}
+
+code,
+.ltx_text[class*="ttfamily"] {
+  font-family: var(--ml-mono);
+  font-size: 0.88em;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+/* ----- Footnotes / notes ------------------------------------------------ */
+
+.ltx_note_mark {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.ltx_note_content {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+/* ----- Bibliography ----------------------------------------------------- */
+
+.ltx_bibliography {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.94em;
+}
+
+.ltx_bibliography .ltx_title {
+  font-size: 1.4rem;
+  font-weight: 620;
+  margin-bottom: 1rem;
+}
+
+.ltx_bibitem {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+  text-indent: -1.5rem;
+  color: var(--text-secondary);
+}
+
+.ltx_bibtag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ----- Horizontal rules / misc ----------------------------------------- */
+
+hr,
+.ltx_rule {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+
+blockquote,
+.ltx_quote {
+  margin: 1.2rem 0;
+  padding-left: 1.2rem;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ----- Floating table of contents (built by monolith-theme.js) --------- */
+
+.monolith-toc {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 15rem;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 2.5rem 1rem 2rem 1.5rem;
+  font-family: var(--ml-sans);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+.monolith-toc-title {
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 0.8rem;
+}
+
+.monolith-toc a {
+  display: block;
+  padding: 0.22rem 0.6rem;
+  margin: 0.05rem 0;
+  color: var(--text-secondary);
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  text-decoration: none;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monolith-toc a.lvl-2 {
+  padding-left: 1.4rem;
+  font-size: 0.95em;
+}
+
+.monolith-toc a:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.monolith-toc a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* The TOC only appears when the viewport is wide enough to hold it beside the
+   centred content column. */
+@media (max-width: 78rem) {
+  .monolith-toc {
+    display: none;
+  }
+}
+
+/* ----- Copy-LaTeX button (added by monolith-theme.js) ------------------- */
+
+.monolith-copy-tex {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--ml-sans);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.ltx_equation:hover .monolith-copy-tex {
+  opacity: 1;
+}
+
+.monolith-copy-tex:hover {
+  color: var(--accent);
+  border-color: var(--accent-light);
+}
+
+.monolith-copy-tex.copied {
+  color: var(--green);
+  border-color: var(--green);
+  opacity: 1;
+}
+
+/* ----- Knowls (inline expansion — see knowl.js) ------------------------ */
+
+.knowl {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent-light);
+}
+
+.knowl.knowl-open {
+  color: var(--accent);
+}
+
+.knowl-output {
+  margin: 0.6rem 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-light);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, opacity 0.22s ease;
+}
+
+.knowl-output.knowl-open {
+  max-height: 60vh;
+  opacity: 1;
+  overflow: auto;
+}
+
+.knowl-content {
+  padding: 0.8rem 1.1rem;
+  font-size: 0.95em;
+}

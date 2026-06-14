@@ -191,6 +191,44 @@ export async function compile(mainFile: string = 'main.tex', content?: string): 
   return res.json();
 }
 
+// HTML render (LaTeXML)
+
+export type HtmlSplitLevel = 'none' | 'part' | 'chapter' | 'section' | 'subsection';
+
+export interface RenderHtmlResponse {
+  ok: boolean;
+  /** false when the LaTeXML binary is not installed on the host. */
+  available: boolean;
+  log: string;
+  errors: string[];
+  warnings: string[];
+}
+
+export async function renderHtml(
+  mainFile: string = 'main.tex',
+  content?: string,
+  splitAt: HtmlSplitLevel = 'none'
+): Promise<RenderHtmlResponse> {
+  const res = await fetch('/api/render-html', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mainFile, content, splitAt }),
+  });
+  const data = await res.json().catch(() => ({}));
+  // The render endpoint reports render failures in-band (200 with ok:false).
+  // Only normalize transport-level errors that don't carry our shape.
+  if (!res.ok && !('ok' in data)) {
+    return {
+      ok: false,
+      available: true,
+      log: '',
+      errors: [data.error || `Render request failed: ${res.statusText}`],
+      warnings: [],
+    };
+  }
+  return data as RenderHtmlResponse;
+}
+
 // SyncTeX
 
 export interface SyncTexForwardResult {

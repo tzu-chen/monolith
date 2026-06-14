@@ -14,16 +14,31 @@ export function createCompileRouter(getProjectRoot: () => string | null): Router
     }
     const { mainFile = 'main.tex', content } = req.body;
 
+    // Validate mainFile unconditionally — it's passed to tectonic as the file to
+    // compile, so a crafted path is a risk even without `content`. Reject
+    // absolute paths and parent-dir traversal, then confirm the resolved path
+    // stays within the project root (separator appended so sibling dirs like
+    // "<root>-evil" can't slip through).
+    if (
+      typeof mainFile !== 'string' ||
+      path.isAbsolute(mainFile) ||
+      mainFile.split(/[\\/]/).includes('..')
+    ) {
+      res.status(403).json({ success: false, log: '', errors: ['Invalid mainFile path'], warnings: [] });
+      return;
+    }
+    const resolvedMain = path.resolve(projectRoot, mainFile);
+    const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+    if (resolvedMain !== projectRoot && !resolvedMain.startsWith(rootWithSep)) {
+      res.status(403).json({ success: false, log: '', errors: ['Path traversal not allowed'], warnings: [] });
+      return;
+    }
+
     try {
-      // If content is provided, save the file before compiling
+      // If content is provided, save the file before compiling (path validated).
       if (typeof content === 'string') {
-        const filePath = path.join(projectRoot, mainFile);
-        if (!filePath.startsWith(projectRoot)) {
-          res.status(403).json({ error: 'Path traversal not allowed' });
-          return;
-        }
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, content, 'utf-8');
+        await fs.mkdir(path.dirname(resolvedMain), { recursive: true });
+        await fs.writeFile(resolvedMain, content, 'utf-8');
       }
 
       console.log(`[compile] Compiling ${mainFile} in ${projectRoot}`);

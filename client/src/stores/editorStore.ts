@@ -36,6 +36,11 @@ export type ActivePanel = 'symbols' | 'snippets' | 'references' | null;
 export type Theme = 'light' | 'dark';
 export type ViewMode = 'both' | 'editor' | 'pdf';
 
+// HTML render (LaTeXML) — additive web-render path alongside the Tectonic PDF.
+export type PreviewMode = 'pdf' | 'html';
+export type HtmlSplitLevel = 'none' | 'part' | 'chapter' | 'section' | 'subsection';
+export type HtmlRenderStatus = 'idle' | 'rendering' | 'success' | 'error' | 'unavailable';
+
 export interface SyncTexHighlight {
   page: number;
   x: number;
@@ -70,6 +75,15 @@ interface EditorState {
   errors: string[];
   warnings: string[];
   lastCompileTime: number | null;
+
+  // HTML render (LaTeXML) state — runs beside the PDF path, same .tex source
+  previewMode: PreviewMode;
+  htmlSplitAt: HtmlSplitLevel;
+  htmlRenderStatus: HtmlRenderStatus;
+  htmlLog: string;
+  htmlErrors: string[];
+  htmlWarnings: string[];
+  htmlNonce: number; // bumped on each successful render to bust the iframe cache
 
   // Sidebar visibility
   sidebarVisible: boolean;
@@ -135,6 +149,18 @@ interface EditorState {
     errors: string[];
     warnings: string[];
     elapsed: number;
+  }) => void;
+
+  // HTML render actions
+  setPreviewMode: (mode: PreviewMode) => void;
+  setHtmlSplitAt: (level: HtmlSplitLevel) => void;
+  setHtmlRenderStatus: (status: HtmlRenderStatus) => void;
+  setHtmlResult: (result: {
+    ok: boolean;
+    available: boolean;
+    log: string;
+    errors: string[];
+    warnings: string[];
   }) => void;
 
   // Sidebar
@@ -249,6 +275,26 @@ function getInitialFontFamily(): string {
   return "'Source Code Pro', monospace";
 }
 
+function getInitialPreviewMode(): PreviewMode {
+  try {
+    const stored = localStorage.getItem('monolith-preview-mode');
+    if (stored === 'html' || stored === 'pdf') return stored;
+  } catch {}
+  return 'pdf';
+}
+
+const HTML_SPLIT_LEVELS: HtmlSplitLevel[] = ['none', 'part', 'chapter', 'section', 'subsection'];
+
+function getInitialHtmlSplit(): HtmlSplitLevel {
+  try {
+    const stored = localStorage.getItem('monolith-html-split');
+    if (stored && (HTML_SPLIT_LEVELS as string[]).includes(stored)) {
+      return stored as HtmlSplitLevel;
+    }
+  } catch {}
+  return 'none';
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
   projectRoot: null,
@@ -262,6 +308,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   errors: [],
   warnings: [],
   lastCompileTime: null,
+  previewMode: getInitialPreviewMode(),
+  htmlSplitAt: getInitialHtmlSplit(),
+  htmlRenderStatus: 'idle',
+  htmlLog: '',
+  htmlErrors: [],
+  htmlWarnings: [],
+  htmlNonce: 0,
   sidebarVisible: true,
   activePanel: null,
   editorView: null,
@@ -298,6 +351,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       errors: [],
       warnings: [],
       lastCompileTime: null,
+      htmlRenderStatus: 'idle',
+      htmlLog: '',
+      htmlErrors: [],
+      htmlWarnings: [],
+      htmlNonce: 0,
       content: '',
       filePath: 'main.tex',
       dirty: false,
@@ -401,6 +459,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       warnings: result.warnings,
       lastCompileTime: result.elapsed,
     }),
+
+  setPreviewMode: (previewMode) => {
+    try { localStorage.setItem('monolith-preview-mode', previewMode); } catch {}
+    set({ previewMode });
+  },
+
+  setHtmlSplitAt: (htmlSplitAt) => {
+    try { localStorage.setItem('monolith-html-split', htmlSplitAt); } catch {}
+    set({ htmlSplitAt });
+  },
+
+  setHtmlRenderStatus: (htmlRenderStatus) => set({ htmlRenderStatus }),
+
+  setHtmlResult: (result) =>
+    set((state) => ({
+      htmlRenderStatus: !result.available ? 'unavailable' : result.ok ? 'success' : 'error',
+      htmlLog: result.log,
+      htmlErrors: result.errors,
+      htmlWarnings: result.warnings,
+      htmlNonce: result.ok ? state.htmlNonce + 1 : state.htmlNonce,
+    })),
 
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
 
