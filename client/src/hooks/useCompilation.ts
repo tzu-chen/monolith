@@ -6,6 +6,7 @@ export function useCompilation() {
   const content = useEditorStore((s) => s.content);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const dirty = useEditorStore((s) => s.dirty);
+  const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const compilationStatus = useEditorStore((s) => s.compilationStatus);
   const setCompilationStatus = useEditorStore((s) => s.setCompilationStatus);
   const setCompileResult = useEditorStore((s) => s.setCompileResult);
@@ -52,8 +53,10 @@ export function useCompilation() {
     }
   }, [setCompilationStatus, setCompileResult]);
 
-  // Debounced auto-compile on content change (only for .tex files)
+  // Debounced auto-compile on content change (only for .tex files, and only
+  // when auto-recompile is enabled in settings)
   useEffect(() => {
+    if (!autoRecompile) return;
     if (!dirty) return;
     if (!activeTabPath?.endsWith('.tex')) return;
 
@@ -69,7 +72,7 @@ export function useCompilation() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [content, dirty, activeTabPath, doCompile]);
+  }, [content, dirty, activeTabPath, autoRecompile, doCompile]);
 
   return { doCompile, compilationStatus };
 }

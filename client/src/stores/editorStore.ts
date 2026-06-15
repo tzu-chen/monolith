@@ -107,6 +107,9 @@ interface EditorState {
   // Vim mode
   vimMode: boolean;
 
+  // Auto recompile/render on edit (off = compile/render only on explicit action)
+  autoRecompile: boolean;
+
   // View mode
   viewMode: ViewMode;
 
@@ -190,6 +193,9 @@ interface EditorState {
   // Vim mode
   toggleVimMode: () => void;
 
+  // Auto recompile
+  toggleAutoRecompile: () => void;
+
   // Line wrap
   toggleLineWrap: () => void;
 
@@ -264,6 +270,13 @@ function getInitialLineWrap(): boolean {
   return false;
 }
 
+function getInitialAutoRecompile(): boolean {
+  try {
+    return localStorage.getItem('monolith-auto-recompile') === 'true';
+  } catch {}
+  return false;
+}
+
 function getInitialFontSize(): number {
   try {
     const stored = localStorage.getItem('monolith-font-size');
@@ -333,6 +346,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   colorScheme: getInitialColorScheme(),
   autoSwitch: getInitialAutoSwitch(),
   vimMode: getInitialVimMode(),
+  autoRecompile: getInitialAutoRecompile(),
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
   fontFamily: getInitialFontFamily(),
@@ -543,6 +557,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const newVim = !get().vimMode;
     try { localStorage.setItem('monolith-vim', String(newVim)); } catch {}
     set({ vimMode: newVim });
+  },
+
+  toggleAutoRecompile: () => {
+    const next = !get().autoRecompile;
+    try { localStorage.setItem('monolith-auto-recompile', String(next)); } catch {}
+    set({ autoRecompile: next });
   },
 
   toggleLineWrap: () => {

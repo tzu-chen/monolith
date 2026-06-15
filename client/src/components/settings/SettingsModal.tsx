@@ -176,6 +176,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
   const lineWrap = useEditorStore((s) => s.lineWrap);
   const toggleLineWrap = useEditorStore((s) => s.toggleLineWrap);
+  const autoRecompile = useEditorStore((s) => s.autoRecompile);
+  const toggleAutoRecompile = useEditorStore((s) => s.toggleAutoRecompile);
 
   // Snapshot to revert on cancel
   const initialSchemeRef = useRef(colorScheme);
@@ -398,6 +400,28 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             >
               <PlusIcon size={12} />
             </div>
+          </div>
+        </div>
+
+        {/* Compilation Section */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Compilation</label>
+          <div style={{ ...rowStyle, marginTop: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: currentScheme.colors.textPrimary }}>
+                Auto recompile
+              </span>
+              <span style={{ fontSize: 12, color: currentScheme.colors.textSecondary }}>
+                Compile &amp; render as you type. Off — use the Compile/Render button.
+              </span>
+            </div>
+            <Toggle
+              on={autoRecompile}
+              onClick={toggleAutoRecompile}
+              ariaLabel="Auto recompile on edit"
+              accent={currentScheme.colors.accent}
+              off={currentScheme.colors.border}
+            />
           </div>
         </div>
 

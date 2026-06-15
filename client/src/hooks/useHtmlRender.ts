@@ -11,6 +11,7 @@ export function useHtmlRender() {
   const content = useEditorStore((s) => s.content);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const dirty = useEditorStore((s) => s.dirty);
+  const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const previewMode = useEditorStore((s) => s.previewMode);
   const htmlSplitAt = useEditorStore((s) => s.htmlSplitAt);
   const setHtmlRenderStatus = useEditorStore((s) => s.setHtmlRenderStatus);
@@ -56,8 +57,10 @@ export function useHtmlRender() {
   }, [setHtmlRenderStatus, setHtmlResult]);
 
   // Debounced auto-render on content change — only while the HTML preview is the
-  // active mode, so we don't pay for renders the user can't see.
+  // active mode (so we don't pay for renders the user can't see) and only when
+  // auto-recompile is enabled in settings.
   useEffect(() => {
+    if (!autoRecompile) return;
     if (previewMode !== 'html') return;
     if (!dirty) return;
     if (!activeTabPath?.endsWith('.tex')) return;
@@ -70,7 +73,7 @@ export function useHtmlRender() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, dirty, activeTabPath, previewMode, htmlSplitAt, doRender]);
+  }, [content, dirty, activeTabPath, autoRecompile, previewMode, htmlSplitAt, doRender]);
 
   return { doRender };
 }

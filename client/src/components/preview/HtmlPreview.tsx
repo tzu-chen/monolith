@@ -47,6 +47,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const htmlWarnings = useEditorStore((s) => s.htmlWarnings);
   const theme = useEditorStore((s) => s.theme);
   const colorScheme = useEditorStore((s) => s.colorScheme);
+  const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -87,11 +88,13 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   }, [postTheme]);
 
   // Kick an initial render the first time the user opens the HTML preview for a
-  // project that hasn't been rendered yet.
+  // project that hasn't been rendered yet. Skipped when auto-recompile is off —
+  // there the user renders explicitly with the Render button.
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const triggeredRef = useRef(false);
   const lastProjectRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!autoRecompile) return;
     if (previewMode !== 'html') return;
     // Re-arm the one-shot auto-render whenever the project changes.
     if (lastProjectRef.current !== currentProject) {
@@ -104,7 +107,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
       triggeredRef.current = true;
       onRenderHtml();
     }
-  }, [previewMode, currentProject, activeTabPath, htmlNonce, htmlRenderStatus, onRenderHtml]);
+  }, [autoRecompile, previewMode, currentProject, activeTabPath, htmlNonce, htmlRenderStatus, onRenderHtml]);
 
   const statusText = (() => {
     switch (htmlRenderStatus) {
