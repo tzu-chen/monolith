@@ -2,7 +2,8 @@ import { useCallback, useEffect } from 'react';
 import TopBar from './nav/TopBar';
 import BottomBar from './nav/BottomBar';
 import Layout from './Layout';
-import ReferenceBrowser from './panels/ReferenceBrowser';
+import ReferenceModal from './panels/ReferenceModal';
+import ProjectManager from './nav/ProjectManager';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
 import { useCompilation } from '../hooks/useCompilation';
@@ -16,7 +17,8 @@ export default function App() {
   const { doCompile } = useCompilation();
   const { doRender } = useHtmlRender();
   const { saveNow } = useAutosave();
-  const activePanel = useEditorStore((s) => s.activePanel);
+  const showReferences = useEditorStore((s) => s.showReferences);
+  const showProjectManager = useEditorStore((s) => s.showProjectManager);
 
   // Ctrl+S: save file to disk then compile
   const handleSave = useCallback(async () => {
@@ -90,12 +92,10 @@ export default function App() {
   return (
     <>
       <TopBar />
-      {activePanel === 'references' ? (
-        <ReferenceBrowser />
-      ) : (
-        <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} onRenderHtml={doRender} />
-      )}
+      <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} onRenderHtml={doRender} />
       <BottomBar />
+      {showReferences && <ReferenceModal />}
+      {showProjectManager && <ProjectManager />}
     </>
   );
 }

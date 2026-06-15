@@ -126,6 +126,24 @@ export function MinusIcon(props: IconProps) {
   return svg(props, <line x1="5" y1="12" x2="19" y2="12" />);
 }
 
+export function CopyIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ));
+}
+
+export function QuoteIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M3 21c3 0 7-1 7-8V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+      <path d="M14 21c3 0 7-1 7-8V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+    </>
+  ));
+}
+
 export function SettingsIcon(props: IconProps) {
   return svg(props, (
     <>

@@ -32,7 +32,7 @@ export function getSchemeForCurrentTime(s: AutoSwitchSettings): string {
 }
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
-export type ActivePanel = 'symbols' | 'snippets' | 'references' | null;
+export type ActivePanel = 'symbols' | 'snippets' | null;
 export type Theme = 'light' | 'dark';
 export type ViewMode = 'both' | 'editor' | 'pdf';
 
@@ -91,6 +91,10 @@ interface EditorState {
   // Panel state (symbols, snippets)
   activePanel: ActivePanel;
   editorView: EditorView | null;
+
+  // Modal dialogs (references browser, project manager)
+  showReferences: boolean;
+  showProjectManager: boolean;
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
@@ -169,6 +173,10 @@ interface EditorState {
   // Panels
   setActivePanel: (panel: ActivePanel) => void;
   setEditorView: (view: EditorView | null) => void;
+
+  // Modal dialogs
+  setShowReferences: (show: boolean) => void;
+  setShowProjectManager: (show: boolean) => void;
 
   // Outline
   requestScrollToLine: (line: number) => void;
@@ -318,6 +326,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   sidebarVisible: true,
   activePanel: null,
   editorView: null,
+  showReferences: false,
+  showProjectManager: false,
   scrollToLine: null,
   theme: getInitialTheme(),
   colorScheme: getInitialColorScheme(),
@@ -485,6 +495,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setActivePanel: (activePanel) => set({ activePanel }),
   setEditorView: (editorView) => set({ editorView }),
+  setShowReferences: (showReferences) => set({ showReferences }),
+  setShowProjectManager: (showProjectManager) => set({ showProjectManager }),
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),

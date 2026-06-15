@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
-import type { ActivePanel } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
 import { PanelIcon, SettingsIcon, CodeIcon, BookIcon } from '../shared/Icons';
 import SettingsModal from '../settings/SettingsModal';
 
 export default function TopBar() {
-  const activePanel = useEditorStore((s) => s.activePanel);
-  const setActivePanel = useEditorStore((s) => s.setActivePanel);
+  const showReferences = useEditorStore((s) => s.showReferences);
+  const setShowReferences = useEditorStore((s) => s.setShowReferences);
   const viewMode = useEditorStore((s) => s.viewMode);
   const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
   const [showSettings, setShowSettings] = useState(false);
-
-  const togglePanel = (panel: ActivePanel) => {
-    setActivePanel(activePanel === panel ? null : panel);
-  };
 
   return (
     <div
@@ -31,16 +26,11 @@ export default function TopBar() {
     >
       {/* Icon Rail */}
       <nav style={{ display: 'flex', gap: 2 }}>
-        <IconRailButton
-          icon={<CodeIcon size={18} />}
-          active={!activePanel}
-          onClick={() => setActivePanel(null)}
-          title="Editor"
-        />
+        <IconRailButton icon={<CodeIcon size={18} />} active title="Editor" />
         <IconRailButton
           icon={<BookIcon size={18} />}
-          active={activePanel === 'references'}
-          onClick={() => togglePanel('references')}
+          active={showReferences}
+          onClick={() => setShowReferences(true)}
           title="References"
         />
       </nav>

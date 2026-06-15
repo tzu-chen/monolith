@@ -113,6 +113,22 @@ export async function listProjects(): Promise<string[]> {
   return data.projects;
 }
 
+export interface ProjectMeta {
+  name: string;
+  fileCount: number;
+  /** Newest file mtime in ms since epoch; 0 when the project is empty. */
+  modified: number;
+}
+
+export async function projectsMeta(): Promise<ProjectMeta[]> {
+  const res = await fetch('/api/projects/meta');
+  if (!res.ok) {
+    throw new Error(`Failed to load project metadata: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.projects;
+}
+
 export async function getCurrentProject(): Promise<{ project: string | null; projectRoot: string | null }> {
   const res = await fetch('/api/projects/current');
   if (!res.ok) {
@@ -122,16 +138,29 @@ export async function getCurrentProject(): Promise<{ project: string | null; pro
   return { project: data.project, projectRoot: data.projectRoot };
 }
 
-export async function createProject(name: string): Promise<void> {
+export async function createProject(name: string, template?: string): Promise<void> {
   const res = await fetch('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, template }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to create project: ${res.statusText}`);
   }
+}
+
+export async function duplicateProject(name: string, newName: string): Promise<{ name: string }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(name)}/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newName }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to duplicate project: ${res.statusText}`);
+  }
+  return res.json();
 }
 
 export async function renameProject(oldName: string, newName: string): Promise<{ project: string; projectRoot: string }> {
