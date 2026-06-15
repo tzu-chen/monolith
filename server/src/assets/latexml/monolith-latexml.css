@@ -448,10 +448,46 @@ math[display="block"] {
 
 .ltx_graphics,
 .ltx_figure img,
-img.ltx_graphics {
+.ltx_figure object,
+img.ltx_graphics,
+object.ltx_graphics {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
+  transition: filter 0.2s ease;
+}
+
+/* Side-by-side panels. When a figure holds several graphics, LaTeXML lays them
+   out with flexbox (.ltx_flex_figure > .ltx_flex_cell) — but it only gives
+   margins to proper \subfigure/\subfloat panels, not to bare flex cells, and
+   the container itself sets no gap. So adjacent images butt together and any
+   \hspace / \hfill / \quad between them in the source is swallowed by the flex
+   grouping. Restore a real gutter between cells (the gap only applies *between*
+   items, so the row stays centred and the outer edges aren't padded). */
+.ltx_flex_figure {
+  gap: 1.25rem 2rem;
+}
+
+.ltx_flex_cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Dark-mode vector figures. SVG plots / TikZ / \includegraphics of .svg are
+   typically dark line art on a white (or transparent) ground, which disappears
+   on a dark page. Flip their luminance while keeping hues roughly intact so
+   they read as light-on-dark, the way a plot styled for a dark theme would.
+   External SVGs come in via <object>, so their internals are out of reach of
+   this stylesheet — a filter on the host element is the only lever. Scoped to
+   vector art: raster photos are left untouched, since inverting a photograph
+   looks wrong. The app theme drives this via data-theme (not the iframe's OS
+   prefers-color-scheme, which wouldn't match the editor's chosen scheme). */
+:root[data-theme="dark"] object[type="image/svg+xml"],
+:root[data-theme="dark"] img.ltx_graphics[src$=".svg" i],
+:root[data-theme="dark"] .ltx_picture svg,
+:root[data-theme="dark"] svg.ltx_picture {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 .ltx_caption {
