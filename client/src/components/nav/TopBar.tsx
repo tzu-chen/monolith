@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
-import { PanelIcon, SettingsIcon, CodeIcon, BookIcon } from '../shared/Icons';
+import { PanelIcon, SettingsIcon, CodeIcon, BookIcon, ChartIcon } from '../shared/Icons';
 import SettingsModal from '../settings/SettingsModal';
 
 export default function TopBar() {
   const showReferences = useEditorStore((s) => s.showReferences);
   const setShowReferences = useEditorStore((s) => s.setShowReferences);
+  const showPyramidPlots = useEditorStore((s) => s.showPyramidPlots);
+  const setShowPyramidPlots = useEditorStore((s) => s.setShowPyramidPlots);
   const viewMode = useEditorStore((s) => s.viewMode);
   const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
   const [showSettings, setShowSettings] = useState(false);
@@ -32,6 +34,12 @@ export default function TopBar() {
           active={showReferences}
           onClick={() => setShowReferences(true)}
           title="References"
+        />
+        <IconRailButton
+          icon={<ChartIcon size={18} />}
+          active={showPyramidPlots}
+          onClick={() => setShowPyramidPlots(true)}
+          title="Pyramid plots"
         />
       </nav>
 

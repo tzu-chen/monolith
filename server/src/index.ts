@@ -8,6 +8,7 @@ import { createRenderHtmlRouter } from './routes/renderHtml.js';
 import { createProjectsRouter } from './routes/projects.js';
 import { createSyncTeXRouter } from './routes/synctex.js';
 import { createReferencesRouter } from './routes/references.js';
+import { createPyramidRouter } from './routes/pyramid.js';
 import { initProjectContext, getCurrent } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
@@ -22,6 +23,8 @@ const PROJECTS_ROOT = path.resolve(
     : path.join(import.meta.dirname, '../../projects'))
 );
 console.log(`[monolith] projects root: ${PROJECTS_ROOT}`);
+// Pyramid (sibling suite app) base URL — used to pull computational plots.
+const PYRAMID_URL = process.env.PYRAMID_URL || 'http://localhost:3007';
 const CLIENT_DIST = path.resolve(import.meta.dirname, '../../client/dist');
 // Bundled LaTeXML theme assets (CSS/JS) shipped globally with Monolith.
 const LATEXML_THEME_DIR = path.resolve(import.meta.dirname, 'assets/latexml');
@@ -51,6 +54,7 @@ app.use('/api/compile', createCompileRouter(() => getCurrent().projectRoot));
 app.use('/api/render-html', createRenderHtmlRouter(() => getCurrent().projectRoot, LATEXML_THEME_DIR));
 app.use('/api/synctex', createSyncTeXRouter(() => getCurrent().projectRoot));
 app.use('/api/references', createReferencesRouter(() => getCurrent().projectRoot));
+app.use('/api/pyramid', createPyramidRouter(() => getCurrent(), PYRAMID_URL));
 
 app.get('/api/health', (_req, res) => {
   const { projectName, projectRoot } = getCurrent();

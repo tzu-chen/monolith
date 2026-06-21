@@ -92,9 +92,10 @@ interface EditorState {
   activePanel: ActivePanel;
   editorView: EditorView | null;
 
-  // Modal dialogs (references browser, project manager)
+  // Modal dialogs (references browser, project manager, Pyramid plots)
   showReferences: boolean;
   showProjectManager: boolean;
+  showPyramidPlots: boolean;
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
@@ -176,10 +177,13 @@ interface EditorState {
   // Panels
   setActivePanel: (panel: ActivePanel) => void;
   setEditorView: (view: EditorView | null) => void;
+  /** Insert text at the active editor's cursor and focus it. */
+  insertAtCursor: (text: string) => void;
 
   // Modal dialogs
   setShowReferences: (show: boolean) => void;
   setShowProjectManager: (show: boolean) => void;
+  setShowPyramidPlots: (show: boolean) => void;
 
   // Outline
   requestScrollToLine: (line: number) => void;
@@ -341,6 +345,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   editorView: null,
   showReferences: false,
   showProjectManager: false,
+  showPyramidPlots: false,
   scrollToLine: null,
   theme: getInitialTheme(),
   colorScheme: getInitialColorScheme(),
@@ -509,8 +514,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setActivePanel: (activePanel) => set({ activePanel }),
   setEditorView: (editorView) => set({ editorView }),
+  insertAtCursor: (text) => {
+    const view = get().editorView;
+    if (!view) return;
+    const { head } = view.state.selection.main;
+    view.dispatch({ changes: { from: head, insert: text }, selection: { anchor: head + text.length } });
+    view.focus();
+  },
   setShowReferences: (showReferences) => set({ showReferences }),
   setShowProjectManager: (showProjectManager) => set({ showProjectManager }),
+  setShowPyramidPlots: (showPyramidPlots) => set({ showPyramidPlots }),
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),

@@ -3,6 +3,7 @@ import TopBar from './nav/TopBar';
 import BottomBar from './nav/BottomBar';
 import Layout from './Layout';
 import ReferenceModal from './panels/ReferenceModal';
+import PyramidPlotPanel from './panels/PyramidPlotPanel';
 import ProjectManager from './nav/ProjectManager';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
@@ -19,6 +20,7 @@ export default function App() {
   const { saveNow } = useAutosave();
   const showReferences = useEditorStore((s) => s.showReferences);
   const showProjectManager = useEditorStore((s) => s.showProjectManager);
+  const showPyramidPlots = useEditorStore((s) => s.showPyramidPlots);
 
   // Ctrl+S: save file to disk then compile
   const handleSave = useCallback(async () => {
@@ -95,6 +97,7 @@ export default function App() {
       <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} onRenderHtml={doRender} />
       <BottomBar />
       {showReferences && <ReferenceModal />}
+      {showPyramidPlots && <PyramidPlotPanel />}
       {showProjectManager && <ProjectManager />}
     </>
   );

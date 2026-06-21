@@ -3,22 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import { getProjectsRoot } from '../projectContext.js';
+import { safePath } from '../util/safePath.js';
 
 export function createFilesRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
-
-  function safePath(relPath: string, projectRoot: string): string | null {
-    // Reject absolute paths and any parent-dir traversal, then confirm the
-    // resolved path stays within the project root. The separator is appended so
-    // a sibling dir like "<root>-evil" can't satisfy the prefix check.
-    if (typeof relPath !== 'string' || path.isAbsolute(relPath) || relPath.split(/[\\/]/).includes('..')) {
-      return null;
-    }
-    const resolved = path.resolve(projectRoot, relPath);
-    const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
-    if (resolved !== projectRoot && !resolved.startsWith(rootWithSep)) return null;
-    return resolved;
-  }
 
   // File upload via multipart form data
   const upload = multer({ storage: multer.memoryStorage() });

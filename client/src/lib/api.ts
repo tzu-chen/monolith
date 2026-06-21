@@ -293,3 +293,93 @@ export async function syncTexInverse(page: number, x: number, y: number): Promis
   if (!res.ok) return null;
   return res.json();
 }
+
+// Pyramid plot interop
+
+export interface PyramidSession {
+  id: string;
+  title: string;
+  session_type?: string;
+  language?: string;
+  status?: string;
+  updated_at?: string;
+  linkedToCurrentProject?: boolean;
+}
+
+export interface PyramidPlot {
+  fileId: string;
+  filename: string;
+  ext: string;
+}
+
+export interface PyramidRefreshResult {
+  updated: number;
+  unchanged: number;
+  missing: number;
+}
+
+export async function pyramidHealth(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/pyramid/health');
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.available;
+  } catch {
+    return false;
+  }
+}
+
+export async function listPyramidSessions(search: string = ''): Promise<PyramidSession[]> {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+  const res = await fetch(`/api/pyramid/sessions${qs}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to list Pyramid sessions: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.sessions;
+}
+
+export async function listPyramidPlots(sessionId: string): Promise<PyramidPlot[]> {
+  const res = await fetch(`/api/pyramid/sessions/${sessionId}/plots`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to list plots: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.plots;
+}
+
+/** URL for an `<img src>` thumbnail of a Pyramid plot (proxied through Monolith). */
+export function pyramidRawUrl(sessionId: string, fileId: string): string {
+  return `/api/pyramid/sessions/${sessionId}/files/${fileId}/raw`;
+}
+
+export async function importPyramidPlot(args: {
+  sessionId: string;
+  fileId: string;
+  filename: string;
+  sessionTitle?: string;
+  targetDir?: string;
+  overwrite?: boolean;
+}): Promise<{ path: string }> {
+  const res = await fetch('/api/pyramid/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to import plot: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function refreshPyramidPlots(): Promise<PyramidRefreshResult> {
+  const res = await fetch('/api/pyramid/refresh', { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to refresh plots: ${res.statusText}`);
+  }
+  return res.json();
+}

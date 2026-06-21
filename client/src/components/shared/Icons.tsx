@@ -192,6 +192,15 @@ export function BookIcon(props: IconProps) {
   ));
 }
 
+export function ChartIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M7 14l3-3 3 3 4-5" />
+    </>
+  ));
+}
+
 export function PanelIcon(props: IconProps & { side: 'left' | 'right' | 'both' }) {
   const { side, ...rest } = props;
   return svg(rest, (
