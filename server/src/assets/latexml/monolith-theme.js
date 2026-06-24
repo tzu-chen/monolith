@@ -228,16 +228,52 @@
     });
   }
 
-  /* ---- 5. Knowls for citations ----------------------------------------- */
+  /* ---- 5. Knowls for citations and cross-references --------------------- */
+
+  // Resolve an in-page "#id" href to its element. LaTeXML ids commonly contain
+  // '.', which a CSS selector would read as a class separator, so prefer
+  // getElementById (literal id) and fall back to querySelector.
+  function resolveRef(href) {
+    if (!href || href.charAt(0) !== '#') return null;
+    var id = href.slice(1);
+    return (
+      document.getElementById(id) ||
+      (function () {
+        try {
+          return document.querySelector(href);
+        } catch (e) {
+          return null;
+        }
+      })()
+    );
+  }
+
+  function makeKnowl(a) {
+    if (a.getAttribute('data-knowl')) return;
+    var href = a.getAttribute('href');
+    if (!href || href === '#' || !resolveRef(href)) return;
+    a.setAttribute('data-knowl', href);
+    // Label used by knowl.js for the "Close <label>" button.
+    a.setAttribute('data-knowl-label', (a.textContent || '').trim());
+    a.classList.add('knowl');
+  }
 
   function setupKnowls() {
-    // Turn bibliography citations into inline-expandable references: the link
-    // already points at "#bibX", so expanding shows the bib entry in place.
+    // Bibliography citations: the link points at "#bibX", so expanding shows the
+    // bib entry in place.
     document.querySelectorAll('.ltx_cite a.ltx_ref[href^="#"]').forEach(function (a) {
-      var href = a.getAttribute('href');
-      if (!href || !document.querySelector(href)) return;
-      a.setAttribute('data-knowl', href);
-      a.classList.add('knowl');
+      makeKnowl(a);
+    });
+
+    // Other same-document cross-references (theorems, equations, figures,
+    // sections …): clicking pops the referenced content inline, with an
+    // "in-context" link to jump there instead (see knowl.js).
+    document.querySelectorAll('a.ltx_ref[href^="#"]').forEach(function (a) {
+      if (a.closest('.ltx_cite')) return; // citations handled above
+      // Skip navigation chrome and a block's own number tag — those aren't
+      // content cross-references.
+      if (a.closest('.monolith-toc, .ltx_TOC, .ltx_page_navbar, .ltx_tag')) return;
+      makeKnowl(a);
     });
   }
 
@@ -425,6 +461,9 @@
     pop.addEventListener('mouseenter', function () { clearTimeout(hideTimer); });
     pop.addEventListener('mouseleave', function () { hideTimer = setTimeout(hide, 180); });
     window.addEventListener('scroll', function () { if (current) hide(); }, { passive: true });
+    // A click opens the pinned inline knowl; dismiss the transient peek so the
+    // two previews don't overlap.
+    window.addEventListener('monolith:knowl', function () { clearTimeout(showTimer); hide(); });
   }
 
   /* ---- 11. Tufte-style sidenotes -------------------------------------- */

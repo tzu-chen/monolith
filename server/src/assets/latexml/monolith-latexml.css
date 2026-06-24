@@ -697,21 +697,99 @@ blockquote,
 }
 
 .knowl-output {
-  margin: 0.6rem 0;
+  position: relative;
+  margin: 0.7rem 0;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent-light);
   border-radius: 8px;
   background: var(--bg-panel);
   max-height: 0;
   opacity: 0;
+  /* Clip the grow animation; the inner .knowl-content scrolls when overlong. */
   overflow: hidden;
   transition: max-height 0.22s ease, opacity 0.22s ease;
 }
 
 .knowl-output.knowl-open {
-  max-height: 60vh;
+  max-height: 72vh;
   opacity: 1;
-  overflow: auto;
+}
+
+/* ----- "in-context" footer link --------------------------------------- */
+
+.knowl-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.1rem 1.1rem 0.6rem;
+}
+
+.knowl-incontext {
+  font-family: var(--ml-sans);
+  font-size: 0.8em;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+
+.knowl-incontext:hover {
+  color: var(--accent-light);
+  text-decoration: underline;
+}
+
+/* ----- "Close <label>" button (revealed on hover) --------------------- */
+
+.knowl-close {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  z-index: 2;
+  font-family: var(--ml-sans);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.18rem 0.55rem;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 1px 3px var(--paper-shadow);
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.knowl-output:hover .knowl-close,
+.knowl-close:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.knowl-close:hover {
+  color: var(--accent);
+  border-color: var(--accent-light);
+}
+
+/* ----- Target highlight when "in-context" jumps ----------------------- */
+
+.monolith-target-flash {
+  border-radius: 5px;
+  animation: monolith-flash 1.6s ease-out;
+}
+
+@keyframes monolith-flash {
+  0%,
+  55% {
+    background-color: var(--accent-bg);
+    box-shadow: 0 0 0 0.3rem var(--accent-bg), 0 0 0 0.14rem var(--accent-light);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0.3rem transparent, 0 0 0 0.14rem transparent;
+  }
 }
 
 /* ----- Reading-progress bar (added by monolith-theme.js) --------------- */
@@ -875,6 +953,46 @@ blockquote,
 }
 
 .knowl-content {
-  padding: 0.8rem 1.1rem;
+  padding: 0.85rem 1.15rem 0.4rem;
   font-size: 0.95em;
+  /* Scroll within the panel when the cloned target is tall; the close button and
+     footer live outside this box so they stay put. */
+  max-height: 58vh;
+  overflow: auto;
+}
+
+.knowl-content > :first-child {
+  margin-top: 0;
+}
+
+.knowl-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* Strip the card chrome from a theorem/proof cloned into the panel so it doesn't
+   nest a card inside a card (mirrors the hover-preview treatment). */
+.knowl-content > .ltx_theorem,
+.knowl-content > .ltx_proof {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+/* A bibliography entry is cloned as a bare <li> (no <ul>); neutralise the list
+   marker and indent so it reads as a plain block. */
+.knowl-content > .ltx_bibitem,
+.knowl-content > li {
+  list-style: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+/* A section cross-reference clones just the heading; tame its display size and
+   margins inside the compact panel. */
+.knowl-content > .ltx_title {
+  margin: 0;
+  font-size: 1.15em;
 }
