@@ -121,6 +121,9 @@ interface EditorState {
   // Line wrap
   lineWrap: boolean;
 
+  // Show line numbers in the editor gutter
+  showLineNumbers: boolean;
+
   // Cursor position
   cursorLine: number;
   cursorCol: number;
@@ -203,8 +206,11 @@ interface EditorState {
   // Line wrap
   toggleLineWrap: () => void;
 
+  // Line numbers
+  toggleShowLineNumbers: () => void;
+
   // View mode
-  cycleViewMode: () => void;
+  setViewMode: (mode: ViewMode) => void;
 
   // Font settings
   setFontSize: (size: number) => void;
@@ -279,6 +285,13 @@ function getInitialAutoRecompile(): boolean {
     return localStorage.getItem('monolith-auto-recompile') === 'true';
   } catch {}
   return false;
+}
+
+function getInitialShowLineNumbers(): boolean {
+  try {
+    return localStorage.getItem('monolith-line-numbers') !== 'false';
+  } catch {}
+  return true;
 }
 
 function getInitialFontSize(): number {
@@ -356,6 +369,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fontSize: getInitialFontSize(),
   fontFamily: getInitialFontFamily(),
   lineWrap: getInitialLineWrap(),
+  showLineNumbers: getInitialShowLineNumbers(),
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -584,11 +598,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ lineWrap: newWrap });
   },
 
-  cycleViewMode: () => {
-    const current = get().viewMode;
-    const next = current === 'both' ? 'editor' : current === 'editor' ? 'pdf' : 'both';
-    set({ viewMode: next });
+  toggleShowLineNumbers: () => {
+    const next = !get().showLineNumbers;
+    try { localStorage.setItem('monolith-line-numbers', String(next)); } catch {}
+    set({ showLineNumbers: next });
   },
+
+  setViewMode: (viewMode) => set({ viewMode }),
 
   setFontSize: (size) => {
     const clamped = Math.min(32, Math.max(8, size));

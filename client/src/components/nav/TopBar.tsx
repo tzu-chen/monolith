@@ -1,8 +1,14 @@
 import { useState } from 'react';
-import { useEditorStore } from '../../stores/editorStore';
+import { useEditorStore, type ViewMode } from '../../stores/editorStore';
 import ProjectSwitcher from './ProjectSwitcher';
 import { PanelIcon, SettingsIcon, CodeIcon, BookIcon, ChartIcon } from '../shared/Icons';
 import SettingsModal from '../settings/SettingsModal';
+
+const VIEW_MODES: { value: ViewMode; title: string; side: 'left' | 'both' | 'right' }[] = [
+  { value: 'editor', title: 'Editor only', side: 'left' },
+  { value: 'both', title: 'Editor and preview', side: 'both' },
+  { value: 'pdf', title: 'Preview only', side: 'right' },
+];
 
 export default function TopBar() {
   const showReferences = useEditorStore((s) => s.showReferences);
@@ -10,7 +16,7 @@ export default function TopBar() {
   const showPyramidPlots = useEditorStore((s) => s.showPyramidPlots);
   const setShowPyramidPlots = useEditorStore((s) => s.setShowPyramidPlots);
   const viewMode = useEditorStore((s) => s.viewMode);
-  const cycleViewMode = useEditorStore((s) => s.cycleViewMode);
+  const setViewMode = useEditorStore((s) => s.setViewMode);
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -55,35 +61,42 @@ export default function TopBar() {
           gap: 10,
         }}
       >
-        {/* View toggle */}
+        {/* View mode segmented control */}
         <div
-          onClick={cycleViewMode}
-          title={
-            viewMode === 'both'
-              ? 'Show editor only'
-              : viewMode === 'editor'
-                ? 'Show PDF only'
-                : 'Show both'
-          }
           style={{
-            fontSize: 15,
-            color: 'var(--text-secondary)',
+            display: 'inline-flex',
             background: 'var(--bg-warm)',
-            padding: '2px 6px',
-            borderRadius: 3,
             border: '1px solid var(--border)',
-            fontFamily: "'Source Code Pro', monospace",
-            fontWeight: 600,
-            cursor: 'pointer',
-            userSelect: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
+            borderRadius: 6,
+            padding: 2,
+            gap: 2,
+            flexShrink: 0,
           }}
         >
-          <span style={{ opacity: viewMode === 'pdf' ? 0.3 : 1 }}><PanelIcon size={10} side="left" /></span>
-          <span style={{ opacity: viewMode !== 'both' ? 0.3 : 1 }}>|</span>
-          <span style={{ opacity: viewMode === 'editor' ? 0.3 : 1 }}><PanelIcon size={10} side="right" /></span>
+          {VIEW_MODES.map((m) => {
+            const active = viewMode === m.value;
+            return (
+              <button
+                key={m.value}
+                onClick={() => setViewMode(m.value)}
+                title={m.title}
+                style={{
+                  cursor: 'pointer',
+                  border: 'none',
+                  padding: '3px 9px',
+                  borderRadius: 4,
+                  background: active ? 'var(--accent)' : 'transparent',
+                  color: active ? 'white' : 'var(--text-dim)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+              >
+                <PanelIcon size={13} side={m.side} />
+              </button>
+            );
+          })}
         </div>
 
         {/* Settings */}

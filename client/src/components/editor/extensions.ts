@@ -16,6 +16,7 @@ import { mathPreview, preambleMacrosFacet } from './math-preview';
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const lineWrapCompartment = new Compartment();
+export const lineNumbersCompartment = new Compartment();
 export const preambleCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
@@ -25,13 +26,17 @@ function getThemeExtensions(colorScheme: string, font: FontSettings = defaultFon
   return [createEditorTheme(scheme, font), createHighlightStyle(scheme)];
 }
 
-export function createExtensions(colorScheme: string = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = ''): Extension[] {
+// Line-number gutter + its active-line highlight toggle together.
+function lineNumbersExtensions(show: boolean): Extension {
+  return show ? [lineNumbers(), highlightActiveLineGutter()] : [];
+}
+
+export function createExtensions(colorScheme: string = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = '', showLineNumbers: boolean = true): Extension[] {
   return [
     vimCompartment.of(vimMode ? vim() : []),
     lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
-    lineNumbers(),
+    lineNumbersCompartment.of(lineNumbersExtensions(showLineNumbers)),
     highlightActiveLine(),
-    highlightActiveLineGutter(),
     history(),
     bracketMatching(),
     closeBrackets(),
@@ -66,6 +71,10 @@ export function getVimReconfiguration(vimMode: boolean) {
 
 export function getLineWrapReconfiguration(lineWrap: boolean) {
   return lineWrapCompartment.reconfigure(lineWrap ? EditorView.lineWrapping : []);
+}
+
+export function getLineNumbersReconfiguration(showLineNumbers: boolean) {
+  return lineNumbersCompartment.reconfigure(lineNumbersExtensions(showLineNumbers));
 }
 
 export function getPreambleReconfiguration(macros: string) {

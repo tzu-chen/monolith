@@ -176,6 +176,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const toggleVimMode = useEditorStore((s) => s.toggleVimMode);
   const lineWrap = useEditorStore((s) => s.lineWrap);
   const toggleLineWrap = useEditorStore((s) => s.toggleLineWrap);
+  const showLineNumbers = useEditorStore((s) => s.showLineNumbers);
+  const toggleShowLineNumbers = useEditorStore((s) => s.toggleShowLineNumbers);
   const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const toggleAutoRecompile = useEditorStore((s) => s.toggleAutoRecompile);
 
@@ -452,7 +454,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Line Wrap Toggle */}
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>Line Wrap</label>
           <div
             onClick={toggleLineWrap}
@@ -474,6 +476,32 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           >
             WRAP
             <span style={{ fontSize: 13, opacity: 0.7 }}>{lineWrap ? 'ON' : 'OFF'}</span>
+          </div>
+        </div>
+
+        {/* Line Numbers Toggle */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>Line Numbers</label>
+          <div
+            onClick={toggleShowLineNumbers}
+            style={{
+              marginTop: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: `1px solid ${showLineNumbers ? currentScheme.colors.accent : currentScheme.colors.border}`,
+              background: showLineNumbers ? currentScheme.colors.accentBg : currentScheme.colors.bgEditor,
+              color: showLineNumbers ? currentScheme.colors.accent : currentScheme.colors.textSecondary,
+              cursor: 'pointer',
+              fontSize: 15,
+              fontWeight: 500,
+              fontFamily: "'Source Code Pro', monospace",
+            }}
+          >
+            123
+            <span style={{ fontSize: 13, opacity: 0.7 }}>{showLineNumbers ? 'ON' : 'OFF'}</span>
           </div>
         </div>
 

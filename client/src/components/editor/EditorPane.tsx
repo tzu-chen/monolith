@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
-import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration, getPreambleReconfiguration } from './extensions';
+import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration, getLineNumbersReconfiguration, getPreambleReconfiguration } from './extensions';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
 
@@ -9,11 +9,21 @@ interface EditorPaneProps {
   onSave: () => void;
 }
 
+// Cache EditorState per file so undo history and editing location (cursor +
+// scroll) survive both tab switches and EditorPane unmounts — e.g. toggling the
+// view to PDF-only and back. Module-scoped so it outlives the component, keyed
+// by project + path to avoid collisions between same-named files in different
+// projects.
+const stateCache = new Map<string, EditorState>();
+
+function cacheKeyFor(path: string): string {
+  const project = useEditorStore.getState().currentProject ?? '';
+  return `${project}\n${path}`;
+}
+
 export default function EditorPane({ onSave }: EditorPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  // Cache EditorState per file so undo history is preserved across tab switches
-  const stateCache = useRef<Map<string, EditorState>>(new Map());
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const content = useEditorStore((s) => s.content);
   const scrollToLine = useEditorStore((s) => s.scrollToLine);
@@ -26,6 +36,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const fontFamily = useEditorStore((s) => s.fontFamily);
   const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const lineWrap = useEditorStore((s) => s.lineWrap);
+  const showLineNumbers = useEditorStore((s) => s.showLineNumbers);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const preambleMacros = useEditorStore((s) => s.preambleMacros);
 
@@ -40,6 +51,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       const currentVim = s.vimMode;
       const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
       const currentLineWrap = s.lineWrap;
+      const currentShowLineNumbers = s.showLineNumbers;
       const currentPreambleMacros = s.preambleMacros;
 
       const saveKeymap = keymap.of([
@@ -91,7 +103,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
       const state = EditorState.create({
         doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros, currentShowLineNumbers), updateListener, syncTexHandler],
       });
 
       return new EditorView({ state, parent });
@@ -105,20 +117,22 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
 
     // Save current editor state to cache before switching
     if (viewRef.current) {
-      const currentPath = viewRef.current.dom.dataset.filePath;
-      if (currentPath) {
-        stateCache.current.set(currentPath, viewRef.current.state);
+      const currentKey = viewRef.current.dom.dataset.cacheKey;
+      if (currentKey) {
+        stateCache.set(currentKey, viewRef.current.state);
       }
       viewRef.current.destroy();
       viewRef.current = null;
     }
 
     // Check if we have a cached state for this file
-    const cached = stateCache.current.get(activeTabPath);
+    const key = cacheKeyFor(activeTabPath);
+    const cached = stateCache.get(key);
     const currentColorScheme = useEditorStore.getState().colorScheme;
     const currentVim = useEditorStore.getState().vimMode;
     const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
     const currentLineWrap = useEditorStore.getState().lineWrap;
+    const currentShowLineNumbers = useEditorStore.getState().showLineNumbers;
     const currentPreambleMacros = useEditorStore.getState().preambleMacros;
 
     if (cached) {
@@ -170,7 +184,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Recreate state with cached doc + extensions
       const state = EditorState.create({
         doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros), updateListener, syncTexHandler],
+        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros, currentShowLineNumbers), updateListener, syncTexHandler],
         selection: cached.selection,
       });
 
@@ -178,13 +192,18 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
         state,
         parent: containerRef.current,
       });
-      view.dom.dataset.filePath = activeTabPath;
+      view.dom.dataset.cacheKey = key;
+      // A fresh view starts scrolled to the top; bring the restored cursor back
+      // into view so the editing location is preserved, not just the selection.
+      view.dispatch({
+        effects: EditorView.scrollIntoView(cached.selection.main.head, { y: 'center' }),
+      });
       viewRef.current = view;
       setEditorView(view);
     } else {
       // Create new editor with content from store
       const view = createView(content, containerRef.current);
-      view.dom.dataset.filePath = activeTabPath;
+      view.dom.dataset.cacheKey = key;
       viewRef.current = view;
       setEditorView(view);
     }
@@ -193,6 +212,19 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       // Don't destroy on cleanup — we handle it at the top of this effect
     };
   }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On unmount (e.g. switching the view to PDF-only), persist the live editor
+  // state so the editing location is restored when the pane mounts again.
+  useEffect(() => {
+    return () => {
+      const view = viewRef.current;
+      if (!view) return;
+      const key = view.dom.dataset.cacheKey;
+      if (key) stateCache.set(key, view.state);
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, []);
 
   // Reconfigure theme dynamically (also triggered by font/color scheme changes)
   useEffect(() => {
@@ -217,6 +249,14 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       effects: getLineWrapReconfiguration(lineWrap),
     });
   }, [lineWrap]);
+
+  // Reconfigure line-number gutter dynamically
+  useEffect(() => {
+    if (!viewRef.current) return;
+    viewRef.current.dispatch({
+      effects: getLineNumbersReconfiguration(showLineNumbers),
+    });
+  }, [showLineNumbers]);
 
   // Reconfigure preamble macros for math preview
   useEffect(() => {
