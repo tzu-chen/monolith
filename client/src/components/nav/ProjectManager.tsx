@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
-import { CloseIcon, PlusIcon, EditIcon, CopyIcon, DotIcon } from '../shared/Icons';
+import { CloseIcon, PlusIcon, EditIcon, CopyIcon, DotIcon, ArchiveIcon, UnarchiveIcon } from '../shared/Icons';
+
+type Tab = 'active' | 'archived';
 
 const TEMPLATES = [
   { value: 'blank', label: 'Empty' },
@@ -30,6 +32,7 @@ export default function ProjectManager() {
 
   const [metas, setMetas] = useState<api.ProjectMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('active');
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -165,7 +168,24 @@ export default function ProjectManager() {
     setBusy(false);
   }, [reload]);
 
-  const filtered = metas.filter((m) => !search || m.name.toLowerCase().includes(search.toLowerCase()));
+  const handleArchive = useCallback(async (name: string, archived: boolean) => {
+    setBusy(true); setError('');
+    try {
+      await api.setProjectArchived(name, archived);
+      resetInlineState();
+      await reload();
+    } catch (err: any) {
+      setError(err.message || `Failed to ${archived ? 'archive' : 'unarchive'} project`);
+    }
+    setBusy(false);
+  }, [reload]);
+
+  const activeCount = metas.filter((m) => !m.archived).length;
+  const archivedCount = metas.length - activeCount;
+  const filtered = metas.filter(
+    (m) => (tab === 'archived' ? m.archived : !m.archived)
+      && (!search || m.name.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const inputStyle: React.CSSProperties = {
     fontSize: 15,
@@ -237,7 +257,7 @@ export default function ProjectManager() {
             style={{ ...inputStyle, flex: 1, border: '1px solid var(--border)' }}
           />
           {!creating && (
-            <button onClick={() => { resetInlineState(); setCreating(true); }} style={{ ...smallBtn('accent'), display: 'flex', alignItems: 'center', gap: 5 }}>
+            <button onClick={() => { resetInlineState(); setTab('active'); setCreating(true); }} style={{ ...smallBtn('accent'), display: 'flex', alignItems: 'center', gap: 5 }}>
               <PlusIcon size={13} /> New
             </button>
           )}
@@ -254,7 +274,7 @@ export default function ProjectManager() {
               value={newName}
               onChange={(e) => { setNewName(e.target.value); setError(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setCreating(false); setNewName(''); } }}
-              placeholder="project-name"
+              placeholder="Project name"
               style={{ ...inputStyle, flex: 1 }}
             />
             <select value={newTemplate} onChange={(e) => setNewTemplate(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
@@ -267,13 +287,48 @@ export default function ProjectManager() {
 
         {error && <div style={{ fontSize: 14, color: 'var(--red)', padding: '8px 18px' }}>{error}</div>}
 
+        {/* Active / Archived tabs */}
+        <div style={{ display: 'flex', gap: 4, padding: '8px 18px 0', borderBottom: '1px solid var(--border)' }}>
+          {([['active', 'Active', activeCount], ['archived', 'Archived', archivedCount]] as const).map(([key, label, count]) => {
+            const selected = tab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => { resetInlineState(); setTab(key); }}
+                style={{
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  padding: '6px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: `2px solid ${selected ? 'var(--accent)' : 'transparent'}`,
+                  marginBottom: -1,
+                  color: selected ? 'var(--text-primary)' : 'var(--text-dim)',
+                  fontWeight: selected ? 600 : 400,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {label}
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 400 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Project list */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 120 }}>
           {loading ? (
             <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-dim)' }}>Loading…</div>
           ) : filtered.length === 0 ? (
             <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-dim)' }}>
-              {search ? 'No projects match your search' : 'No projects yet'}
+              {search
+                ? 'No projects match your search'
+                : tab === 'archived'
+                  ? 'No archived projects'
+                  : 'No projects yet'}
             </div>
           ) : (
             filtered.map((m) => {
@@ -348,6 +403,14 @@ export default function ProjectManager() {
                     </button>
                     <button title="Rename" onClick={() => { resetInlineState(); setRenaming(m.name); setRenameName(m.name); }} style={iconBtn}>
                       <EditIcon size={14} />
+                    </button>
+                    <button
+                      title={m.archived ? 'Unarchive' : 'Archive'}
+                      onClick={() => handleArchive(m.name, !m.archived)}
+                      disabled={busy}
+                      style={iconBtn}
+                    >
+                      {m.archived ? <UnarchiveIcon size={14} /> : <ArchiveIcon size={14} />}
                     </button>
                     <button title="Delete" onClick={() => { resetInlineState(); setConfirmDelete(m.name); }} style={{ ...iconBtn, color: 'var(--red)' }}>
                       <CloseIcon size={14} />

@@ -118,6 +118,8 @@ export interface ProjectMeta {
   fileCount: number;
   /** Newest file mtime in ms since epoch; 0 when the project is empty. */
   modified: number;
+  /** Archived projects are hidden from the quick-switcher. */
+  archived: boolean;
 }
 
 export async function projectsMeta(): Promise<ProjectMeta[]> {
@@ -185,6 +187,17 @@ export async function deleteProject(name: string): Promise<{ deleted: true; swit
     throw new Error(data.error || `Failed to delete project: ${res.statusText}`);
   }
   return res.json();
+}
+
+export async function setProjectArchived(name: string, archived: boolean): Promise<void> {
+  const action = archived ? 'archive' : 'unarchive';
+  const res = await fetch(`/api/projects/${encodeURIComponent(name)}/${action}`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to ${action} project: ${res.statusText}`);
+  }
 }
 
 export async function switchProject(name: string): Promise<{ projectRoot: string }> {

@@ -1,9 +1,23 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { getProjectsRoot, getCurrent, switchProject, renameProject, deleteProject } from '../projectContext.js';
+import { getProjectsRoot, getCurrent, switchProject, renameProject, deleteProject, isArchived, setArchived } from '../projectContext.js';
 
-const VALID_NAME = /^[a-zA-Z0-9_-]+$/;
+// Allowed characters in a project name. Spaces are permitted, but path
+// separators and dots are not, so a name can never traverse or escape the
+// projects root (and can't start with a dot, which would hide it from listings).
+const VALID_NAME = /^[a-zA-Z0-9 _-]+$/;
+
+/** Returns an error message if the name is invalid, or null when it's acceptable. */
+function nameError(name: string): string | null {
+  if (name !== name.trim()) {
+    return 'Project name may not start or end with a space';
+  }
+  if (!VALID_NAME.test(name)) {
+    return 'Project name may only contain letters, numbers, spaces, hyphens, and underscores';
+  }
+  return null;
+}
 
 // Directories excluded from metadata counts and project duplication (build artifacts).
 const EXCLUDED_DIRS = new Set(['build', '.monolith']);
@@ -65,13 +79,16 @@ async function projectStats(dir: string): Promise<{ fileCount: number; modified:
 export function createProjectsRouter(): Router {
   const router = Router();
 
-  // List all projects (names only — keeps the quick-switcher fast)
+  // List active projects (names only — keeps the quick-switcher fast).
+  // Archived projects are excluded; they're only surfaced in the manager's
+  // Archived tab via /meta.
   router.get('/', async (_req: Request, res: Response) => {
     try {
       const entries = await fs.readdir(getProjectsRoot(), { withFileTypes: true });
       const projects = entries
         .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
         .map((e) => e.name)
+        .filter((name) => !isArchived(name))
         .sort();
       res.json({ projects });
     } catch (err) {
@@ -91,7 +108,7 @@ export function createProjectsRouter(): Router {
       const projects = await Promise.all(
         names.map(async (name) => {
           const { fileCount, modified } = await projectStats(path.join(root, name));
-          return { name, fileCount, modified };
+          return { name, fileCount, modified, archived: isArchived(name) };
         })
       );
       res.json({ projects });
@@ -114,8 +131,9 @@ export function createProjectsRouter(): Router {
         res.status(400).json({ error: 'Body must include "name" string' });
         return;
       }
-      if (!VALID_NAME.test(name)) {
-        res.status(400).json({ error: 'Project name may only contain letters, numbers, hyphens, and underscores' });
+      const invalid = nameError(name);
+      if (invalid) {
+        res.status(400).json({ error: invalid });
         return;
       }
       const projectDir = path.join(getProjectsRoot(), name);
@@ -152,8 +170,9 @@ export function createProjectsRouter(): Router {
         res.status(400).json({ error: 'Body must include "newName" string' });
         return;
       }
-      if (!VALID_NAME.test(newName)) {
-        res.status(400).json({ error: 'Project name may only contain letters, numbers, hyphens, and underscores' });
+      const invalid = nameError(newName);
+      if (invalid) {
+        res.status(400).json({ error: invalid });
         return;
       }
       const root = getProjectsRoot();
@@ -187,6 +206,28 @@ export function createProjectsRouter(): Router {
     }
   });
 
+  // Archive a project (hides it from the quick-switcher)
+  router.post('/:name/archive', async (req: Request, res: Response) => {
+    try {
+      await setArchived(req.params.name, true);
+      res.json({ name: req.params.name, archived: true });
+    } catch (err: any) {
+      const status = err.message.includes('does not exist') ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // Unarchive a project (restores it to the active list)
+  router.post('/:name/unarchive', async (req: Request, res: Response) => {
+    try {
+      await setArchived(req.params.name, false);
+      res.json({ name: req.params.name, archived: false });
+    } catch (err: any) {
+      const status = err.message.includes('does not exist') ? 404 : 500;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
   // Switch active project
   router.put('/current', (req: Request, res: Response) => {
     try {
@@ -211,8 +252,9 @@ export function createProjectsRouter(): Router {
         res.status(400).json({ error: 'Body must include "name" string' });
         return;
       }
-      if (!VALID_NAME.test(newName)) {
-        res.status(400).json({ error: 'Project name may only contain letters, numbers, hyphens, and underscores' });
+      const invalid = nameError(newName);
+      if (invalid) {
+        res.status(400).json({ error: invalid });
         return;
       }
       const ctx = await renameProject(oldName, newName);

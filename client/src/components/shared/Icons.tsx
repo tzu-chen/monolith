@@ -144,6 +144,27 @@ export function QuoteIcon(props: IconProps) {
   ));
 }
 
+export function ArchiveIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </>
+  ));
+}
+
+export function UnarchiveIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <polyline points="9 15 12 12 15 15" />
+      <line x1="12" y1="12" x2="12" y2="18" />
+    </>
+  ));
+}
+
 export function SettingsIcon(props: IconProps) {
   return svg(props, (
     <>
