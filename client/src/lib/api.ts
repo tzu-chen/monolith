@@ -331,6 +331,16 @@ export interface PyramidRefreshResult {
   missing: number;
 }
 
+/** A recorded link between a local project file and its Pyramid source. */
+export interface PyramidLink {
+  path: string;
+  sessionId: string;
+  sessionTitle: string;
+  fileId: string;
+  filename: string;
+  importedAt: string;
+}
+
 export async function pyramidHealth(): Promise<boolean> {
   try {
     const res = await fetch('/api/pyramid/health');
@@ -395,4 +405,41 @@ export async function refreshPyramidPlots(): Promise<PyramidRefreshResult> {
     throw new Error(data.error || `Failed to refresh plots: ${res.statusText}`);
   }
   return res.json();
+}
+
+/** List the recorded plot links (the import manifest). Local-only; works even when Pyramid is offline. */
+export async function listPyramidLinks(): Promise<PyramidLink[]> {
+  const res = await fetch('/api/pyramid/manifest');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to load plot links: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.entries;
+}
+
+/** Rename/move a plot link's local path (moves the file on disk too). */
+export async function renamePyramidLink(from: string, to: string): Promise<void> {
+  const res = await fetch('/api/pyramid/manifest', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to rename plot link: ${res.statusText}`);
+  }
+}
+
+/** Delete a plot link; with `deleteFile`, also remove the imported file from disk. */
+export async function deletePyramidLink(path: string, deleteFile: boolean): Promise<void> {
+  const res = await fetch('/api/pyramid/manifest', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, deleteFile }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to delete plot link: ${res.statusText}`);
+  }
 }

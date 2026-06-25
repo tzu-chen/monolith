@@ -214,6 +214,87 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
     res.json({ entries });
   });
 
+  // PATCH /api/pyramid/manifest — rename/move a linked plot's local path
+  // Body: { from, to }. Moves the file on disk (if present) and re-keys the
+  // manifest entry; the link survives even if the file was already deleted.
+  router.patch('/manifest', async (req: Request, res: Response) => {
+    try {
+      const { projectRoot } = getCtx();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
+      const { from, to } = req.body || {};
+      if (typeof from !== 'string' || typeof to !== 'string' || !from || !to) {
+        res.status(400).json({ error: 'Body must include "from" and "to" paths' });
+        return;
+      }
+
+      const manifest = await readManifest(projectRoot);
+      if (!manifest[from]) { res.status(404).json({ error: 'No link for that path' }); return; }
+      if (from === to) { res.json({ from, to }); return; }
+      if (manifest[to]) { res.status(409).json({ error: 'A link already exists at the target path' }); return; }
+
+      const fromAbs = safePath(from, projectRoot);
+      const toAbs = safePath(to, projectRoot);
+      if (!fromAbs || !toAbs) { res.status(403).json({ error: 'Path traversal not allowed' }); return; }
+
+      // Don't clobber an unrelated existing file at the destination.
+      try {
+        await fs.access(toAbs);
+        res.status(409).json({ error: 'A file already exists at the target path' });
+        return;
+      } catch { /* destination free — proceed */ }
+
+      // Move the file if it's present; the link metadata persists regardless.
+      try {
+        await fs.mkdir(path.dirname(toAbs), { recursive: true });
+        await fs.rename(fromAbs, toAbs);
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') throw err;
+      }
+
+      manifest[to] = manifest[from];
+      delete manifest[from];
+      await writeManifest(projectRoot, manifest);
+      res.json({ from, to });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to rename link: ${err}` });
+    }
+  });
+
+  // DELETE /api/pyramid/manifest — remove a link; optionally its file too
+  // Body: { path, deleteFile? }
+  router.delete('/manifest', async (req: Request, res: Response) => {
+    try {
+      const { projectRoot } = getCtx();
+      if (!projectRoot) { res.status(400).json({ error: 'No project selected' }); return; }
+      const { path: relPath, deleteFile = false } = req.body || {};
+      if (typeof relPath !== 'string' || !relPath) {
+        res.status(400).json({ error: 'Body must include "path"' });
+        return;
+      }
+
+      const manifest = await readManifest(projectRoot);
+      if (!manifest[relPath]) { res.status(404).json({ error: 'No link for that path' }); return; }
+
+      let fileDeleted = false;
+      if (deleteFile) {
+        const abs = safePath(relPath, projectRoot);
+        if (!abs) { res.status(403).json({ error: 'Path traversal not allowed' }); return; }
+        try {
+          await fs.rm(abs);
+          fileDeleted = true;
+        } catch (err: any) {
+          if (err?.code !== 'ENOENT') throw err;
+        }
+      }
+
+      delete manifest[relPath];
+      await writeManifest(projectRoot, manifest);
+      res.json({ path: relPath, deleted: true, fileDeleted });
+    } catch (err) {
+      res.status(500).json({ error: `Failed to delete link: ${err}` });
+    }
+  });
+
   // POST /api/pyramid/refresh — re-pull every linked plot
   router.post('/refresh', async (_req: Request, res: Response) => {
     try {

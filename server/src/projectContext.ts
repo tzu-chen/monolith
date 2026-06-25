@@ -39,8 +39,24 @@ export function getCurrent(): ProjectContext {
   return current;
 }
 
+/**
+ * Resolve a project directory inside the projects root, rejecting any name that
+ * would escape it (`..`, absolute paths, embedded separators). Every filesystem
+ * operation keyed by an untrusted project name must go through here so a crafted
+ * name can't traverse outside the root. Throws "does not exist" (mapped to 404 by
+ * the routes) rather than confirming the traversal attempt.
+ */
+function resolveProjectDir(name: string): string {
+  const resolved = path.resolve(projectsRoot, name);
+  const rootWithSep = projectsRoot.endsWith(path.sep) ? projectsRoot : projectsRoot + path.sep;
+  if (!resolved.startsWith(rootWithSep)) {
+    throw new Error(`Project "${name}" does not exist`);
+  }
+  return resolved;
+}
+
 export function switchProject(name: string): ProjectContext {
-  const projectRoot = path.join(projectsRoot, name);
+  const projectRoot = resolveProjectDir(name);
   if (!fs.existsSync(projectRoot) || !fs.statSync(projectRoot).isDirectory()) {
     throw new Error(`Project "${name}" does not exist`);
   }
@@ -62,7 +78,7 @@ export function isArchived(name: string): boolean {
 
 /** Toggle a project's archived state by adding/removing its marker file. */
 export async function setArchived(name: string, archived: boolean): Promise<void> {
-  const projectPath = path.join(projectsRoot, name);
+  const projectPath = resolveProjectDir(name);
   if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
     throw new Error(`Project "${name}" does not exist`);
   }
@@ -76,8 +92,8 @@ export async function setArchived(name: string, archived: boolean): Promise<void
 }
 
 export async function renameProject(oldName: string, newName: string): Promise<ProjectContext> {
-  const oldPath = path.join(projectsRoot, oldName);
-  const newPath = path.join(projectsRoot, newName);
+  const oldPath = resolveProjectDir(oldName);
+  const newPath = resolveProjectDir(newName);
   if (!fs.existsSync(oldPath) || !fs.statSync(oldPath).isDirectory()) {
     throw new Error(`Project "${oldName}" does not exist`);
   }
@@ -96,7 +112,7 @@ export async function renameProject(oldName: string, newName: string): Promise<P
 }
 
 export async function deleteProject(name: string): Promise<{ deleted: true; switchedTo: string | null }> {
-  const projectPath = path.join(projectsRoot, name);
+  const projectPath = resolveProjectDir(name);
   if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
     throw new Error(`Project "${name}" does not exist`);
   }

@@ -166,6 +166,11 @@ export function createProjectsRouter(): Router {
     try {
       const { name } = req.params;
       const { newName } = req.body;
+      const srcInvalid = nameError(name);
+      if (srcInvalid) {
+        res.status(400).json({ error: srcInvalid });
+        return;
+      }
       if (!newName || typeof newName !== 'string') {
         res.status(400).json({ error: 'Body must include "newName" string' });
         return;
@@ -209,6 +214,11 @@ export function createProjectsRouter(): Router {
   // Archive a project (hides it from the quick-switcher)
   router.post('/:name/archive', async (req: Request, res: Response) => {
     try {
+      const invalid = nameError(req.params.name);
+      if (invalid) {
+        res.status(400).json({ error: invalid });
+        return;
+      }
       await setArchived(req.params.name, true);
       res.json({ name: req.params.name, archived: true });
     } catch (err: any) {
@@ -220,6 +230,11 @@ export function createProjectsRouter(): Router {
   // Unarchive a project (restores it to the active list)
   router.post('/:name/unarchive', async (req: Request, res: Response) => {
     try {
+      const invalid = nameError(req.params.name);
+      if (invalid) {
+        res.status(400).json({ error: invalid });
+        return;
+      }
       await setArchived(req.params.name, false);
       res.json({ name: req.params.name, archived: false });
     } catch (err: any) {
