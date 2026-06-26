@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { renderHtml, type SplitLevel } from '../services/latexml.js';
+import { ZipArchive } from 'archiver';
+import { renderHtml, htmlOutputDir, type SplitLevel } from '../services/latexml.js';
 
 const VALID_SPLITS: SplitLevel[] = ['none', 'part', 'chapter', 'section', 'subsection'];
 
@@ -18,6 +19,45 @@ export function createRenderHtmlRouter(
   themeDir: string
 ): Router {
   const router = Router();
+
+  /**
+   * GET /api/render-html/download — stream the current project's rendered HTML
+   * output (`.monolith/html/`) as a single .zip so the user gets a self-contained,
+   * fully-styled bundle (index.html + theme CSS/JS + LaTeXML assets). 404s when
+   * nothing has been rendered yet.
+   */
+  router.get('/download', async (_req: Request, res: Response) => {
+    const projectRoot = getProjectRoot();
+    if (!projectRoot) {
+      res.status(400).json({ error: 'No project selected' });
+      return;
+    }
+
+    const outDir = htmlOutputDir(projectRoot);
+    try {
+      await fs.access(path.join(outDir, 'index.html'));
+    } catch {
+      res.status(404).json({ error: 'No rendered HTML found. Render the HTML preview first.' });
+      return;
+    }
+
+    // Strip anything that could break the Content-Disposition header or escape
+    // the filename; fall back to a generic name if the project name is empty.
+    const safeName = path.basename(projectRoot).replace(/[^A-Za-z0-9._-]/g, '_') || 'html';
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.zip"`);
+
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      console.error('[render-html] zip error:', err);
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to build archive' });
+      else res.destroy(err);
+    });
+    archive.pipe(res);
+    // Flatten the output dir to the zip root so index.html sits at the top level.
+    archive.directory(outDir, false);
+    await archive.finalize();
+  });
 
   router.post('/', async (req: Request, res: Response) => {
     const projectRoot = getProjectRoot();

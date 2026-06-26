@@ -271,6 +271,19 @@ export async function renderHtml(
   return data as RenderHtmlResponse;
 }
 
+/**
+ * Fetch the current project's rendered HTML output as a .zip Blob. Throws with
+ * the server's message when nothing has been rendered yet (or on transport error).
+ */
+export async function downloadHtmlZip(): Promise<Blob> {
+  const res = await fetch('/api/render-html/download');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Download failed: ${res.statusText}`);
+  }
+  return res.blob();
+}
+
 // SyncTeX
 
 export interface SyncTexForwardResult {

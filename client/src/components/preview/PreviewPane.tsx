@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as api from '../../lib/api';
-import { PlayIcon, SpinnerIcon } from '../shared/Icons';
+import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
+import { base64ToBlob, downloadBlob } from '../../lib/download';
 import PreviewModeToggle from './PreviewModeToggle';
 import HtmlPreview from './HtmlPreview';
 
@@ -56,6 +57,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
     useEditorStore();
   const previewMode = useEditorStore((s) => s.previewMode);
+  const currentProject = useEditorStore((s) => s.currentProject);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,6 +96,12 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
       }
     } catch {}
   }, []);
+
+  const handleDownloadPdf = useCallback(() => {
+    if (!pdfData) return;
+    const name = (currentProject || 'document').replace(/[^A-Za-z0-9._-]/g, '_') || 'document';
+    downloadBlob(base64ToBlob(pdfData, 'application/pdf'), `${name}.pdf`);
+  }, [pdfData, currentProject]);
 
   // Load the PDF document when pdfData changes
   useEffect(() => {
@@ -346,6 +354,27 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
             gap: 10,
           }}
         >
+          {pdfData && (
+            <button
+              onClick={handleDownloadPdf}
+              title="Download PDF"
+              style={{
+                fontSize: 16,
+                color: 'var(--text-secondary)',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                padding: '4px 8px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <DownloadIcon size={13} /> PDF
+            </button>
+          )}
           <div
             style={{
               fontSize: 16,

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { HtmlSplitLevel } from '../../stores/editorStore';
-import { PlayIcon, SpinnerIcon } from '../shared/Icons';
+import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
+import { downloadBlob } from '../../lib/download';
+import * as api from '../../lib/api';
 import PreviewModeToggle from './PreviewModeToggle';
 
 /** Try to extract a line number from a LaTeXML diagnostic string. */
@@ -52,6 +54,21 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showLog, setShowLog] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await api.downloadHtmlZip();
+      const name = (currentProject || 'html').replace(/[^A-Za-z0-9._-]/g, '_') || 'html';
+      downloadBlob(blob, `${name}.zip`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  }, [downloading, currentProject]);
 
   const iframeSrc = useMemo(() => {
     if (!currentProject || htmlNonce === 0) return null;
@@ -196,6 +213,28 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
           </select>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {htmlNonce > 0 && (
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              title="Download HTML (.zip with assets)"
+              style={{
+                fontSize: 16,
+                color: 'var(--text-secondary)',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                padding: '4px 8px',
+                borderRadius: 6,
+                cursor: downloading ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {downloading ? <SpinnerIcon size={13} /> : <DownloadIcon size={13} />} HTML
+            </button>
+          )}
           <div style={{ fontSize: 16, color: statusColor, display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor }} />
             {statusText}
