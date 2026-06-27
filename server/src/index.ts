@@ -14,6 +14,7 @@ import { setupWebSocket } from './ws.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3005', 10);
+const HOST = process.env.HOST || '127.0.0.1';
 // Explicit PROJECTS_ROOT wins; otherwise fall back to the shared suite root when
 // SUITE_DATA_ROOT is set, else the original in-repo location (copied verbatim).
 const PROJECTS_ROOT = path.resolve(
@@ -100,8 +101,8 @@ if (fs.existsSync(CLIENT_DIST)) {
   });
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`[monolith] Server listening on http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`[monolith] Server listening on http://${HOST}:${PORT}`);
   console.log(`[monolith] Projects root: ${PROJECTS_ROOT}`);
   console.log(`[monolith] Active project: ${getCurrent().projectName ?? '(none)'}`);
   if (fs.existsSync(CLIENT_DIST)) {
