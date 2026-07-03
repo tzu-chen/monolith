@@ -99,8 +99,13 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
 
   const handleDownloadPdf = useCallback(() => {
     if (!pdfData) return;
-    const name = (currentProject || 'document').replace(/[^A-Za-z0-9._-]/g, '_') || 'document';
-    downloadBlob(base64ToBlob(pdfData, 'application/pdf'), `${name}.pdf`);
+    const fallback = (currentProject || 'document').replace(/[^A-Za-z0-9._-]/g, '_') || 'document';
+    const input = window.prompt('Download PDF as:', `${fallback}.pdf`);
+    if (input === null) return; // cancelled
+    let name = input.trim().replace(/[^A-Za-z0-9._-]/g, '_').replace(/^_+/, '');
+    if (!name || /^\.pdf$/i.test(name)) name = `${fallback}.pdf`;
+    if (!/\.pdf$/i.test(name)) name += '.pdf';
+    downloadBlob(base64ToBlob(pdfData, 'application/pdf'), name);
   }, [pdfData, currentProject]);
 
   // Load the PDF document when pdfData changes
