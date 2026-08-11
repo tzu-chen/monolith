@@ -71,6 +71,39 @@ export interface ScopeEnvironment {
   uses: number;
 }
 
+export type LabelKind =
+  | 'section'
+  | 'equation'
+  | 'figure'
+  | 'table'
+  | 'theorem'
+  | 'algorithm'
+  | 'listing'
+  | 'item'
+  | 'other';
+
+export interface ScopeLabel {
+  name: string;
+  /** What the label names, read from the environment it sits in — not its prefix. */
+  kind: LabelKind;
+  /** Innermost enclosing environment, when there is one. */
+  env: string | null;
+  /** Nearest preceding sectioning title. */
+  section: string | null;
+  source: SourceRef;
+  /** \ref-family uses across the project. */
+  uses: number;
+  /** True when the same name is declared more than once in scope. */
+  duplicate: boolean;
+}
+
+/** A `\ref` that names no label anywhere in the project. */
+export interface DanglingRef {
+  key: string;
+  uses: number;
+  source: SourceRef;
+}
+
 export interface ScopeGraph {
   /** File the graph was resolved for. */
   root: string;
@@ -78,6 +111,10 @@ export interface ScopeGraph {
   packages: ScopePackage[];
   macros: ScopeMacro[];
   environments: ScopeEnvironment[];
+  /** Labels in scope, in document order. */
+  labels: ScopeLabel[];
+  /** Ref keys used somewhere in the project that no \label defines. */
+  danglingRefs: DanglingRef[];
   /** Cite keys defined in the project's .bib files — used to flag broken cites. */
   bibKeys: string[];
   /** Files read while resolving; a change to any of them invalidates the graph. */
@@ -106,4 +143,38 @@ export function unsupportedPackages(scope: ScopeGraph): ScopePackage[] {
 
 export function findMacro(scope: ScopeGraph | null, name: string): ScopeMacro | null {
   return scope?.macros.find((m) => m.name === name) ?? null;
+}
+
+/** Three-letter tag a label row is filed under. */
+export const LABEL_KIND_TAG: Record<LabelKind, string> = {
+  section: 'sec',
+  equation: 'eq',
+  figure: 'fig',
+  table: 'tab',
+  theorem: 'thm',
+  algorithm: 'alg',
+  listing: 'lst',
+  item: 'itm',
+  other: '—',
+};
+
+export const LABEL_KIND_NAME: Record<LabelKind, string> = {
+  section: 'Section',
+  equation: 'Equation',
+  figure: 'Figure',
+  table: 'Table',
+  theorem: 'Theorem',
+  algorithm: 'Algorithm',
+  listing: 'Listing',
+  item: 'List item',
+  other: 'Other',
+};
+
+/**
+ * The reference command this label wants. An equation is nearly always cited
+ * with `\eqref`, and inserting `\ref` there gives a number without its
+ * parentheses — a wrong-looking result the user then has to fix by hand.
+ */
+export function refCommandFor(label: ScopeLabel): string {
+  return label.kind === 'equation' ? 'eqref' : 'ref';
 }

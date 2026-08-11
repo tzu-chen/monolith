@@ -6,9 +6,9 @@ import { shadowedPackage } from '../data/packageCommands.js';
 /**
  * Scope resolution.
  *
- * Answers, for one file: which packages, macros and environments are actually
- * available here, counting everything inherited through `\input`, `\include`
- * and `\usepackage`, and where each of them came from.
+ * Answers, for one file: which packages, macros, environments and labels are
+ * actually available here, counting everything inherited through `\input`,
+ * `\include` and `\usepackage`, and where each of them came from.
  *
  * This runs on the server because answering it means reading an unbounded set
  * of project files, and because the use counts need a sweep over every `.tex`
@@ -67,12 +67,48 @@ export interface ScopeEnvironment {
   uses: number;
 }
 
+export type LabelKind =
+  | 'section'
+  | 'equation'
+  | 'figure'
+  | 'table'
+  | 'theorem'
+  | 'algorithm'
+  | 'listing'
+  | 'item'
+  | 'other';
+
+export interface ScopeLabel {
+  name: string;
+  /** What the label names, read from the context it sits in — not from its prefix. */
+  kind: LabelKind;
+  /** Innermost enclosing environment, when there is one. */
+  env: string | null;
+  /** Nearest preceding sectioning title, so a label carries where it lives. */
+  section: string | null;
+  source: SourceRef;
+  /** \ref-family uses across the project. */
+  uses: number;
+  /** True when the same name is declared more than once in scope. */
+  duplicate: boolean;
+}
+
+/** A `\ref` that names no label anywhere in the project. */
+export interface DanglingRef {
+  key: string;
+  uses: number;
+  /** First occurrence, so the panel can jump to one. */
+  source: SourceRef;
+}
+
 export interface ScopeGraph {
   root: string;
   includes: ScopeInclude[];
   packages: ScopePackage[];
   macros: ScopeMacro[];
   environments: ScopeEnvironment[];
+  labels: ScopeLabel[];
+  danglingRefs: DanglingRef[];
   bibKeys: string[];
   chain: string[];
   resolvedAt: number;
@@ -84,6 +120,9 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_DEPTH = 12;
 /** Files scanned when counting macro uses. */
 const MAX_SCAN_FILES = 400;
+/** A book-length document is a few hundred labels; past this it is a generator. */
+const MAX_LABELS = 4000;
+const MAX_DANGLING_REFS = 200;
 
 const SKIP_DIRS = new Set(['build', 'node_modules', '.git', '.monolith']);
 
@@ -117,6 +156,27 @@ function lineAt(source: string, index: number): number {
     if (source[i] === '\n') line++;
   }
   return line;
+}
+
+/**
+ * Line numbers for a left-to-right scan. `lineAt` restarts from the top of the
+ * file every call, which is fine for the handful of declarations in a preamble
+ * and quadratic for the hundreds of labels and refs in a book.
+ *
+ * The returned function must be called with non-decreasing indices — which is
+ * what `matchAll` hands out.
+ */
+function lineTracker(source: string): (index: number) => number {
+  let line = 1;
+  let cursor = 0;
+  return (index) => {
+    const stop = Math.min(index, source.length);
+    while (cursor < stop) {
+      if (source[cursor] === '\n') line++;
+      cursor++;
+    }
+    return line;
+  };
 }
 
 /**
@@ -164,6 +224,43 @@ interface ParsedFile {
   /** Raw include targets, in source order. */
   includes: { target: string; line: number }[];
   bibResources: string[];
+  labels: Omit<ScopeLabel, 'uses' | 'duplicate'>[];
+  /** Environment names declared by \newtheorem, so their labels read as theorems. */
+  theoremEnvs: string[];
+}
+
+/**
+ * What a label names, decided by the environment it sits in rather than by the
+ * `eq:` / `fig:` prefix someone typed — the prefix is a convention, the context
+ * is the fact. Starred variants are folded in by stripping the `*`.
+ */
+const ENVS_BY_KIND: [LabelKind, Set<string>][] = [
+  ['equation', new Set([
+    'equation', 'align', 'alignat', 'flalign', 'gather', 'multline', 'eqnarray',
+    'displaymath', 'split', 'subequations', 'xalignat', 'xxalignat', 'dmath',
+    'IEEEeqnarray',
+  ])],
+  ['figure', new Set(['figure', 'subfigure', 'wrapfigure', 'SCfigure', 'sidewaysfigure'])],
+  ['table', new Set([
+    'table', 'tabular', 'tabularx', 'tabulary', 'longtable', 'supertabular',
+    'threeparttable', 'sidewaystable', 'wraptable',
+  ])],
+  ['theorem', new Set([
+    'theorem', 'lemma', 'proposition', 'corollary', 'definition', 'remark',
+    'example', 'claim', 'conjecture', 'proof', 'axiom', 'thm', 'lem', 'prop',
+    'cor', 'defn', 'rem',
+  ])],
+  ['algorithm', new Set(['algorithm', 'algorithmic', 'algorithmize', 'algo'])],
+  ['listing', new Set(['lstlisting', 'listing', 'minted', 'verbatim', 'Verbatim', 'code'])],
+  ['item', new Set(['enumerate', 'itemize', 'description', 'tasks'])],
+];
+
+function envKind(env: string): LabelKind | null {
+  const base = env.replace(/\*$/, '');
+  for (const [kind, names] of ENVS_BY_KIND) {
+    if (names.has(base)) return kind;
+  }
+  return null;
 }
 
 const INCLUDE_RE = /\\(input|include|subfile|subfileinclude)\s*\{([^}]*)\}/g;
@@ -173,6 +270,28 @@ const BIBRESOURCE_RE = /\\(?:addbibresource|bibliography)\s*\{([^}]*)\}/g;
 const MACRO_RE = /\\(newcommand|renewcommand|providecommand|DeclareMathOperator)(\*?)\s*/g;
 const DEF_RE = /\\def\s*\\([a-zA-Z@]+)((?:#\d)*)\s*\{/g;
 const ENV_RE = /\\(newenvironment|renewenvironment)(\*?)\s*\{([^}]*)\}\s*(\[\d+\])?/g;
+const THEOREM_RE = /\\(?:newtheorem\*?|declaretheorem)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g;
+
+/**
+ * One ordered pass for everything a label's context needs: environment
+ * begin/end, sectioning commands, and the labels themselves. Reading them
+ * separately would lose the interleaving, which is the whole signal.
+ */
+const LABEL_CONTEXT_RE =
+  /\\(begin|end)\s*\{([^}]*)\}|\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?\s*(?:\[[^\]]*\])?\s*\{|\\label\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g;
+
+/** How far below a `\section{…}` a bare label still counts as naming it. */
+const SECTION_LABEL_REACH = 1;
+
+/**
+ * Every way a project names a label. `\hyperref` takes its key in brackets;
+ * the cleveref family takes comma-separated lists. Longer names come first so
+ * `\eqref` is not read as `\ref`.
+ */
+const REF_USE_RE =
+  /\\hyperref\s*\[([^\]]*)\]|\\(?:[eE]qref|[aA]utopageref|[aA]utoref|[nN]amecref|[nN]ameref|[cC]refrange|[cC]pageref|[cC]ref|[pP]ageref|[vV]pageref|[vV]ref|labelcref|subref|[fF]ref|ref)\*?\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g;
+
+const LABEL_NAME_RE = /\\label\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g;
 
 function parseFile(file: string, raw: string): ParsedFile {
   const source = stripComments(raw);
@@ -182,6 +301,8 @@ function parseFile(file: string, raw: string): ParsedFile {
     environments: [],
     includes: [],
     bibResources: [],
+    labels: [],
+    theoremEnvs: [],
   };
 
   const docClass = source.match(DOCUMENTCLASS_RE);
@@ -223,6 +344,63 @@ function parseFile(file: string, raw: string): ParsedFile {
   for (const m of source.matchAll(BIBRESOURCE_RE)) {
     for (const name of m[1].split(',').map((n) => n.trim()).filter(Boolean)) {
       parsed.bibResources.push(name);
+    }
+  }
+
+  for (const m of source.matchAll(THEOREM_RE)) {
+    const name = m[1].trim();
+    if (name) parsed.theoremEnvs.push(name);
+  }
+
+  // Labels, with the environment stack and last section heading they sit under.
+  {
+    const at = lineTracker(source);
+    const envStack: string[] = [];
+    let lastSection: { title: string; line: number } | null = null;
+
+    for (const m of source.matchAll(LABEL_CONTEXT_RE)) {
+      const start = m.index ?? 0;
+
+      if (m[1] === 'begin') {
+        envStack.push(m[2].trim());
+        continue;
+      }
+      if (m[1] === 'end') {
+        // Tolerate mismatched nesting: unwind to the named environment when it
+        // is open, and ignore the \end when it is not.
+        const name = m[2].trim();
+        const at_ = envStack.lastIndexOf(name);
+        if (at_ !== -1) envStack.length = at_;
+        continue;
+      }
+      if (m[3]) {
+        const title = readGroup(source, start + m[0].length - 1);
+        lastSection = { title: (title?.body ?? '').replace(/\s+/g, ' ').trim(), line: at(start) };
+        continue;
+      }
+
+      const name = m[4].trim();
+      if (!name || parsed.labels.length >= MAX_LABELS) continue;
+      const line = at(start);
+
+      // Innermost first: a \label in a tikzpicture inside a figure names the
+      // figure, but `tikzpicture` is still the environment it was written in.
+      let kind: LabelKind | null = null;
+      for (let i = envStack.length - 1; i >= 0; i--) {
+        kind = envKind(envStack[i]);
+        if (kind) break;
+      }
+      const innermost = [...envStack].reverse().find((e) => e !== 'document') ?? null;
+
+      parsed.labels.push({
+        name,
+        kind:
+          kind ??
+          (lastSection && line - lastSection.line <= SECTION_LABEL_REACH ? 'section' : 'other'),
+        env: innermost,
+        section: lastSection?.title || null,
+        source: { file, line },
+      });
     }
   }
 
@@ -426,6 +604,8 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
   const packages: ScopePackage[] = [];
   const rawMacros: Omit<ScopeMacro, 'uses' | 'overrides'>[] = [];
   const rawEnvironments: Omit<ScopeEnvironment, 'uses'>[] = [];
+  const rawLabels: Omit<ScopeLabel, 'uses' | 'duplicate'>[] = [];
+  const theoremEnvs = new Set<string>();
   const bibResources = new Set<string>();
 
   const queue: { path: string; depth: number }[] = roots.map((r) => ({ path: r, depth: 0 }));
@@ -442,6 +622,8 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
     packages.push(...parsed.packages);
     rawMacros.push(...parsed.macros);
     rawEnvironments.push(...parsed.environments);
+    rawLabels.push(...parsed.labels);
+    for (const env of parsed.theoremEnvs) theoremEnvs.add(env);
     for (const bib of parsed.bibResources) bibResources.add(bib);
 
     for (const inc of parsed.includes) {
@@ -471,11 +653,40 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
   for (const pkg of packages) if (!packageByName.has(pkg.name)) packageByName.set(pkg.name, pkg);
   const loadedPackages = new Set(packageByName.keys());
 
-  // One pass over the project's sources, counting every macro and environment.
+  // One pass over the project's sources: the text every macro and environment
+  // is counted against, plus every \ref and \label in the project.
+  //
+  // Both label questions are asked project-wide rather than chain-wide. A label
+  // referenced from a sibling document is used, and a \ref answered by a file
+  // this one never includes is not broken — narrowing either to the chain would
+  // report problems that aren't there.
   const corpus: string[] = [];
+  const refUses = new Map<string, { uses: number; source: SourceRef }>();
+  const definedLabels = new Set<string>();
+
   for (const texFile of texFiles) {
     const content = await readIfFile(path.join(projectRoot, texFile));
-    if (content) corpus.push(stripComments(content));
+    if (!content) continue;
+    const stripped = stripComments(content);
+    corpus.push(stripped);
+
+    const at = lineTracker(stripped);
+    for (const m of stripped.matchAll(REF_USE_RE)) {
+      const line = at(m.index ?? 0);
+      // \cref{a,b} references two labels in one call.
+      for (const key of (m[1] ?? m[2] ?? '').split(',')) {
+        const trimmed = key.trim();
+        if (!trimmed) continue;
+        const seen = refUses.get(trimmed);
+        if (seen) seen.uses++;
+        else refUses.set(trimmed, { uses: 1, source: { file: texFile, line } });
+      }
+    }
+
+    for (const m of stripped.matchAll(LABEL_NAME_RE)) {
+      const name = m[1].trim();
+      if (name) definedLabels.add(name);
+    }
   }
   const corpusText = corpus.join('\n');
 
@@ -497,6 +708,25 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
     uses: countMatches(corpusText, new RegExp(`\\\\begin\\s*\\{${env.name}\\}`, 'g')),
   }));
 
+  // A label declared twice is a LaTeX error the log buries; both copies are
+  // marked so the panel can point at either one.
+  const labelCounts = new Map<string, number>();
+  for (const label of rawLabels) labelCounts.set(label.name, (labelCounts.get(label.name) ?? 0) + 1);
+
+  const labels: ScopeLabel[] = rawLabels.map((label) => ({
+    ...label,
+    // \newtheorem environments are only known once every file has been read.
+    kind: label.kind === 'other' && label.env && theoremEnvs.has(label.env) ? 'theorem' : label.kind,
+    uses: refUses.get(label.name)?.uses ?? 0,
+    duplicate: (labelCounts.get(label.name) ?? 0) > 1,
+  }));
+
+  const danglingRefs: DanglingRef[] = [...refUses.entries()]
+    .filter(([key]) => !definedLabels.has(key))
+    .map(([key, use]) => ({ key, uses: use.uses, source: use.source }))
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .slice(0, MAX_DANGLING_REFS);
+
   // Cite keys, so the editor can flag a \cite that names nothing.
   const bibFiles = await listProjectFiles(projectRoot, ['.bib']);
   const bibKeys: string[] = [];
@@ -512,6 +742,10 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
     packages: [...packageByName.values()],
     macros: macros.sort((a, b) => a.name.localeCompare(b.name)),
     environments: environments.sort((a, b) => a.name.localeCompare(b.name)),
+    // Left in document order — the order they were walked in, which is the one
+    // order the client cannot reconstruct from the names alone.
+    labels,
+    danglingRefs,
     bibKeys,
     chain: [...visited],
     resolvedAt: Date.now(),

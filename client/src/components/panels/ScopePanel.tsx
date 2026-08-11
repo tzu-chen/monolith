@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
-import * as api from '../../lib/api';
+import { goToSource } from '../../lib/navigate';
 import type { ScopeMacro, ScopePackage } from '../../lib/scope-api';
 import {
   PanelHeader,
@@ -76,28 +76,11 @@ function Section({
 
 /** `preamble.tex:3` — where a declaration actually lives. */
 function SourceLocation({ file, line }: { file: string; line: number }) {
-  const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
-  const openFile = useEditorStore((s) => s.openFile);
-
-  const jump = async () => {
-    const state = useEditorStore.getState();
-    if (state.activeTabPath !== file) {
-      try {
-        const existing = state.openTabs.find((t) => t.path === file);
-        if (existing) state.setActiveTab(file);
-        else openFile(file, await api.readFile(file));
-      } catch {
-        return;
-      }
-    }
-    requestScrollToLine(line);
-  };
-
   return (
     <span
       onClick={(e) => {
         e.stopPropagation();
-        jump();
+        goToSource(file, line);
       }}
       title={`Go to ${file}:${line}`}
       style={{
@@ -205,7 +188,6 @@ export default function ScopePanel() {
   const scopeStatus = useEditorStore((s) => s.scopeStatus);
   const scopeError = useEditorStore((s) => s.scopeError);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
-  const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   // Resolution itself is owned by the single `useScope` in App — Rescan just
   // invalidates, so opening this panel never issues a competing request.
   const refresh = useEditorStore((s) => s.invalidateScope);
@@ -407,22 +389,7 @@ export default function ScopePanel() {
             \{selected.name}
           </span>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexShrink: 0 }}>
-            <OutlinedButton
-              onClick={() => {
-                const state = useEditorStore.getState();
-                if (state.activeTabPath === selected.source.file) {
-                  requestScrollToLine(selected.source.line);
-                } else {
-                  api
-                    .readFile(selected.source.file)
-                    .then((content) => {
-                      state.openFile(selected.source.file, content);
-                      state.requestScrollToLine(selected.source.line);
-                    })
-                    .catch(() => {});
-                }
-              }}
-            >
+            <OutlinedButton onClick={() => goToSource(selected.source.file, selected.source.line)}>
               Go to definition
             </OutlinedButton>
             <OutlinedButton
