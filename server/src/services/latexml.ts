@@ -68,11 +68,17 @@ export async function renderHtml(
     '--format=html5',
     `--sourcedirectory=${projectRoot}`,
     // Extra search dir for custom *.sty.ltxml bindings (Tier-3 packages).
+    // The project's own dir comes first so a project can override ours.
     `--path=${path.join(projectRoot, 'latexml')}`,
+    `--path=${themeDir}`,
     // Permit reading raw .sty when no binding ships (Tier-2 packages).
     '--includestyles',
     // Make \iflatexml available even if the source forgets \usepackage{latexml}.
     '--preload=latexml.sty',
+    // Our bibliography field-mapping fixes (see monolith-bib.sty.ltxml).
+    // Preloads are recorded in the intermediate XML, so this binding also
+    // reaches the recursive pass that converts the .bib file.
+    '--preload=monolith-bib.sty',
     // Layer our theme on top of LaTeXML's default ltx_* resources.
     `--css=${path.join(themeDir, 'monolith-latexml.css')}`,
     `--javascript=${path.join(themeDir, 'knowl.js')}`,

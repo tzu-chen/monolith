@@ -25,7 +25,7 @@ npm start                # Build + start production server
 - **server/src/index.ts** — Express app setup, routing, SPA fallback
 - **server/src/routes/** — API handlers (compile, files, projects, synctex)
 - **server/src/services/** — Business logic (tectonic spawning, latexml HTML rendering, chokidar file watcher, synctex parsing)
-- **server/src/assets/latexml/** — bundled HTML theme assets (`monolith-latexml.css`, `monolith-theme.js`, `knowl.js`) injected into LaTeXML output
+- **server/src/assets/latexml/** — bundled HTML theme assets (`monolith-latexml.css`, `monolith-theme.js`, `knowl.js`) injected into LaTeXML output, plus `monolith-bib.sty.ltxml`, a preloaded LaTeXML binding that fixes bibliography field mappings
 
 ## Code Conventions
 

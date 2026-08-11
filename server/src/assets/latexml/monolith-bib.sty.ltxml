@@ -1,0 +1,71 @@
+# -*- mode: Perl -*-
+# /=====================================================================\
+# | monolith-bib.sty.ltxml                                              |
+# | LaTeXML binding preloaded by Monolith's HTML render (latexml.ts).   |
+# | Fixes bibliography field mappings that render ambiguously.          |
+# \=====================================================================/
+package LaTeXML::Package::Pool;
+use strict;
+use warnings;
+use LaTeXML::Package;
+
+#======================================================================
+# `howpublished`
+#
+# LaTeXML's stock BibTeX binding maps `howpublished` onto <ltx:bib-note>,
+# the same element `note` and `annote` use. MakeBibliography then formats
+# every bib-note of an entry through a single xpath match and concatenates
+# their children into one "Note: …" span with no separator, so an entry
+# carrying both fields renders them run together:
+#
+#   Note: Measure Theory & Real AnalysisPersonal library
+#
+# Put `howpublished` in the publication slot instead — where BibTeX's own
+# styles put it — so it formats as its own bibblock. Which element that is
+# depends on the entry type's format spec (LaTeXML::Post::MakeBibliography,
+# %FMT_SPEC): book-like specs (book, misc, booklet, manual, proceedings,
+# unpublished, incollection, report, thesis, …) render <ltx:bib-publisher>,
+# the website/software specs render <ltx:bib-organization>, and `article`
+# renders neither — mapping it there would drop the field, so articles keep
+# the note slot.
+#
+# Handlers are looked up as \bib@field@<type>@<field> before
+# \bib@field@default@<field> (see BibTeX.pool.ltxml), so the per-type
+# definitions below take precedence over the default one. `website` covers
+# the @online / @electronic / @www / @webpage aliases.
+#======================================================================
+
+DefMacro('\bib@field@default@howpublished',  '\bib@@field{ltx:bib-publisher}');
+DefMacro('\bib@field@website@howpublished',  '\bib@@field{ltx:bib-organization}');
+DefMacro('\bib@field@software@howpublished', '\bib@@field{ltx:bib-organization}');
+
+#======================================================================
+# The note slot itself
+#
+# The same concatenation applies to every field that legitimately lands in
+# the note slot (`note`, `annote`, `enote`, plus `howpublished` on @article,
+# whose format spec has no publication slot to move it to). Since they share
+# one span by design, terminate each with a period unless it already ends in
+# punctuation, so a merged run reads as sentences rather than one collision.
+# This also closes the note block, which LaTeXML leaves unpunctuated.
+#======================================================================
+
+# Emit the field value as <ltx:bib-note role=$role>, sentence-terminated.
+sub monolithBibNote {
+  my ($role) = @_;
+  return sub {
+    my ($gullet, $value) = @_;
+    # An empty field gets nothing to terminate, or it reads as a bare "Note: .".
+    my $text       = ToString($value);
+    my $terminated = $text !~ /\S/ || $text =~ /[.!?,;:]\s*\z/;
+    return (
+      TokenizeInternal('\bib@@field{ltx:bib-note}[role=' . $role . ']')->unlist,
+      T_BEGIN, $value->unlist, ($terminated ? () : (T_OTHER('.'))), T_SPACE, T_END); }; }
+
+DefMacro('\bib@field@default@note{}',         monolithBibNote('annotation'));
+DefMacro('\bib@field@default@annote{}',       monolithBibNote('annotation'));
+DefMacro('\bib@field@default@enote{}',        monolithBibNote('electronic-annotation'));
+DefMacro('\bib@field@article@howpublished{}', monolithBibNote('publication'));
+
+#======================================================================
+1;

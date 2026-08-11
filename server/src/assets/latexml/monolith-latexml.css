@@ -557,16 +557,65 @@ code,
   margin-bottom: 1rem;
 }
 
-.ltx_bibitem {
-  margin: 0.6rem 0;
-  padding-left: 1.5rem;
-  text-indent: -1.5rem;
-  color: var(--text-secondary);
+.ltx_biblist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.ltx_bibtag {
+/* Hanging indent, so the [n] tag sits out in the gutter of the entry. */
+.ltx_bibitem {
+  margin: 0 0 0.85rem;
+  padding-left: 2.2rem;
+  text-indent: -2.2rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* The refnum tag. LaTeXML's own stylesheet pulls it left by -2em, which
+   double-counts the hanging indent above; cancel that. */
+.ltx_bibitem > .ltx_tag {
+  margin: 0;
   color: var(--accent);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LaTeXML emits each part of an entry as an inline `ltx_bibblock` span, so the
+   trailing metadata ("Note: …", "External Links: …", "Cited by: …") runs
+   straight on from the citation — and the note block carries no closing
+   punctuation, so it reads as one mingled sentence. Break the metadata onto
+   its own line, dimmed, leaving the citation proper as a flowing paragraph. */
+.ltx_bibitem > .ltx_bibblock.ltx_bib_cited,
+.ltx_bibitem > .ltx_bibblock:has(> .ltx_bib_note),
+.ltx_bibitem > .ltx_bibblock:has(> .ltx_bib_links) {
+  display: block;
+  text-indent: 0;
+  margin-top: 0.1rem;
+  font-size: 0.92em;
+  color: var(--text-dim);
+}
+
+/* The title carries the entry; the rest of the citation stays secondary. */
+.ltx_bib_title {
+  color: var(--text-primary);
+}
+
+/* A "Cited by" entry shows the referring node's title, cloned along with any
+   inline font-size LaTeXML gave it there (a document title carries \Large's,
+   say). In the reference list it has to read at list size — `!important` only
+   because an inline style is what we're overriding. */
+.ltx_bib_cited .ltx_ref .ltx_text {
+  font-size: inherit !important;
+}
+
+/* LaTeXML's website/software entry specs (@online, @electronic, @www, @webpage,
+   @software) butt author, year, title and type together with no punctuation
+   between them — "S. Author (2024)A web resource(Website)". Space them apart. */
+.ltx_bib_website .ltx_bib_title::before,
+.ltx_bib_website .ltx_bib_type::before,
+.ltx_bib_software .ltx_bib_type::before {
+  content: " ";
 }
 
 /* ----- Horizontal rules / misc ----------------------------------------- */
@@ -1042,12 +1091,14 @@ blockquote,
 }
 
 /* A bibliography entry is cloned as a bare <li> (no <ul>); neutralise the list
-   marker and indent so it reads as a plain block. */
+   marker and indent so it reads as a plain block. The hanging indent goes too —
+   without the padding it would pull the first line out past the panel edge. */
 .knowl-content > .ltx_bibitem,
 .knowl-content > li {
   list-style: none;
   margin-left: 0;
   padding-left: 0;
+  text-indent: 0;
 }
 
 /* A section cross-reference clones just the heading; tame its display size and
