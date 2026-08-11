@@ -364,19 +364,147 @@
 
   /* ---- 9. Drop-cap lead paragraph ------------------------------------- */
 
+  // Contexts where a cap would be decoration on something that isn't running
+  // prose: a numbered statement, a caption, a list item, code, a table cell.
+  var LEAD_EXCLUDE =
+    '.ltx_theorem, .ltx_proof, .ltx_caption, .ltx_abstract, .ltx_bibliography, ' +
+    '.ltx_item, .ltx_listing, .ltx_verbatim, .ltx_quote, .ltx_note, .ltx_tabular, ' +
+    '.ltx_figure, .ltx_table, .monolith-refpop, .knowl-output';
+
+  // The rendered cap is two lines tall, so the paragraph must be able to fill
+  // two lines at the article's measure — otherwise the capital hangs past the
+  // end of its own text. Roughly 90 characters set a line here.
+  var LEAD_MIN_CHARS = 200;
+
+  /**
+   * First text node under `el` that carries a non-space character, or null.
+   * This is the node the cap is cut from.
+   */
+  function firstTextNode(el) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (/\S/.test(node.data)) return node;
+    }
+    return null;
+  }
+
   function tagLeadParagraph(scope) {
     var paras = scope.querySelectorAll('.ltx_p');
     for (var i = 0; i < paras.length; i++) {
       var p = paras[i];
-      var text = (p.textContent || '').trim();
-      // A drop cap only reads well leading a substantial, letter-initial line.
-      if (text.length < 60 || !/^[A-Za-z]/.test(text)) continue;
-      if (p.closest('.ltx_theorem, .ltx_proof, .ltx_caption, .ltx_abstract, .ltx_bibliography')) {
-        continue;
-      }
+      if ((p.textContent || '').trim().length < LEAD_MIN_CHARS) continue;
+      if (p.closest(LEAD_EXCLUDE)) continue;
+      // A cap has to be cut from a letter of prose. A paragraph opening with
+      // math ("$V$ is a Banach space…") has a letter in its textContent, but
+      // that letter is a variable inside <math> — enlarging it would wreck the
+      // formula — so require the leading text to be real prose.
+      var first = firstTextNode(p);
+      if (!first || !/^\s*[A-Za-z]/.test(first.data)) continue;
+      if (first.parentElement && first.parentElement.closest('math')) continue;
       p.classList.add('monolith-lead');
       return;
     }
+  }
+
+  /**
+   * Distance from `el`'s content-box top down to its first line's baseline.
+   *
+   * A zero-sized inline-block sits with its bottom margin edge exactly on the
+   * baseline of the line it joins, and being zero-sized it cannot disturb that
+   * line — so it reads the baseline of whatever font actually rendered, which
+   * is the only way to place a cap correctly when the family in use may be any
+   * of the fallbacks in `--ml-serif`.
+   */
+  function baselineOffset(el) {
+    var probe = document.createElement('span');
+    probe.style.cssText = 'display:inline-block;width:0;height:0;';
+    el.insertBefore(probe, el.firstChild);
+    var cs = getComputedStyle(el);
+    var top =
+      el.getBoundingClientRect().top +
+      parseFloat(cs.borderTopWidth || 0) +
+      parseFloat(cs.paddingTop || 0);
+    var base = probe.getBoundingClientRect().bottom;
+    probe.parentNode.removeChild(probe);
+    return base - top;
+  }
+
+  /** Cap height (as a fraction of the em) of the font `el` renders in. */
+  function capHeightRatio(el) {
+    try {
+      var cs = getComputedStyle(el);
+      var ctx = capHeightRatio._ctx;
+      if (!ctx) ctx = capHeightRatio._ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = (cs.fontWeight || '400') + ' 100px ' + cs.fontFamily;
+      // 'H' is flat-topped, so its ink height is the cap height exactly (no
+      // overshoot the way round letters like 'O' have).
+      var m = ctx.measureText('H');
+      var ratio = m && m.actualBoundingBoxAscent / 100;
+      if (ratio > 0.4 && ratio < 1) return ratio;
+    } catch (e) {}
+    return 0.7; // a typical serif; only reached if TextMetrics is unavailable
+  }
+
+  /**
+   * Size and sink the cap so its ink spans exactly two lines: the top of the
+   * capital meets the cap height of line one, its baseline rests on line two's
+   * baseline, and its float box ends there too, so precisely two lines wrap
+   * beside it. Everything is measured from the live layout — nothing here is
+   * tuned to a particular font or line-height.
+   */
+  function fitDropCap(p) {
+    var cap = p.querySelector('.monolith-cap');
+    if (!cap) return;
+
+    // Below the narrow-pane breakpoint the stylesheet drops the cap back to
+    // body text; measuring an un-floated letter would only write nonsense over
+    // the good values, so leave them for when the pane widens again.
+    if (getComputedStyle(cap).cssFloat === 'none') return;
+
+    var cs = getComputedStyle(p);
+    var fontSize = parseFloat(cs.fontSize);
+    var line = parseFloat(cs.lineHeight);
+    if (!(line > 0)) line = fontSize * 1.72; // computed 'normal'
+    if (!(fontSize > 0)) return;
+
+    // Line one's baseline, measured without the cap in the way.
+    cap.style.display = 'none';
+    var firstBaseline = baselineOffset(p);
+    cap.style.display = '';
+    if (!(firstBaseline > 0)) return; // not laid out yet (hidden iframe, etc.)
+
+    // Ink height wanted = line one's cap height + one line of leading below it.
+    var size = fontSize + line / capHeightRatio(cap);
+    cap.style.setProperty('--ml-cap-size', size + 'px');
+
+    // Where the cap's own baseline falls inside its box, now that it is set at
+    // that size, then how far to sink the box to land that baseline on line two.
+    var capBaseline = baselineOffset(cap);
+    if (!(capBaseline > 0)) return;
+    var sink = firstBaseline + line - capBaseline;
+
+    cap.style.setProperty('--ml-cap-sink', sink + 'px');
+    // Float box bottom = sink + height = two lines, so line three clears it.
+    cap.style.setProperty('--ml-cap-box', 2 * line - sink + 'px');
+  }
+
+  /**
+   * Move the paragraph's first letter into its own element. A real element in
+   * place of `::first-letter` is what makes the cap measurable — and it renders
+   * identically everywhere, instead of splitting into a Chromium
+   * `initial-letter` path and a floated fallback that drift apart.
+   */
+  function wrapDropCap(p) {
+    var node = firstTextNode(p);
+    if (!node) return false;
+    var letter = node.splitText(node.data.search(/\S/)); // starts at the letter
+    letter.splitText(1); // …and now holds exactly that letter
+    var cap = document.createElement('span');
+    cap.className = 'monolith-cap';
+    letter.parentNode.replaceChild(cap, letter);
+    cap.appendChild(letter);
+    return true;
   }
 
   function setupDropCaps() {
@@ -386,6 +514,27 @@
     } else {
       tagLeadParagraph(document.querySelector('article.ltx_document') || document.body);
     }
+
+    var leads = document.querySelectorAll('.monolith-lead');
+    if (!leads.length) return;
+    leads.forEach(function (p) {
+      if (wrapDropCap(p)) fitDropCap(p);
+    });
+
+    // Metrics move when a webfont swaps in; widths don't affect them, but a
+    // resize is a cheap, reliable prod that the layout has settled.
+    function refit() {
+      leads.forEach(function (p) { try { fitDropCap(p); } catch (e) {} });
+    }
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(refit).catch(function () {});
+    }
+    window.addEventListener('load', refit);
+    var timer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(timer);
+      timer = setTimeout(refit, 150);
+    });
   }
 
   /* ---- 10. Cross-reference hover previews ----------------------------- */

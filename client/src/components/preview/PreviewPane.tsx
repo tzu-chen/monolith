@@ -6,6 +6,8 @@ import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
 import { base64ToBlob, downloadBlob } from '../../lib/download';
 import PreviewModeToggle from './PreviewModeToggle';
 import HtmlPreview from './HtmlPreview';
+import { useElementWidth } from '../../hooks/useElementWidth';
+import { toolbarLayout } from './toolbarLayout';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -67,6 +69,8 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
   const savedScrollRatioRef = useRef<number | null>(null);
   const hasRenderedRef = useRef(false);
+  const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
+  const layout = toolbarLayout(toolbarWidth);
 
   const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -268,6 +272,17 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const statusColor =
     compilationStatus === 'error' ? 'var(--red)' : 'var(--green)';
 
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    fontSize: layout.compactControls ? 15 : 17,
+    color: active ? 'var(--accent)' : 'var(--text-dim)',
+    padding: layout.compactControls ? '4px 6px' : '4px 10px',
+    borderRadius: 4,
+    cursor: 'pointer',
+    background: active ? 'var(--accent-bg)' : 'transparent',
+    fontWeight: active ? 500 : 400,
+    whiteSpace: 'nowrap',
+  });
+
   // The HTML (LaTeXML) renderer is a self-contained view. All PDF hooks above
   // run unconditionally but no-op here (their container isn't mounted).
   if (previewMode === 'html') {
@@ -278,85 +293,80 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-warm)', overflow: 'hidden' }}>
       {/* Preview Toolbar */}
       <div
+        ref={toolbarRef}
         style={{
           height: 36,
           background: 'var(--bg-panel)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 16px',
-          gap: 12,
+          padding: layout.padding,
+          gap: layout.gap,
           flexShrink: 0,
+          overflow: 'hidden',
         }}
       >
-        <PreviewModeToggle />
+        {/* Everything left of the action button gives up space first, and is
+            clipped rather than allowed to push the button off the end. */}
         <div
-          onClick={() => setShowLog(false)}
           style={{
-            fontSize: 17,
-            color: !showLog ? 'var(--accent)' : 'var(--text-dim)',
-            padding: '4px 10px',
-            borderRadius: 4,
-            cursor: 'pointer',
-            background: !showLog ? 'var(--accent-bg)' : 'transparent',
-            fontWeight: !showLog ? 500 : 400,
+            display: 'flex',
+            alignItems: 'center',
+            gap: layout.gap,
+            minWidth: 0,
+            overflow: 'hidden',
           }}
         >
-          View
-        </div>
-        <div
-          onClick={() => setShowLog(true)}
-          style={{
-            fontSize: 17,
-            color: showLog ? 'var(--accent)' : 'var(--text-dim)',
-            padding: '4px 10px',
-            borderRadius: 4,
-            cursor: 'pointer',
-            background: showLog ? 'var(--accent-bg)' : 'transparent',
-            fontWeight: showLog ? 500 : 400,
-          }}
-        >
-          Log
-          {(errors.length > 0 || warnings.length > 0) && (
-            <span
+          <PreviewModeToggle compact={layout.compactControls} />
+          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>
+            View
+          </div>
+          <div onClick={() => setShowLog(true)} style={tabStyle(showLog)}>
+            Log
+            {(errors.length > 0 || warnings.length > 0) && (
+              <span
+                style={{
+                  marginLeft: 5,
+                  fontSize: 12,
+                  color: errors.length > 0 ? 'var(--red)' : 'var(--orange)',
+                }}
+              >
+                {errors.length + warnings.length}
+              </span>
+            )}
+          </div>
+          {!showLog && layout.showSelect && (
+            <select
+              value={zoomLevel}
+              onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
               style={{
-                marginLeft: 5,
-                fontSize: 12,
-                color: errors.length > 0 ? 'var(--red)' : 'var(--orange)',
+                fontSize: 16,
+                padding: '2px 4px',
+                borderRadius: 4,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-editor)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                outline: 'none',
+                minWidth: 0,
+                maxWidth: layout.showButtonLabels ? undefined : 92,
               }}
             >
-              {errors.length + warnings.length}
-            </span>
+              {ZOOM_LEVELS.map((z) => (
+                <option key={z.value} value={z.value}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
-        {!showLog && (
-          <select
-            value={zoomLevel}
-            onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
-            style={{
-              fontSize: 16,
-              padding: '2px 4px',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-editor)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            {ZOOM_LEVELS.map((z) => (
-              <option key={z.value} value={z.value}>
-                {z.label}
-              </option>
-            ))}
-          </select>
-        )}
         <div
           style={{
             marginLeft: 'auto',
             display: 'flex',
             alignItems: 'center',
             gap: 10,
+            flexShrink: 0,
           }}
         >
           {pdfData && (
@@ -377,10 +387,12 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
                 gap: 4,
               }}
             >
-              <DownloadIcon size={13} /> PDF
+              <DownloadIcon size={13} />
+              {layout.showButtonLabels && 'PDF'}
             </button>
           )}
           <div
+            title={statusText}
             style={{
               fontSize: 16,
               color: statusColor,
@@ -395,19 +407,21 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
                 height: 6,
                 borderRadius: '50%',
                 background: statusColor,
+                flexShrink: 0,
               }}
             />
-            {statusText}
+            {layout.showStatusText && statusText}
           </div>
           <button
             onClick={onCompile}
             disabled={compilationStatus === 'compiling'}
+            title={compilationStatus === 'compiling' ? 'Compiling…' : 'Compile (Ctrl+S)'}
             style={{
               fontSize: 17,
               color: 'white',
               background: compilationStatus === 'compiling' ? 'var(--accent-light)' : 'var(--accent)',
               border: '1px solid var(--accent)',
-              padding: '4px 12px',
+              padding: layout.showButtonLabels ? '4px 12px' : '4px 8px',
               borderRadius: 6,
               cursor: compilationStatus === 'compiling' ? 'wait' : 'pointer',
               fontFamily: 'inherit',
@@ -417,7 +431,8 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
               gap: 4,
             }}
           >
-            {compilationStatus === 'compiling' ? <><SpinnerIcon size={12} /> Compiling</> : <><PlayIcon size={10} /> Compile</>}
+            {compilationStatus === 'compiling' ? <SpinnerIcon size={12} /> : <PlayIcon size={10} />}
+            {layout.showButtonLabels && (compilationStatus === 'compiling' ? 'Compiling' : 'Compile')}
           </button>
         </div>
       </div>

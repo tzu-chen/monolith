@@ -39,6 +39,8 @@
   --ml-mono: 'Source Code Pro', ui-monospace, 'SF Mono', Menlo, Consolas,
     monospace;
   --ml-measure: 46rem;
+  /* Body line-height. Named because the drop cap is sized against it. */
+  --ml-line: 1.72;
 }
 
 html {
@@ -53,7 +55,7 @@ body.ltx_document,
   color: var(--text-primary);
   font-family: var(--ml-serif);
   font-size: 18px;
-  line-height: 1.72;
+  line-height: var(--ml-line);
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
@@ -870,36 +872,72 @@ blockquote,
 
 /* ----- Drop-cap lead paragraph (tagged by monolith-theme.js) ----------- */
 
-/* Fallback for engines without `initial-letter` (notably Firefox): a floated
-   two-line cap. A floated `::first-letter` pins its box top to the first line,
-   so these three values are tuned together against the body's 1.72 line-height:
-   `font-size` sets the cap-height to span the first two lines, `line-height`
-   keeps the float box within two lines (so only two lines wrap beside it, not
-   three), and `margin-top` drops the glyph so its cap meets the top of the
-   first line and its baseline rests on the second line's baseline. */
-.monolith-lead::first-letter {
-  float: left;
-  margin: 0.58rem 0.5rem 0 0;
-  padding: 0;
-  font-family: var(--ml-serif);
-  font-size: 4.05rem;
-  line-height: 0.8;
-  font-weight: 600;
-  color: var(--accent);
+/* LaTeXML's own stylesheet indents the opening paragraph of a `.ltx_para`
+   (`ltx-article.css`: `.ltx_para > .ltx_p:first-child { text-indent: 2em }`,
+   and `.ltx_indent > .ltx_p:first-child` with `!important`). Beside a cap that
+   indent reads as a hole punched between the capital and the words that follow
+   it, so cancel it — `!important` only to outrank LaTeXML's own `!important`. */
+.monolith-lead {
+  text-indent: 0 !important;
+  /* The cap is two body lines tall. Should the paragraph itself come up short
+     (one line at a wide measure), the float would hang below the paragraph box
+     and land on whatever block follows; reserving two lines keeps it home. */
+  min-height: calc(2 * var(--ml-line) * 1em);
 }
 
-/* Where supported (Chromium, WebKit), `initial-letter` is the right tool: it
-   aligns the cap-height to the top of the first line and rests the baseline on
-   the second line's baseline, so the letter never floats high and the sink is
-   exact. A single inline-end margin is the only spacing it needs. */
-@supports (initial-letter: 2) or (-webkit-initial-letter: 2) {
-  .monolith-lead::first-letter {
-    -webkit-initial-letter: 2;
-    initial-letter: 2;
+/* The capital itself. `monolith-theme.js` wraps the first letter in this
+   element and measures the rendered font to fill in the three custom
+   properties: `--ml-cap-size` so the ink spans two lines, `--ml-cap-sink` so
+   its baseline lands on line two's, and `--ml-cap-box` so the float ends there
+   and exactly two lines wrap beside it. The fallbacks below are what a serif at
+   the default 18px/1.72 body wants; they only apply if the measurement can't
+   run (no layout yet), and get replaced as soon as it can. */
+.monolith-cap {
+  float: left;
+  font-family: var(--ml-serif);
+  font-weight: 600;
+  color: var(--accent);
+  font-size: var(--ml-cap-size, 3.94rem);
+  line-height: 1;
+  height: var(--ml-cap-box, 3.44rem);
+  margin: var(--ml-cap-sink, 0.4rem) 0.5rem 0 0;
+  padding: 0;
+}
+
+/* Hover previews and knowls deep-clone live document nodes, `.monolith-lead`
+   and all, into a panel far narrower than the article. A cap there is noise
+   around a quoted fragment, so strip it back to body text. */
+.monolith-refpop .monolith-lead,
+.knowl-content .monolith-lead {
+  min-height: 0;
+}
+
+.monolith-refpop .monolith-cap,
+.knowl-content .monolith-cap {
+  float: none;
+  height: auto;
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+/* A two-line capital needs a measure to sit in. In a narrow preview pane it
+   swallows most of the first two lines and the paragraph turns to rubble, so
+   below this width the lead paragraph is simply ordinary text. */
+@media (max-width: 30rem) {
+  .monolith-lead {
+    min-height: 0;
+  }
+  .monolith-cap {
     float: none;
-    margin: 0 0.5rem 0 0;
+    height: auto;
+    margin: 0;
     font-size: inherit;
-    line-height: normal;
+    line-height: inherit;
+    font-weight: inherit;
+    color: inherit;
   }
 }
 

@@ -8,8 +8,10 @@ const MODES: { value: PreviewMode; label: string }[] = [
 /**
  * Segmented control that switches the preview renderer between the Tectonic PDF
  * path and the LaTeXML HTML path. Shared by both preview views' toolbars.
+ *
+ * `compact` tightens it for a narrow pane; see `toolbarLayout`.
  */
-export default function PreviewModeToggle() {
+export default function PreviewModeToggle({ compact = false }: { compact?: boolean }) {
   const previewMode = useEditorStore((s) => s.previewMode);
   const setPreviewMode = useEditorStore((s) => s.setPreviewMode);
 
@@ -20,8 +22,8 @@ export default function PreviewModeToggle() {
         background: 'var(--bg-editor)',
         border: '1px solid var(--border)',
         borderRadius: 6,
-        padding: 2,
-        gap: 2,
+        padding: compact ? 1 : 2,
+        gap: compact ? 1 : 2,
         flexShrink: 0,
       }}
     >
@@ -32,11 +34,11 @@ export default function PreviewModeToggle() {
             key={m.value}
             onClick={() => setPreviewMode(m.value)}
             style={{
-              fontSize: 14,
+              fontSize: compact ? 13 : 14,
               fontFamily: 'inherit',
               cursor: 'pointer',
               border: 'none',
-              padding: '2px 11px',
+              padding: compact ? '2px 5px' : '2px 11px',
               borderRadius: 4,
               background: active ? 'var(--accent)' : 'transparent',
               color: active ? 'white' : 'var(--text-dim)',

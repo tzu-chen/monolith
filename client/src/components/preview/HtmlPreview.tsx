@@ -5,6 +5,8 @@ import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
 import { downloadBlob } from '../../lib/download';
 import * as api from '../../lib/api';
 import PreviewModeToggle from './PreviewModeToggle';
+import { useElementWidth } from '../../hooks/useElementWidth';
+import { toolbarLayout } from './toolbarLayout';
 
 /** Try to extract a line number from a LaTeXML diagnostic string. */
 function parseLineNumber(msg: string): number | null {
@@ -55,6 +57,8 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showLog, setShowLog] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
+  const layout = toolbarLayout(toolbarWidth);
 
   const handleDownload = useCallback(async () => {
     if (downloading) return;
@@ -144,75 +148,100 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const rendering = htmlRenderStatus === 'rendering';
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    fontSize: 17,
+    fontSize: layout.compactControls ? 15 : 17,
     color: active ? 'var(--accent)' : 'var(--text-dim)',
-    padding: '4px 10px',
+    padding: layout.compactControls ? '4px 6px' : '4px 10px',
     borderRadius: 4,
     cursor: 'pointer',
     background: active ? 'var(--accent-bg)' : 'transparent',
     fontWeight: active ? 500 : 400,
+    whiteSpace: 'nowrap',
   });
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-warm)', overflow: 'hidden' }}>
       {/* Toolbar */}
       <div
+        ref={toolbarRef}
         style={{
           height: 36,
           background: 'var(--bg-panel)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 16px',
-          gap: 12,
+          padding: layout.padding,
+          gap: layout.gap,
           flexShrink: 0,
+          overflow: 'hidden',
         }}
       >
-        <PreviewModeToggle />
-        <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>
-          View
-        </div>
-        <div onClick={() => setShowLog(true)} style={tabStyle(showLog)}>
-          Log
-          {(htmlErrors.length > 0 || htmlWarnings.length > 0) && (
-            <span
+        {/* Everything left of the action button gives up space first, and is
+            clipped rather than allowed to push the button off the end. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: layout.gap,
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <PreviewModeToggle compact={layout.compactControls} />
+          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>
+            View
+          </div>
+          <div onClick={() => setShowLog(true)} style={tabStyle(showLog)}>
+            Log
+            {(htmlErrors.length > 0 || htmlWarnings.length > 0) && (
+              <span
+                style={{
+                  marginLeft: 5,
+                  fontSize: 12,
+                  color: htmlErrors.length > 0 ? 'var(--red)' : 'var(--orange)',
+                }}
+              >
+                {htmlErrors.length + htmlWarnings.length}
+              </span>
+            )}
+          </div>
+          {!showLog && layout.showSelect && (
+            <select
+              value={htmlSplitAt}
+              onChange={(e) => {
+                setHtmlSplitAt(e.target.value as HtmlSplitLevel);
+                onRenderHtml();
+              }}
+              title="How to paginate the HTML output"
               style={{
-                marginLeft: 5,
-                fontSize: 12,
-                color: htmlErrors.length > 0 ? 'var(--red)' : 'var(--orange)',
+                fontSize: 16,
+                padding: '2px 4px',
+                borderRadius: 4,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-editor)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                outline: 'none',
+                minWidth: 0,
+                maxWidth: layout.showButtonLabels ? undefined : 92,
               }}
             >
-              {htmlErrors.length + htmlWarnings.length}
-            </span>
+              {SPLIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
-        {!showLog && (
-          <select
-            value={htmlSplitAt}
-            onChange={(e) => {
-              setHtmlSplitAt(e.target.value as HtmlSplitLevel);
-              onRenderHtml();
-            }}
-            title="How to paginate the HTML output"
-            style={{
-              fontSize: 16,
-              padding: '2px 4px',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-editor)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            {SPLIT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        )}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div
+          style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexShrink: 0,
+          }}
+        >
           {htmlNonce > 0 && (
             <button
               onClick={handleDownload}
@@ -232,22 +261,27 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
                 gap: 4,
               }}
             >
-              {downloading ? <SpinnerIcon size={13} /> : <DownloadIcon size={13} />} HTML
+              {downloading ? <SpinnerIcon size={13} /> : <DownloadIcon size={13} />}
+              {layout.showButtonLabels && 'HTML'}
             </button>
           )}
-          <div style={{ fontSize: 16, color: statusColor, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor }} />
-            {statusText}
+          <div
+            title={statusText}
+            style={{ fontSize: 16, color: statusColor, display: 'flex', alignItems: 'center', gap: 5 }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+            {layout.showStatusText && statusText}
           </div>
           <button
             onClick={onRenderHtml}
             disabled={rendering}
+            title={rendering ? 'Rendering HTML…' : 'Render HTML'}
             style={{
               fontSize: 17,
               color: 'white',
               background: rendering ? 'var(--accent-light)' : 'var(--accent)',
               border: '1px solid var(--accent)',
-              padding: '4px 12px',
+              padding: layout.showButtonLabels ? '4px 12px' : '4px 8px',
               borderRadius: 6,
               cursor: rendering ? 'wait' : 'pointer',
               fontFamily: 'inherit',
@@ -257,7 +291,8 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
               gap: 4,
             }}
           >
-            {rendering ? <><SpinnerIcon size={12} /> Rendering</> : <><PlayIcon size={10} /> Render</>}
+            {rendering ? <SpinnerIcon size={12} /> : <PlayIcon size={10} />}
+            {layout.showButtonLabels && (rendering ? 'Rendering' : 'Render')}
           </button>
         </div>
       </div>
