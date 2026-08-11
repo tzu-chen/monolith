@@ -3,3 +3,5 @@ dist/
 build/
 *.tsbuildinfo
 .DS_Store
+latexml-friendly-packages.md
+latexml-integration-guide.md
