@@ -80,6 +80,12 @@ export function useFileWatcher() {
             useEditorStore.getState().invalidateScope();
           }
 
+          // The reference library is entries joined to \cite uses, so either
+          // side of that join going stale invalidates it.
+          if (msg.path.endsWith('.bib') || msg.path.endsWith('.tex')) {
+            useEditorStore.getState().invalidateLibrary();
+          }
+
           // Re-fetch preamble macros when preamble.tex changes
           if (msg.path === 'preamble.tex' && (msg.event === 'change' || msg.event === 'add')) {
             try {

@@ -1,7 +1,18 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { mergeBib, attachmentToBib, extractKeys } from '../services/bibtex.js';
+import {
+  mergeBib,
+  attachmentToBib,
+  extractKeys,
+  parseEntries,
+  parseFields,
+  formatEntry,
+  replaceEntry,
+  bracesBalanced,
+} from '../services/bibtex.js';
+import { readLibrary, applyFieldUpdates } from '../services/bibLibrary.js';
+import { safePath } from '../util/safePath.js';
 
 const NAVIGATE_BASE = (process.env.NAVIGATE_URL || 'http://localhost:3001') + '/api';
 const SCRIBE_BASE = (process.env.SCRIBE_URL || 'http://localhost:3003') + '/api';
@@ -103,6 +114,99 @@ export function createReferencesRouter(getProjectRoot: () => string | null): Rou
     const file = safeBibName(req.query.file);
     const keys = extractKeys(await readBib(projectRoot, file));
     res.json({ file, keys });
+  });
+
+  // The project's own reference library: every .bib entry joined to its \cite uses
+  router.get('/entries', async (_req: Request, res: Response) => {
+    const projectRoot = getProjectRoot();
+    if (!projectRoot) {
+      res.status(400).json({ error: 'No project selected' });
+      return;
+    }
+    try {
+      res.json(await readLibrary(projectRoot));
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to read the reference library: ${err.message}` });
+    }
+  });
+
+  // Edit one entry in place. Body: { key, file, fields? } or { key, file, raw? }
+  router.patch('/entries', async (req: Request, res: Response) => {
+    const projectRoot = getProjectRoot();
+    if (!projectRoot) {
+      res.status(400).json({ error: 'No project selected' });
+      return;
+    }
+
+    const { key, file, fields, raw } = req.body as {
+      key?: string;
+      file?: string;
+      fields?: Record<string, string>;
+      raw?: string;
+    };
+    if (typeof key !== 'string' || !key || typeof file !== 'string' || !file) {
+      res.status(400).json({ error: 'Body must include "key" and "file"' });
+      return;
+    }
+    if (!file.endsWith('.bib')) {
+      res.status(400).json({ error: 'Only .bib files can be edited here' });
+      return;
+    }
+    const abs = safePath(file, projectRoot);
+    if (!abs) {
+      res.status(403).json({ error: 'Path traversal not allowed' });
+      return;
+    }
+
+    try {
+      const source = await fs.readFile(abs, 'utf-8');
+      const entry = parseEntries(source).find((e) => e.key === key);
+      if (!entry) {
+        res.status(404).json({ error: `No entry "${key}" in ${file}` });
+        return;
+      }
+
+      let replacement: string;
+      if (typeof raw === 'string') {
+        // Raw mode: the pasted text must itself be exactly one entry, and it must
+        // keep the key — otherwise every \cite of it silently breaks.
+        const parsed = parseEntries(raw);
+        if (parsed.length !== 1) {
+          res.status(400).json({ error: 'Provide exactly one BibTeX entry' });
+          return;
+        }
+        if (parsed[0].key !== key) {
+          res.status(400).json({ error: `The cite key must stay "${key}"` });
+          return;
+        }
+        replacement = parsed[0].raw.trim();
+      } else if (fields && typeof fields === 'object') {
+        for (const [name, value] of Object.entries(fields)) {
+          if (typeof value !== 'string') {
+            res.status(400).json({ error: `Field "${name}" must be a string` });
+            return;
+          }
+          if (!bracesBalanced(value)) {
+            res.status(400).json({ error: `Unbalanced braces in "${name}"` });
+            return;
+          }
+        }
+        const updated = applyFieldUpdates(parseFields(entry.raw), fields);
+        replacement = formatEntry(entry.type, key, updated);
+      } else {
+        res.status(400).json({ error: 'Body must include "fields" or "raw"' });
+        return;
+      }
+
+      await fs.writeFile(abs, replaceEntry(source, entry, replacement), 'utf-8');
+      res.json({ key, file });
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') {
+        res.status(404).json({ error: `${file} does not exist` });
+        return;
+      }
+      res.status(500).json({ error: `Failed to update the entry: ${err.message}` });
+    }
   });
 
   // Fetch BibTeX for a DOI or arXiv ID

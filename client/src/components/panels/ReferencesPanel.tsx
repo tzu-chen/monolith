@@ -22,28 +22,42 @@ import { ENTER } from '../../lib/shortcuts';
 import {
   fetchPapers,
   fetchAttachments,
-  fetchLibraryKeys,
+  fetchLibrary,
   lookupReference,
   importReferences,
+  fieldValue,
+  shortAuthors,
+  sourceLine,
   type NavigatePaper,
   type ScribeAttachment,
   type ImportInput,
+  type Library,
+  type LibraryEntry,
 } from '../../lib/references-api';
 import * as api from '../../lib/api';
 
 /**
- * References panel (430px in the handoff, scaled here).
+ * References panel — the list half of the handoff's reference manager (1c).
  *
- * The library lives in the companion Navigate/Scribe services, not in
- * `refs.bib` — so where the handoff's reference manager edits BibTeX fields in
- * place, this one browses what those services hold and imports selected entries
- * into the project's bib. The row grammar is the handoff's: status dot, title,
- * `Authors · Source` line, a badge row, and a `Cite ↵` action that appears on
- * the row you are pointing at.
+ * The first tab is the project's own `.bib`: every entry, with the cite count
+ * and field defects that make it triageable, in the handoff's row grammar
+ * (status dot, title, `Authors · Source`, key chip, badges, `Cite ↵`).
+ * Selecting a row opens the entry editor in the detail column beside this one.
+ *
+ * The other two tabs browse the companion Navigate/Scribe services and import
+ * from them — the library those hold is not the project's `.bib`, so bringing
+ * an entry across is an explicit act rather than a live view.
  */
 
-type SourceTab = 'All' | 'Papers' | 'Files';
-const TABS: SourceTab[] = ['All', 'Papers', 'Files'];
+type SourceTab = 'library' | 'papers' | 'files';
+const TABS: { value: SourceTab; label: string }[] = [
+  { value: 'library', label: 'refs.bib' },
+  { value: 'papers', label: 'Papers' },
+  { value: 'files', label: 'Files' },
+];
+
+/** The list filters that ride beside the search field on the library tab. */
+type LibraryFilter = 'all' | 'cited' | 'issues';
 
 function parseAuthors(json: string): string {
   try {
@@ -75,17 +89,34 @@ function selectionToInput(keys: string[]): ImportInput {
   return { paperIds, attachmentIds };
 }
 
+/** Strip the braces a BibTeX title uses to protect capitalisation. */
+function plain(value: string): string {
+  return value.replace(/[{}]/g, '').trim();
+}
+
+const EMPTY_LIBRARY: Library = { files: [], entries: [], missing: [] };
+
 export default function ReferencesPanel() {
-  const [tab, setTab] = useState<SourceTab>('All');
+  const [tab, setTab] = useState<SourceTab>('library');
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<LibraryFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const managerDetail = useEditorStore((s) => s.managerDetail);
+  const setManagerDetail = useEditorStore((s) => s.setManagerDetail);
+  const libraryNonce = useEditorStore((s) => s.libraryNonce);
+  const invalidateLibrary = useEditorStore((s) => s.invalidateLibrary);
+  const activeKey = managerDetail?.kind === 'reference' ? managerDetail.key : null;
+
+  const [library, setLibrary] = useState<Library>(EMPTY_LIBRARY);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryLoading, setLibraryLoading] = useState(true);
 
   const [papers, setPapers] = useState<NavigatePaper[]>([]);
   const [attachments, setAttachments] = useState<ScribeAttachment[]>([]);
   const [papersError, setPapersError] = useState<string | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
-  const [libraryKeys, setLibraryKeys] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'err' } | null>(null);
 
@@ -94,20 +125,33 @@ export default function ReferencesPanel() {
   const [lookupQuery, setLookupQuery] = useState('');
   const [pasteText, setPasteText] = useState('');
 
-  const loadLists = useCallback(async () => {
-    setLoading(true);
-    const [pRes, aRes, keys] = await Promise.all([fetchPapers(), fetchAttachments(), fetchLibraryKeys()]);
-    setPapers(pRes.papers);
-    setPapersError(pRes.error ?? null);
-    setAttachments(aRes.attachments);
-    setAttachmentsError(aRes.error ?? null);
-    setLibraryKeys(new Set(keys));
-    setLoading(false);
-  }, []);
+  // The library re-reads on any .bib or .tex change; the external sources are
+  // fetched once, since nothing in this app changes them.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await fetchLibrary();
+      if (cancelled) return;
+      setLibrary({ files: result.files, entries: result.entries, missing: result.missing });
+      setLibraryError(result.error ?? null);
+      setLibraryLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [libraryNonce]);
 
   useEffect(() => {
-    loadLists();
-  }, [loadLists]);
+    let cancelled = false;
+    (async () => {
+      const [pRes, aRes] = await Promise.all([fetchPapers(), fetchAttachments()]);
+      if (cancelled) return;
+      setPapers(pRes.papers);
+      setPapersError(pRes.error ?? null);
+      setAttachments(aRes.attachments);
+      setAttachmentsError(aRes.error ?? null);
+      setSourcesLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const flash = useCallback((text: string, tone: 'ok' | 'err') => {
     setMsg({ text, tone });
@@ -116,8 +160,36 @@ export default function ReferencesPanel() {
 
   const query = search.toLowerCase();
 
+  const libraryKeys = useMemo(
+    () => new Set(library.entries.map((e) => e.key)),
+    [library.entries]
+  );
+
+  const citedCount = useMemo(
+    () => library.entries.filter((e) => e.uses.length > 0).length,
+    [library.entries]
+  );
+  const issueCount = useMemo(
+    () => library.entries.filter((e) => e.issues.length > 0).length,
+    [library.entries]
+  );
+
+  const filteredEntries = useMemo(() => {
+    return library.entries.filter((e) => {
+      if (filter === 'cited' && e.uses.length === 0) return false;
+      if (filter === 'issues' && e.issues.length === 0) return false;
+      if (!query) return true;
+      return (
+        e.key.toLowerCase().includes(query) ||
+        plain(fieldValue(e, 'title')).toLowerCase().includes(query) ||
+        fieldValue(e, 'author').toLowerCase().includes(query) ||
+        sourceLine(e).toLowerCase().includes(query)
+      );
+    });
+  }, [library.entries, filter, query]);
+
   const filteredPapers = useMemo(() => {
-    if (tab === 'Files') return [];
+    if (tab !== 'papers') return [];
     return papers.filter(
       (p) =>
         !query ||
@@ -127,7 +199,7 @@ export default function ReferencesPanel() {
   }, [papers, tab, query]);
 
   const filteredAttachments = useMemo(() => {
-    if (tab === 'Papers') return [];
+    if (tab !== 'files') return [];
     return attachments.filter(
       (a) =>
         !query ||
@@ -176,7 +248,7 @@ export default function ReferencesPanel() {
     });
   }, [allVisibleSelected, visibleKeys]);
 
-  /** Reload the file tree and the imported .bib tab, and refresh the "in bib" set. */
+  /** Reload the file tree and the imported .bib tab, and re-read the library. */
   const refreshProject = useCallback(async (file: string) => {
     try {
       const store = useEditorStore.getState();
@@ -185,8 +257,8 @@ export default function ReferencesPanel() {
     } catch {
       // Best-effort: the import already landed on disk.
     }
-    setLibraryKeys(new Set(await fetchLibraryKeys()));
-  }, []);
+    invalidateLibrary();
+  }, [invalidateLibrary]);
 
   const runImport = useCallback(
     async (input: ImportInput, cite: boolean) => {
@@ -237,6 +309,10 @@ export default function ReferencesPanel() {
     await runImport({ bibtex: text }, false);
   }, [pasteText, runImport]);
 
+  const citeEntry = useCallback((entry: LibraryEntry) => {
+    useEditorStore.getState().insertAtCursor(`\\cite{${entry.key}}`);
+  }, []);
+
   const inputStyle: React.CSSProperties = {
     fontSize: fs.control,
     fontFamily: font.mono,
@@ -248,6 +324,118 @@ export default function ReferencesPanel() {
     outline: 'none',
     width: '100%',
   };
+
+  /** A `.bib` entry, in the handoff's row grammar. */
+  function LibraryRow({ entry }: { entry: LibraryEntry }) {
+    const active = activeKey === entry.key;
+    const [hovered, setHovered] = useState(false);
+    const cited = entry.uses.length > 0;
+    const broken = entry.issues.length > 0;
+    const title = plain(fieldValue(entry, 'title')) || entry.key;
+    const subtitle = [shortAuthors(entry), sourceLine(entry)].filter(Boolean).join(' · ');
+
+    return (
+      <div
+        onClick={() => setManagerDetail({ kind: 'reference', key: entry.key })}
+        onMouseEnter={(e) => { setHovered(true); hoverRow(e, active); }}
+        onMouseLeave={(e) => { setHovered(false); leaveRow(e, active); }}
+        style={rowStyle(active, {
+          alignItems: 'flex-start',
+          gap: 10,
+          padding: `9px ${metrics.padPanel}px`,
+          borderBottom: '1px solid var(--line-faint)',
+          whiteSpace: 'normal',
+        })}
+      >
+        <span style={{ paddingTop: 6 }}>
+          <Dot
+            color={broken ? 'var(--error)' : cited ? 'var(--accent)' : 'var(--line-strong)'}
+            filled={cited && !broken}
+          />
+        </span>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div
+            style={{
+              fontSize: fs.title,
+              color: active ? 'var(--text)' : 'var(--text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={title}
+          >
+            {title}
+          </div>
+          {subtitle && (
+            <div
+              style={{
+                fontSize: fs.control,
+                color: 'var(--text-faint)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {subtitle}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+            <Badge mono tone={cited ? 'accent' : undefined}>{entry.key}</Badge>
+            <span style={{ fontSize: fs.meta, color: 'var(--text-faint)' }}>
+              {cited ? `cited ${entry.uses.length}×` : 'uncited'}
+            </span>
+            {entry.issues.map((issue) => (
+              <Badge key={issue} tone="error">{issue}</Badge>
+            ))}
+            {(hovered || active) && (
+              <span style={{ marginLeft: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                <OutlinedButton
+                  accent
+                  title={`Insert \\cite{${entry.key}} at the cursor`}
+                  onClick={() => citeEntry(entry)}
+                >
+                  Cite {ENTER}
+                </OutlinedButton>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /** A key cited in the sources that no `.bib` defines — a compile error in waiting. */
+  function MissingRow({ entry }: { entry: Library['missing'][number] }) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          padding: `9px ${metrics.padPanel}px`,
+          borderBottom: '1px solid var(--line-faint)',
+          borderLeft: '2px solid var(--error)',
+          whiteSpace: 'normal',
+        }}
+      >
+        <span style={{ paddingTop: 6 }}><Dot color="var(--error)" /></span>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontFamily: font.mono, fontSize: fs.row, color: 'var(--text)' }}>{entry.key}</span>
+          <span style={{ fontSize: fs.meta, color: 'var(--text-faint)' }}>
+            cited {entry.uses.length}× · not in any .bib
+          </span>
+        </div>
+        <span onClick={(e) => e.stopPropagation()}>
+          <OutlinedButton
+            title="Look this key up by DOI or arXiv id"
+            onClick={() => { setAddOpen(true); setAddMode('lookup'); setLookupQuery(entry.key); }}
+          >
+            Resolve
+          </OutlinedButton>
+        </span>
+      </div>
+    );
+  }
 
   function EntryRow({
     entryKey,
@@ -331,11 +519,13 @@ export default function ReferencesPanel() {
     );
   }
 
+  const bibLabel = library.files.length === 1 ? library.files[0] : `${library.files.length} .bib files`;
+
   return (
     <>
       <PanelHeader title="References">
         <span style={{ fontFamily: font.mono, fontSize: fs.meta, color: 'var(--text-disabled)' }}>
-          refs.bib · {libraryKeys.size}
+          {library.files.length === 0 ? 'no .bib' : `${bibLabel} · ${library.entries.length}`}
         </span>
         <OutlinedButton accent icon={<PlusIcon size={11} />} onClick={() => setAddOpen(!addOpen)}>
           Import
@@ -402,7 +592,29 @@ export default function ReferencesPanel() {
       )}
 
       <FilterRow>
-        <FilterInput value={search} onChange={setSearch} placeholder="Search references…" />
+        <FilterInput
+          value={search}
+          onChange={setSearch}
+          placeholder={tab === 'library' ? 'Search author, title, key…' : 'Search references…'}
+        />
+        {tab === 'library' && (
+          <>
+            <Pill
+              mono={false}
+              active={filter === 'cited'}
+              onClick={() => setFilter(filter === 'cited' ? 'all' : 'cited')}
+            >
+              Cited ({citedCount})
+            </Pill>
+            <Pill
+              mono={false}
+              tone={filter === 'issues' ? 'error' : undefined}
+              onClick={() => setFilter(filter === 'issues' ? 'all' : 'issues')}
+            >
+              Issues ({issueCount})
+            </Pill>
+          </>
+        )}
       </FilterRow>
 
       <div
@@ -416,17 +628,21 @@ export default function ReferencesPanel() {
         }}
       >
         {TABS.map((t) => (
-          <Pill key={t} mono={false} active={tab === t} onClick={() => setTab(t)}>
-            {t}
+          <Pill key={t.value} mono={false} active={tab === t.value} onClick={() => setTab(t.value)}>
+            {t.label}
           </Pill>
         ))}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Checkbox checked={allVisibleSelected} onChange={toggleAll} title="Select all visible" />
-          <SectionLabel>{visibleKeys.length} shown</SectionLabel>
-        </span>
+        {tab !== 'library' && (
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Checkbox checked={allVisibleSelected} onChange={toggleAll} title="Select all visible" />
+            <SectionLabel>{visibleKeys.length} shown</SectionLabel>
+          </span>
+        )}
       </div>
 
-      {(papersError || attachmentsError) && (
+      {((tab === 'library' && libraryError) ||
+        (tab === 'papers' && papersError) ||
+        (tab === 'files' && attachmentsError)) && (
         <div
           style={{
             padding: `6px ${metrics.padPanel}px`,
@@ -438,13 +654,42 @@ export default function ReferencesPanel() {
             whiteSpace: 'normal',
           }}
         >
-          {tab !== 'Files' && papersError && <div>Papers unavailable: {papersError}</div>}
-          {tab !== 'Papers' && attachmentsError && <div>Files unavailable: {attachmentsError}</div>}
+          {tab === 'library' && libraryError}
+          {tab === 'papers' && papersError && `Papers unavailable: ${papersError}`}
+          {tab === 'files' && attachmentsError && `Files unavailable: ${attachmentsError}`}
         </div>
       )}
 
       <PanelBody>
-        {loading ? (
+        {tab === 'library' ? (
+          libraryLoading ? (
+            <EmptyState><SpinnerIcon size={16} /></EmptyState>
+          ) : library.entries.length === 0 ? (
+            <EmptyState>
+              {library.files.length === 0
+                ? 'This project has no .bib file yet — use Import to start one'
+                : 'No entries in the project’s .bib files'}
+            </EmptyState>
+          ) : filteredEntries.length === 0 && (filter !== 'issues' || library.missing.length === 0) ? (
+            <EmptyState>No entries match</EmptyState>
+          ) : (
+            <>
+              {filteredEntries.map((entry) => (
+                <LibraryRow key={`${entry.file}:${entry.key}`} entry={entry} />
+              ))}
+              {library.missing.length > 0 && filter !== 'cited' && (
+                <>
+                  <div style={{ padding: `10px ${metrics.padPanel}px 6px` }}>
+                    <SectionLabel>Cited but undefined</SectionLabel>
+                  </div>
+                  {library.missing.map((entry) => (
+                    <MissingRow key={entry.key} entry={entry} />
+                  ))}
+                </>
+              )}
+            </>
+          )
+        ) : sourcesLoading ? (
           <EmptyState><SpinnerIcon size={16} /></EmptyState>
         ) : visibleKeys.length === 0 ? (
           <EmptyState>
@@ -476,55 +721,93 @@ export default function ReferencesPanel() {
         )}
       </PanelBody>
 
-      <div
-        style={{
-          flexShrink: 0,
-          borderTop: '1px solid var(--line)',
-          padding: `9px ${metrics.padPanel}px`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-        }}
-      >
-        <span style={{ fontSize: fs.meta, color: selected.size > 0 ? 'var(--accent)' : 'var(--text-faint)' }}>
-          {selected.size} selected
-        </span>
-        {msg && (
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              fontSize: fs.meta,
-              color: msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-            }}
-          >
-            <Dot color={msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)'} filled />
-            {msg.text}
+      {tab === 'library' ? (
+        <div
+          style={{
+            flexShrink: 0,
+            borderTop: '1px solid var(--line)',
+            padding: `9px ${metrics.padPanel}px`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            fontSize: fs.meta,
+            color: 'var(--text-faint)',
+          }}
+        >
+          <span>{filteredEntries.length} shown</span>
+          {msg && (
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                color: msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}
+            >
+              <Dot color={msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)'} filled />
+              {msg.text}
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            Select an entry to edit it
           </span>
-        )}
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexShrink: 0 }}>
-          <OutlinedButton
-            icon={<QuoteIcon size={11} />}
-            onClick={() => runImport(selectionToInput([...selected]), true)}
-            disabled={busy || selected.size === 0}
-          >
-            Insert \cite
-          </OutlinedButton>
-          <OutlinedButton
-            accent
-            onClick={() => runImport(selectionToInput([...selected]), false)}
-            disabled={busy || selected.size === 0}
-          >
-            {busy ? 'Working…' : 'Import'}
-          </OutlinedButton>
-        </span>
-      </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            flexShrink: 0,
+            borderTop: '1px solid var(--line)',
+            padding: `9px ${metrics.padPanel}px`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}
+        >
+          <span style={{ fontSize: fs.meta, color: selected.size > 0 ? 'var(--accent)' : 'var(--text-faint)' }}>
+            {selected.size} selected
+          </span>
+          {msg && (
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: fs.meta,
+                color: msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}
+            >
+              <Dot color={msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)'} filled />
+              {msg.text}
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexShrink: 0 }}>
+            <OutlinedButton
+              icon={<QuoteIcon size={11} />}
+              onClick={() => runImport(selectionToInput([...selected]), true)}
+              disabled={busy || selected.size === 0}
+            >
+              Insert \cite
+            </OutlinedButton>
+            <OutlinedButton
+              accent
+              onClick={() => runImport(selectionToInput([...selected]), false)}
+              disabled={busy || selected.size === 0}
+            >
+              {busy ? 'Working…' : 'Import'}
+            </OutlinedButton>
+          </span>
+        </div>
+      )}
     </>
   );
 }

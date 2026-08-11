@@ -52,6 +52,31 @@ export type SidePanel =
 /** Rail tools that open the drawer docked at the bottom of the editor pane. */
 export type Drawer = 'symbols' | 'snippets';
 
+/**
+ * The item a manager panel has open in its detail pane.
+ *
+ * The reference and plot managers are list-plus-detail screens: the rail panel
+ * holds the list, and the thing you selected opens in its own column beside it
+ * (handoff 1c and 1f). Selection lives in the store because the two components
+ * sit in different branches of the shell.
+ */
+export type ManagerDetail =
+  | { kind: 'reference'; key: string }
+  | {
+      kind: 'plot';
+      sessionId: string;
+      sessionTitle: string;
+      fileId: string;
+      filename: string;
+      updatedAt?: string | null;
+    };
+
+/** The panel each detail kind belongs to — closing that panel closes the pane. */
+export const DETAIL_OWNER: Record<ManagerDetail['kind'], SidePanel> = {
+  reference: 'references',
+  plot: 'plots',
+};
+
 /** Overlay finders: Mod+P files, Mod+Shift+P projects. */
 export type Finder = 'files' | 'projects';
 
@@ -126,6 +151,10 @@ interface EditorState {
   activeDrawer: Drawer | null;
   finder: Finder | null;
   showSettings: boolean;
+  /** What the open manager panel is showing in its detail column, if anything. */
+  managerDetail: ManagerDetail | null;
+  /** Bumped when a `.bib` or `.tex` changes — the reference library re-reads. */
+  libraryNonce: number;
 
   editorView: EditorView | null;
 
@@ -224,6 +253,8 @@ interface EditorState {
   // Shell
   setActivePanel: (panel: SidePanel | null) => void;
   toggleActivePanel: (panel: SidePanel) => void;
+  setManagerDetail: (detail: ManagerDetail | null) => void;
+  invalidateLibrary: () => void;
   setActiveDrawer: (drawer: Drawer | null) => void;
   toggleDrawer: (drawer: Drawer) => void;
   setFinder: (finder: Finder | null) => void;
@@ -384,6 +415,12 @@ function getInitialPanel(): SidePanel | null {
   return 'files';
 }
 
+/** Keep a detail pane only while its own list panel is the one open. */
+function detailFor(panel: SidePanel | null, detail: ManagerDetail | null): ManagerDetail | null {
+  if (!detail || panel === null) return null;
+  return DETAIL_OWNER[detail.kind] === panel ? detail : null;
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
   projectRoot: null,
@@ -413,6 +450,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeDrawer: null,
   finder: null,
   showSettings: false,
+  managerDetail: null,
+  libraryNonce: 0,
   editorView: null,
   scope: null,
   scopeStatus: 'idle',
@@ -471,6 +510,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       projectRoot: null,
       syncTexHighlight: null,
       preambleMacros: '',
+      // The open reference/plot belonged to the project being left.
+      managerDetail: null,
       scope: null,
       scopeStatus: 'idle',
       scopeError: null,
@@ -602,16 +643,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       htmlRenderedAt: result.ok ? Date.now() : state.htmlRenderedAt,
     })),
 
+  /** A detail pane belongs to its list — it closes when you leave that panel. */
   setActivePanel: (activePanel) => {
     try { localStorage.setItem('monolith-panel', activePanel ?? 'none'); } catch {}
-    set({ activePanel });
+    set((state) => ({ activePanel, managerDetail: detailFor(activePanel, state.managerDetail) }));
   },
 
   toggleActivePanel: (panel) => {
     const next = get().activePanel === panel ? null : panel;
     try { localStorage.setItem('monolith-panel', next ?? 'none'); } catch {}
-    set({ activePanel: next });
+    set((state) => ({ activePanel: next, managerDetail: detailFor(next, state.managerDetail) }));
   },
+
+  setManagerDetail: (managerDetail) => set({ managerDetail }),
+  invalidateLibrary: () => set((state) => ({ libraryNonce: state.libraryNonce + 1 })),
 
   setActiveDrawer: (activeDrawer) => set({ activeDrawer }),
   toggleDrawer: (drawer) =>

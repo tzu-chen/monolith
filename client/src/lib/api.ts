@@ -336,12 +336,29 @@ export interface PyramidPlot {
   fileId: string;
   filename: string;
   ext: string;
+  /** When the plot was last written upstream, ISO-8601. */
+  updatedAt?: string | null;
+}
+
+/** Size and intrinsic dimensions of a plot, read from its own bytes. */
+export interface PlotMeta {
+  bytes: number;
+  width?: number;
+  height?: number;
+  unit?: 'in' | 'px';
 }
 
 export interface PyramidRefreshResult {
   updated: number;
   unchanged: number;
   missing: number;
+}
+
+/** One recorded version of a linked plot's bytes. */
+export interface PyramidRevision {
+  at: string;
+  bytes: number;
+  sha: string;
 }
 
 /** A recorded link between a local project file and its Pyramid source. */
@@ -352,6 +369,8 @@ export interface PyramidLink {
   fileId: string;
   filename: string;
   importedAt: string;
+  /** Newest last. Absent on links recorded before revisions were tracked. */
+  revisions?: PyramidRevision[];
 }
 
 export async function pyramidHealth(): Promise<boolean> {
@@ -391,6 +410,17 @@ export function pyramidRawUrl(sessionId: string, fileId: string): string {
   return `/api/pyramid/sessions/${sessionId}/files/${fileId}/raw`;
 }
 
+/** Size and intrinsic dimensions of a plot, read server-side from its bytes. */
+export async function pyramidPlotMeta(sessionId: string, fileId: string): Promise<PlotMeta | null> {
+  try {
+    const res = await fetch(`/api/pyramid/sessions/${sessionId}/files/${fileId}/meta`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function importPyramidPlot(args: {
   sessionId: string;
   fileId: string;
@@ -398,7 +428,7 @@ export async function importPyramidPlot(args: {
   sessionTitle?: string;
   targetDir?: string;
   overwrite?: boolean;
-}): Promise<{ path: string }> {
+}): Promise<{ path: string; revisions?: number }> {
   const res = await fetch('/api/pyramid/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -47,6 +47,57 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ----- Scrollbars ------------------------------------------------------- */
+
+/* The preview is its own document, so the app shell's scrollbar styling does
+   not reach it — this repeats it against the variable names this file reads
+   (see client/src/global.css for the engine notes, including why the standard
+   properties must not be fenced behind an @supports query). Applies to the page
+   scrollbar and to anything that scrolls inside it: wide tables, long verbatim
+   blocks, the floating TOC. */
+
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-dim);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--accent);
+}
+
 /* ----- Page frame ------------------------------------------------------- */
 
 body.ltx_document,

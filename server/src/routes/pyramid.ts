@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { safePath } from '../util/safePath.js';
+import { readImageMeta } from '../services/imageMeta.js';
 
 interface ProjectCtx {
   projectName: string | null;
@@ -21,16 +23,46 @@ function validId(s: unknown): s is string {
   return typeof s === 'string' && s.length <= 128 && ID_RE.test(s);
 }
 
+/** One version of a linked plot's bytes, appended whenever they change. */
+interface Revision {
+  at: string;
+  bytes: number;
+  /** Short content digest — what makes "changed" an observation, not a guess. */
+  sha: string;
+}
+
 interface ManifestEntry {
   sessionId: string;
   sessionTitle: string;
   fileId: string;
   filename: string;
   importedAt: string;
+  /** Newest last. Absent on links recorded before revisions were tracked. */
+  revisions?: Revision[];
 }
 type Manifest = Record<string, ManifestEntry>;
 
 const MANIFEST_REL = path.join('.monolith', 'pyramid-plots.json');
+
+/** Keep the history bounded — the manifest is a sidecar, not an archive. */
+const MAX_REVISIONS = 20;
+
+function digest(bytes: Buffer): string {
+  return crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 12);
+}
+
+/**
+ * Record a new version of a plot, unless its bytes are the ones already on
+ * record. Returns the entry so callers can write it straight back.
+ */
+function noteRevision(entry: ManifestEntry, bytes: Buffer, at: string): ManifestEntry {
+  const revisions = entry.revisions ?? [];
+  const sha = digest(bytes);
+  if (revisions.length > 0 && revisions[revisions.length - 1].sha === sha) return entry;
+  revisions.push({ at, bytes: bytes.length, sha });
+  entry.revisions = revisions.slice(-MAX_REVISIONS);
+  return entry;
+}
 
 export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string): Router {
   const router = Router();
@@ -119,6 +151,8 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
           fileId: f.id,
           filename: f.filename,
           ext: (f.filename?.split('.').pop() || '').toLowerCase(),
+          // When the plot was last written upstream — the preview's freshness line.
+          updatedAt: f.updated_at ?? f.created_at ?? null,
         }));
       res.json({ plots });
     } catch (err) {
@@ -141,6 +175,21 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
       res.send(Buffer.from(await r.arrayBuffer()));
+    } catch (err) {
+      res.status(502).json({ error: `Failed to reach Pyramid: ${err}` });
+    }
+  });
+
+  // GET /api/pyramid/sessions/:id/files/:fileId/meta — size and intrinsic dimensions
+  router.get('/sessions/:id/files/:fileId/meta', async (req: Request, res: Response) => {
+    try {
+      if (!validId(req.params.id) || !validId(req.params.fileId)) {
+        res.status(400).json({ error: 'Invalid id' });
+        return;
+      }
+      const bytes = await fetchPlotBytes(req.params.id, req.params.fileId);
+      if (bytes === null) { res.status(404).json({ error: 'Plot no longer exists in Pyramid' }); return; }
+      res.json(readImageMeta(bytes));
     } catch (err) {
       res.status(502).json({ error: `Failed to reach Pyramid: ${err}` });
     }
@@ -196,10 +245,17 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
       await fs.writeFile(abs, bytes);
 
       const manifest = await readManifest(projectRoot);
-      manifest[relPath] = { sessionId, sessionTitle, fileId, filename: base, importedAt: new Date().toISOString() };
+      const now = new Date().toISOString();
+      const previous = manifest[relPath];
+      // Re-importing over an existing link continues that link's history rather
+      // than starting a new one, so "3 revisions" counts the plot's versions.
+      const entry: ManifestEntry = previous
+        ? { ...previous, sessionId, sessionTitle, fileId, filename: base }
+        : { sessionId, sessionTitle, fileId, filename: base, importedAt: now };
+      manifest[relPath] = noteRevision(entry, bytes, now);
       await writeManifest(projectRoot, manifest);
 
-      res.status(201).json({ path: relPath });
+      res.status(201).json({ path: relPath, revisions: manifest[relPath].revisions?.length ?? 1 });
     } catch (err) {
       res.status(500).json({ error: `Failed to import plot: ${err}` });
     }
@@ -303,6 +359,7 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
 
       const manifest = await readManifest(projectRoot);
       let updated = 0, unchanged = 0, missing = 0;
+      let manifestDirty = false;
 
       for (const [relPath, entry] of Object.entries(manifest)) {
         const abs = safePath(relPath, projectRoot);
@@ -327,9 +384,12 @@ export function createPyramidRouter(getCtx: () => ProjectCtx, pyramidUrl: string
 
         await fs.mkdir(path.dirname(abs), { recursive: true });
         await fs.writeFile(abs, bytes);
+        noteRevision(entry, bytes, new Date().toISOString());
+        manifestDirty = true;
         updated++;
       }
 
+      if (manifestDirty) await writeManifest(projectRoot, manifest);
       res.json({ updated, unchanged, missing });
     } catch (err) {
       res.status(500).json({ error: `Failed to refresh plots: ${err}` });

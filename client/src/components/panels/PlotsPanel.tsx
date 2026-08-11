@@ -18,58 +18,24 @@ import {
   leaveRow,
 } from '../shared/ui';
 import { fs, font, metrics, radius } from '../../theme/tokens';
-import { ENTER } from '../../lib/shortcuts';
+import { formatIsoAge } from '../../hooks/useFreshness';
 import * as api from '../../lib/api';
 import type { PyramidSession, PyramidPlot, PyramidLink } from '../../lib/api';
 
 /**
- * Plots panel.
+ * Plots panel — the list half of the handoff's plot manager (1f).
  *
  * Plots are produced by the companion Pyramid app; this panel browses that
  * app's sessions and imports a plot into the project — it never generates or
  * edits one. That is the same contract as the handoff's plot manager, with
- * Pyramid sessions standing in for watched folders.
+ * Pyramid sessions standing in for the watched folder.
  *
- * Layout follows S7b (list over detail rather than beside it, to fit a side
- * panel): sessions and their plots on top, then the selected plot's preview
- * with the insert-as controls and a live snippet preview beneath it.
+ * Selecting a plot opens it in the detail column beside this one, where the
+ * zoomable preview and the insert controls live. `Recently changed` lists the
+ * plots this project has re-pulled most recently, from the link manifest.
  */
 
 type Tab = 'browse' | 'linked';
-type InsertMode = 'figure' | 'includegraphics' | 'wrapfigure';
-
-const INSERT_MODES: { value: InsertMode; label: string }[] = [
-  { value: 'figure', label: 'figure environment' },
-  { value: 'includegraphics', label: 'includegraphics only' },
-  { value: 'wrapfigure', label: 'wrapfigure' },
-];
-
-/** Compose the snippet from the current insert mode and width. */
-function snippetFor(mode: InsertMode, relPath: string, width: string): string {
-  const stem = relPath.split('/').pop()!.replace(/\.[^.]+$/, '');
-  const label = stem.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  const include = `\\includegraphics[width=${width}]{${relPath}}`;
-
-  if (mode === 'includegraphics') return `${include}\n`;
-  if (mode === 'wrapfigure') {
-    return (
-      `\\begin{wrapfigure}{r}{${width}}\n` +
-      `  \\centering\n` +
-      `  ${include}\n` +
-      `  \\caption{${stem}}\n` +
-      `  \\label{fig:${label}}\n` +
-      `\\end{wrapfigure}\n`
-    );
-  }
-  return (
-    `\\begin{figure}[htbp]\n` +
-    `  \\centering\n` +
-    `  ${include}\n` +
-    `  \\caption{${stem}}\n` +
-    `  \\label{fig:${label}}\n` +
-    `\\end{figure}\n`
-  );
-}
 
 function fmtDate(iso: string): string {
   try {
@@ -79,13 +45,16 @@ function fmtDate(iso: string): string {
   }
 }
 
-interface Selection {
-  session: PyramidSession;
-  plot: PyramidPlot;
+/** When a link last changed on disk: its newest revision, else its import. */
+function lastChangedAt(link: PyramidLink): string {
+  const revisions = link.revisions;
+  return revisions && revisions.length > 0 ? revisions[revisions.length - 1].at : link.importedAt;
 }
 
 export default function PlotsPanel() {
-  const insertAtCursor = useEditorStore((s) => s.insertAtCursor);
+  const setManagerDetail = useEditorStore((s) => s.setManagerDetail);
+  const managerDetail = useEditorStore((s) => s.managerDetail);
+  const activeFileId = managerDetail?.kind === 'plot' ? managerDetail.fileId : null;
 
   const [tab, setTab] = useState<Tab>('browse');
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -97,10 +66,6 @@ export default function PlotsPanel() {
   const [plotsLoading, setPlotsLoading] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'err' } | null>(null);
-  const [selection, setSelection] = useState<Selection | null>(null);
-
-  const [insertMode, setInsertMode] = useState<InsertMode>('figure');
-  const [insertWidth, setInsertWidth] = useState('0.8\\textwidth');
 
   const [links, setLinks] = useState<PyramidLink[]>([]);
   const [linksLoading, setLinksLoading] = useState(false);
@@ -148,12 +113,50 @@ export default function PlotsPanel() {
     }
   }, [flash]);
 
+  // Both tabs need the manifest: `Linked` lists it, and `Browse` reads its
+  // revision times for the "Recently changed" section.
   useEffect(() => {
-    if (tab !== 'linked') return;
     setEditingPath(null);
     setConfirmDelete(null);
     loadLinks();
   }, [tab, loadLinks]);
+
+  /** The plots this project has pulled most recently, newest first. */
+  const recentlyChanged = useMemo(
+    () =>
+      [...links]
+        .sort((a, b) => Date.parse(lastChangedAt(b)) - Date.parse(lastChangedAt(a)))
+        .slice(0, 4),
+    [links]
+  );
+
+  const selectPlot = useCallback(
+    (session: PyramidSession, plot: PyramidPlot) => {
+      setManagerDetail({
+        kind: 'plot',
+        sessionId: session.id,
+        sessionTitle: session.title,
+        fileId: plot.fileId,
+        filename: plot.filename,
+        updatedAt: plot.updatedAt ?? null,
+      });
+    },
+    [setManagerDetail]
+  );
+
+  const selectLink = useCallback(
+    (link: PyramidLink) => {
+      setManagerDetail({
+        kind: 'plot',
+        sessionId: link.sessionId,
+        sessionTitle: link.sessionTitle,
+        fileId: link.fileId,
+        filename: link.filename,
+        updatedAt: lastChangedAt(link),
+      });
+    },
+    [setManagerDetail]
+  );
 
   const toggleSession = useCallback(async (id: string) => {
     if (expanded === id) {
@@ -173,30 +176,6 @@ export default function PlotsPanel() {
     }
   }, [expanded, plots, flash]);
 
-  const insertSelected = useCallback(async () => {
-    if (!selection) return;
-    setBusy(true);
-    try {
-      const { path } = await api.importPyramidPlot({
-        sessionId: selection.session.id,
-        fileId: selection.plot.fileId,
-        filename: selection.plot.filename,
-        sessionTitle: selection.session.title,
-      });
-      insertAtCursor(snippetFor(insertMode, path, insertWidth));
-      try {
-        useEditorStore.getState().setFileTree(await api.listFiles());
-      } catch {
-        // The file landed; the tree will catch up on the next watcher event.
-      }
-      flash(`Inserted ${path}`, 'ok');
-    } catch (err) {
-      flash(String((err as Error).message || err), 'err');
-    } finally {
-      setBusy(false);
-    }
-  }, [selection, insertMode, insertWidth, insertAtCursor, flash]);
-
   const refreshLinked = useCallback(async () => {
     setBusy(true);
     try {
@@ -206,6 +185,7 @@ export default function PlotsPanel() {
       } catch {
         // Best-effort tree refresh.
       }
+      await loadLinks();
       const parts = [`${r.updated} updated`, `${r.unchanged} unchanged`];
       if (r.missing > 0) parts.push(`${r.missing} source missing`);
       flash(parts.join(', '), r.missing > 0 ? 'err' : 'ok');
@@ -214,7 +194,7 @@ export default function PlotsPanel() {
     } finally {
       setBusy(false);
     }
-  }, [flash]);
+  }, [loadLinks, flash]);
 
   const saveEdit = useCallback(async (link: PyramidLink) => {
     const to = editValue.trim();
@@ -260,14 +240,6 @@ export default function PlotsPanel() {
       setBusy(false);
     }
   }, [loadLinks, flash]);
-
-  const previewSnippet = useMemo(
-    () =>
-      selection
-        ? snippetFor(insertMode, `figures/${selection.plot.filename}`, insertWidth)
-        : '',
-    [selection, insertMode, insertWidth]
-  );
 
   const inputStyle: React.CSSProperties = {
     fontSize: fs.meta,
@@ -369,12 +341,11 @@ export default function PlotsPanel() {
                       </div>
                     ) : (
                       sessionPlots.map((plot) => {
-                        const active =
-                          selection?.plot.fileId === plot.fileId && selection?.session.id === session.id;
+                        const active = activeFileId === plot.fileId;
                         return (
                           <div
                             key={plot.fileId}
-                            onClick={() => setSelection({ session, plot })}
+                            onClick={() => selectPlot(session, plot)}
                             onMouseEnter={(e) => hoverRow(e, active)}
                             onMouseLeave={(e) => leaveRow(e, active)}
                             title={plot.filename}
@@ -410,7 +381,54 @@ export default function PlotsPanel() {
               );
             })
           )
-        ) : linksLoading ? (
+        ) : null}
+
+        {tab === 'browse' && recentlyChanged.length > 0 && (
+          <>
+            <div
+              style={{
+                margin: `12px ${metrics.padPanel}px 6px`,
+                paddingTop: 12,
+                borderTop: '1px solid var(--line)',
+              }}
+            >
+              <SectionLabel>Recently changed</SectionLabel>
+            </div>
+            {recentlyChanged.map((link) => {
+              const active = activeFileId === link.fileId;
+              return (
+                <div
+                  key={link.path}
+                  onClick={() => selectLink(link)}
+                  onMouseEnter={(e) => hoverRow(e, active)}
+                  onMouseLeave={(e) => leaveRow(e, active)}
+                  title={`${link.path} · from ${link.sessionTitle}`}
+                  style={rowStyle(active, {
+                    gap: 7,
+                    padding: `5px ${metrics.padPanel}px`,
+                    fontSize: fs.meta,
+                  })}
+                >
+                  <span
+                    style={{
+                      fontFamily: font.mono,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      minWidth: 0,
+                    }}
+                  >
+                    {link.path.split('/').pop()}
+                  </span>
+                  <span style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--text-faint)' }}>
+                    {formatIsoAge(lastChangedAt(link))}
+                  </span>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {tab === 'linked' && (linksLoading ? (
           <EmptyState><SpinnerIcon size={16} /></EmptyState>
         ) : links.length === 0 ? (
           <EmptyState>No plots imported into this project yet</EmptyState>
@@ -494,98 +512,10 @@ export default function PlotsPanel() {
               )}
             </div>
           ))
-        )}
+        ))}
       </PanelBody>
 
-      {tab === 'browse' && selection && (
-        <div
-          style={{
-            flexShrink: 0,
-            borderTop: '1px solid var(--line)',
-            padding: `10px ${metrics.padPanel}px`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <div
-            style={{
-              border: '1px solid var(--line)',
-              borderRadius: radius.control,
-              background: 'var(--paper-sheet)',
-              padding: 8,
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <img
-              src={api.pyramidRawUrl(selection.session.id, selection.plot.fileId)}
-              alt={selection.plot.filename}
-              style={{ maxWidth: '100%', maxHeight: 140, objectFit: 'contain' }}
-            />
-          </div>
-
-          <SectionLabel>Insert as</SectionLabel>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {INSERT_MODES.map((m) => (
-              <Pill key={m.value} mono={false} active={insertMode === m.value} onClick={() => setInsertMode(m.value)}>
-                {m.label}
-              </Pill>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <SectionLabel>Width</SectionLabel>
-            <input
-              value={insertWidth}
-              onChange={(e) => setInsertWidth(e.target.value)}
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </div>
-
-          <pre
-            style={{
-              margin: 0,
-              border: '1px solid var(--line)',
-              borderRadius: radius.control,
-              background: 'var(--surface-editor)',
-              padding: '7px 9px',
-              fontFamily: font.mono,
-              fontSize: fs.meta,
-              lineHeight: 1.6,
-              color: 'var(--text-muted)',
-              overflowX: 'auto',
-              whiteSpace: 'pre',
-            }}
-          >
-            {previewSnippet}
-          </pre>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {msg && (
-              <span
-                style={{
-                  fontSize: fs.meta,
-                  color: msg.tone === 'ok' ? 'var(--ok)' : 'var(--error)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  minWidth: 0,
-                }}
-              >
-                {msg.text}
-              </span>
-            )}
-            <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
-              <OutlinedButton accent onClick={insertSelected} disabled={busy}>
-                {busy ? 'Working…' : `Insert at cursor ${ENTER}`}
-              </OutlinedButton>
-            </span>
-          </div>
-        </div>
-      )}
-
-      {tab === 'linked' && msg && (
+      {msg && (
         <div
           style={{
             flexShrink: 0,
@@ -601,6 +531,7 @@ export default function PlotsPanel() {
           {msg.text}
         </div>
       )}
+
     </>
   );
 }

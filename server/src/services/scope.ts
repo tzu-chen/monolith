@@ -343,7 +343,7 @@ async function resolveInclude(
   return null;
 }
 
-async function listProjectFiles(projectRoot: string, extensions: string[]): Promise<string[]> {
+export async function listProjectFiles(projectRoot: string, extensions: string[]): Promise<string[]> {
   const found: string[] = [];
 
   async function walk(dir: string, rel: string): Promise<void> {

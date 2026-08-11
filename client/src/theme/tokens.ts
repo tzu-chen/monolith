@@ -70,10 +70,14 @@ export const metrics = {
   panelOutline: 240,
   panelScope: 330,
   panelProjects: 296,
-  /** Wider than the handoff's 250px list: the detail view and insert controls
-   *  sit below the list here rather than in a separate pane. */
-  panelPlots: 330,
+  /** 1f's plot list */
+  panelPlots: 290,
+  /** 1c's .bib list */
   panelReferences: 470,
+
+  /** Detail columns beside a manager list — 1c's entry editor, 1f's preview. */
+  detailReference: 460,
+  detailPlot: 560,
 
   /** bottom symbol/snippet drawer */
   drawer: 288,

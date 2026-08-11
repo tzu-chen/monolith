@@ -114,10 +114,48 @@ textarea::placeholder { color: var(--text-faint); }
   border-color: var(--accent);
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+/*
+ * Scrollbars. Every scroll surface — panes, lists, popovers, the CodeMirror
+ * scroller (which CodeMirror itself leaves unstyled) — gets a thin bar in theme
+ * colour: a --line-strong thumb on a transparent track, so whatever surface is
+ * behind it shows through and the bar reads as one more hairline rather than a
+ * strip of chrome.
+ *
+ * scrollbar-width / scrollbar-color is the primary path. It is the only one
+ * Gecko implements, and Blink honours it over the ::-webkit-scrollbar
+ * pseudo-elements whenever both are present. The WebKit block is the fallback
+ * for engines predating the standard properties (Safari before 18.2); there the
+ * thumb also gets an inset capsule shape and a hover step, neither of which the
+ * standard properties can express.
+ *
+ * Do NOT fence the standard block behind `@supports not
+ * selector(::-webkit-scrollbar)`. Gecko parses unknown -webkit- pseudo-elements
+ * as valid-but-never-matching for web compat, so that query reports support and
+ * Firefox is left with no scrollbar styling at all.
+ *
+ * color-scheme covers what neither block reaches: <select> popups and other
+ * UA-drawn widgets, which would otherwise render light-on-light in Graphite.
+ */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-faint); }
+::-webkit-scrollbar-thumb:active { background-color: var(--accent); }
 
 /* Single-line bars never wrap or reflow. */
 .bar { white-space: nowrap; flex-shrink: 0; }
