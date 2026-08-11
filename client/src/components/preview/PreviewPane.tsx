@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as api from '../../lib/api';
-import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
+import { PlayIcon, SpinnerIcon, DownloadIcon, MinusIcon, PlusIcon } from '../shared/Icons';
+import { OutlinedButton, IconButton, Dot, BarDivider } from '../shared/ui';
+import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl';
+import { mod } from '../../lib/shortcuts';
 import { base64ToBlob, downloadBlob } from '../../lib/download';
 import PreviewModeToggle from './PreviewModeToggle';
 import HtmlPreview from './HtmlPreview';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { useFreshness } from '../../hooks/useFreshness';
 import { toolbarLayout } from './toolbarLayout';
+import { parseLineNumber } from '../../lib/diagnostics';
+import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -15,39 +21,22 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-/** Try to extract a line number from an error/warning string */
-function parseLineNumber(msg: string): number | null {
-  // Match patterns like "l.42", "line 42", ":42:"
-  const patterns = [
-    /\bl\.(\d+)\b/,
-    /\bline\s+(\d+)\b/i,
-    /:(\d+):/,
-  ];
-  for (const pat of patterns) {
-    const m = msg.match(pat);
-    if (m) return parseInt(m[1], 10);
-  }
-  return null;
-}
+/**
+ * PDF preview pane: toolbar / page / status bar.
+ *
+ * The rendered page is a paper surface — a light sheet even in dark mode, since
+ * it stands for the printed article rather than for the app's chrome. The
+ * inverted rendering is still available behind a setting for low-light work.
+ */
 
-type ZoomOption = '50%' | '75%' | '100%' | '125%' | '150%' | '200%' | 'fit-width';
+type Zoom = number | 'fit';
 
-const ZOOM_LEVELS: { label: string; value: ZoomOption }[] = [
-  { label: '50%', value: '50%' },
-  { label: '75%', value: '75%' },
-  { label: '100%', value: '100%' },
-  { label: '125%', value: '125%' },
-  { label: '150%', value: '150%' },
-  { label: '200%', value: '200%' },
-  { label: 'Fit Width', value: 'fit-width' },
-];
+const ZOOM_STEPS = [50, 75, 90, 100, 116, 125, 150, 200, 300];
 
-function zoomToScale(zoom: ZoomOption, containerWidth: number, pageWidth: number): number {
-  if (zoom === 'fit-width') {
-    // Leave some padding (40px total) on each side
-    return (containerWidth - 40) / pageWidth;
-  }
-  return parseInt(zoom) / 100;
+function zoomToScale(zoom: Zoom, containerWidth: number, pageWidth: number): number {
+  // Leave the handoff's 18px page padding on each side, plus room for a scrollbar.
+  if (zoom === 'fit') return Math.max(0.1, (containerWidth - metrics.padPage * 2 - 12) / pageWidth);
+  return zoom / 100;
 }
 
 interface PreviewPaneProps {
@@ -56,61 +45,83 @@ interface PreviewPaneProps {
 }
 
 export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProps) {
-  const { pdfData, compilationStatus, errors, warnings, lastCompileTime, log, syncTexHighlight, theme } =
-    useEditorStore();
+  const pdfData = useEditorStore((s) => s.pdfData);
+  const compilationStatus = useEditorStore((s) => s.compilationStatus);
+  const errors = useEditorStore((s) => s.errors);
+  const warnings = useEditorStore((s) => s.warnings);
+  const log = useEditorStore((s) => s.log);
+  const lastCompileAt = useEditorStore((s) => s.lastCompileAt);
+  const lastCompileTime = useEditorStore((s) => s.lastCompileTime);
+  const syncTexHighlight = useEditorStore((s) => s.syncTexHighlight);
+  const theme = useEditorStore((s) => s.theme);
+  const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
   const previewMode = useEditorStore((s) => s.previewMode);
+  const viewMode = useEditorStore((s) => s.viewMode);
   const currentProject = useEditorStore((s) => s.currentProject);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [showLog, setShowLog] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState<ZoomOption>('fit-width');
+  const [zoom, setZoom] = useState<Zoom>('fit');
+  const [zoomDraft, setZoomDraft] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number; width: number; height: number }>>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [renderedScale, setRenderedScale] = useState(1);
+  const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number }>>([]);
   const savedScrollRatioRef = useRef<number | null>(null);
   const hasRenderedRef = useRef(false);
   const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
   const layout = toolbarLayout(toolbarWidth);
+  const freshness = useFreshness(lastCompileAt);
+
+  const invert = theme === 'dark' && invertPdfInDark;
 
   const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const canvas = target.closest('canvas');
+    const canvas = (e.target as HTMLElement).closest('canvas');
     if (!canvas) return;
-
     const pageInfo = pageGeometryRef.current.find((p) => p.canvas === canvas);
     if (!pageInfo) return;
 
     const rect = canvas.getBoundingClientRect();
-    // Convert click coordinates to PDF coordinates (scale back)
     const x = (e.clientX - rect.left) / pageInfo.scale;
     const y = (e.clientY - rect.top) / pageInfo.scale;
 
     try {
       const result = await api.syncTexInverse(pageInfo.page, x, y);
-      if (result && result.line > 0) {
-        // Open file if needed and jump to line
-        const store = useEditorStore.getState();
-        if (result.file && result.file !== store.activeTabPath) {
-          try {
-            const content = await api.readFile(result.file);
-            store.openFile(result.file, content);
-          } catch {}
+      if (!result || result.line <= 0) return;
+      const store = useEditorStore.getState();
+      if (result.file && result.file !== store.activeTabPath) {
+        try {
+          store.openFile(result.file, await api.readFile(result.file));
+        } catch {
+          // Fall through and jump within whatever file is open.
         }
-        store.requestScrollToLine(result.line);
       }
-    } catch {}
+      store.requestScrollToLine(result.line);
+    } catch {
+      // No SyncTeX data for this point.
+    }
   }, []);
 
   const handleDownloadPdf = useCallback(() => {
     if (!pdfData) return;
     const fallback = (currentProject || 'document').replace(/[^A-Za-z0-9._-]/g, '_') || 'document';
     const input = window.prompt('Download PDF as:', `${fallback}.pdf`);
-    if (input === null) return; // cancelled
+    if (input === null) return;
     let name = input.trim().replace(/[^A-Za-z0-9._-]/g, '_').replace(/^_+/, '');
     if (!name || /^\.pdf$/i.test(name)) name = `${fallback}.pdf`;
     if (!/\.pdf$/i.test(name)) name += '.pdf';
     downloadBlob(base64ToBlob(pdfData, 'application/pdf'), name);
   }, [pdfData, currentProject]);
+
+  const stepZoom = useCallback((direction: 1 | -1) => {
+    setZoom((current) => {
+      const percent = current === 'fit' ? Math.round(renderedScale * 100) : current;
+      if (direction === 1) return ZOOM_STEPS.find((z) => z > percent) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+      return [...ZOOM_STEPS].reverse().find((z) => z < percent) ?? ZOOM_STEPS[0];
+    });
+  }, [renderedScale]);
 
   // Load the PDF document when pdfData changes
   useEffect(() => {
@@ -118,52 +129,46 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
       hasRenderedRef.current = false;
       return;
     }
-
     const loadPdf = async () => {
       const binaryStr = atob(pdfData);
       const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
       setPdfDoc(await pdfjsLib.getDocument({ data: bytes }).promise);
     };
-
     loadPdf().catch(console.error);
   }, [pdfData]);
 
-  // Render pages whenever the doc, zoom, tab, or theme changes
+  // Render pages whenever the doc, zoom, theme or log toggle changes.
   useEffect(() => {
     if (!pdfDoc || !containerRef.current || showLog) return;
 
     const container = containerRef.current;
     const pdf = pdfDoc;
+    let cancelled = false;
 
     const renderPdf = async () => {
-      // We need the intrinsic page width (at scale=1) for fit-width calculation
       const firstPage = await pdf.getPage(1);
       const baseViewport = firstPage.getViewport({ scale: 1 });
-      const containerWidth = container.clientWidth;
-      const scale = zoomToScale(zoomLevel, containerWidth, baseViewport.width);
+      const scale = zoomToScale(zoom, container.clientWidth, baseViewport.width);
+      if (cancelled) return;
+      setRenderedScale(scale);
 
-      // Save scroll position before clearing
       if (hasRenderedRef.current && container.scrollHeight > 0) {
         savedScrollRatioRef.current = container.scrollTop / container.scrollHeight;
       } else {
         savedScrollRatioRef.current = null;
       }
 
-      // Clear previous pages
       container.innerHTML = '';
       pageGeometryRef.current = [];
 
       const outputScale = window.devicePixelRatio || 1;
 
-      // Render each page
       for (let i = 1; i <= pdf.numPages; i++) {
+        if (cancelled) return;
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale });
 
-        // Wrapper for positioning highlight overlays
         const wrapper = document.createElement('div');
         wrapper.style.position = 'relative';
         wrapper.style.margin = '0 auto 20px';
@@ -176,34 +181,25 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         canvas.style.display = 'block';
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
-        canvas.style.borderRadius = '2px';
-        if (theme === 'dark') {
+        canvas.style.background = 'var(--paper-sheet)';
+        canvas.style.border = '1px solid var(--line)';
+        canvas.style.boxShadow = 'var(--shadow-paper)';
+        if (invert) {
           canvas.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
           canvas.style.background = 'white';
-        } else {
-          canvas.style.background = 'var(--paper)';
-          canvas.style.border = '1px solid var(--border)';
-          canvas.style.boxShadow =
-            '0 1px 3px var(--paper-shadow), 0 8px 30px var(--paper-shadow), 0 20px 60px rgba(45,40,30,0.04)';
         }
 
         wrapper.appendChild(canvas);
         container.appendChild(wrapper);
-
-        pageGeometryRef.current.push({
-          canvas,
-          page: i,
-          scale,
-          width: viewport.width,
-          height: viewport.height,
-        });
+        pageGeometryRef.current.push({ canvas, page: i, scale });
 
         const ctx = canvas.getContext('2d')!;
         const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined;
         await page.render({ canvasContext: ctx, viewport, transform }).promise;
       }
 
-      // Restore scroll position after recompilation (skip if SyncTeX will handle scrolling)
+      // Restore the reading position after a recompile, unless SyncTeX is about
+      // to scroll somewhere more specific.
       if (savedScrollRatioRef.current !== null && !useEditorStore.getState().syncTexHighlight) {
         container.scrollTop = savedScrollRatioRef.current * container.scrollHeight;
         savedScrollRatioRef.current = null;
@@ -212,40 +208,53 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     };
 
     renderPdf().catch(console.error);
-  }, [pdfDoc, showLog, theme, zoomLevel]);
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfDoc, showLog, invert, zoom]);
 
-  // Render SyncTeX highlight overlay
+  // Track which page is under the viewport's midline, for the status bar.
   useEffect(() => {
-    // Remove any existing highlights
-    document.querySelectorAll('.synctex-highlight').forEach((el) => el.remove());
+    const container = containerRef.current;
+    if (!container || showLog) return;
+    const onScroll = () => {
+      const midline = container.scrollTop + container.clientHeight / 2;
+      let page = 1;
+      for (const wrapper of Array.from(container.children) as HTMLElement[]) {
+        if (wrapper.offsetTop <= midline) page = Number(wrapper.dataset.page) || page;
+        else break;
+      }
+      setCurrentPage(page);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [showLog, pdfDoc]);
 
+  // SyncTeX highlight overlay
+  useEffect(() => {
+    document.querySelectorAll('.synctex-highlight').forEach((el) => el.remove());
     if (!syncTexHighlight || !containerRef.current || showLog) return;
 
     const { page, x, y, h, w } = syncTexHighlight;
     const pageInfo = pageGeometryRef.current.find((p) => p.page === page);
-    if (!pageInfo) return;
-
-    const wrapper = pageInfo.canvas.parentElement;
+    const wrapper = pageInfo?.canvas.parentElement;
     if (!wrapper) return;
 
     const overlay = document.createElement('div');
     overlay.className = 'synctex-highlight';
     overlay.style.position = 'absolute';
-    overlay.style.left = `${x * pageInfo.scale}px`;
-    overlay.style.top = `${y * pageInfo.scale}px`;
-    overlay.style.width = `${Math.max(w * pageInfo.scale, 200)}px`;
-    overlay.style.height = `${Math.max(h * pageInfo.scale, 16)}px`;
-    overlay.style.background = 'rgba(124, 111, 240, 0.25)';
-    overlay.style.border = '2px solid rgba(124, 111, 240, 0.6)';
+    overlay.style.left = `${x * pageInfo!.scale}px`;
+    overlay.style.top = `${y * pageInfo!.scale}px`;
+    overlay.style.width = `${Math.max(w * pageInfo!.scale, 200)}px`;
+    overlay.style.height = `${Math.max(h * pageInfo!.scale, 16)}px`;
+    overlay.style.border = '2px solid var(--accent)';
+    overlay.style.background = 'var(--accent-wash-strong)';
     overlay.style.borderRadius = '2px';
     overlay.style.pointerEvents = 'none';
     overlay.style.transition = 'opacity 0.3s';
     wrapper.appendChild(overlay);
-
-    // Scroll the highlight into view
     overlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // Fade out after 3 seconds
     const timer = setTimeout(() => {
       overlay.style.opacity = '0';
       setTimeout(() => {
@@ -260,184 +269,163 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     };
   }, [syncTexHighlight, showLog, setSyncTexHighlight]);
 
-  const statusText = (() => {
-    if (compilationStatus === 'compiling') return 'compiling...';
-    if (compilationStatus === 'success' && lastCompileTime != null) {
-      return `compiled ${(lastCompileTime / 1000).toFixed(1)}s ago`;
-    }
-    if (compilationStatus === 'error') return 'compilation failed';
-    return 'ready';
-  })();
+  const engineLabel = useMemo(() => {
+    if (compilationStatus === 'compiling') return 'tectonic · compiling…';
+    if (compilationStatus === 'idle' || lastCompileAt === null) return 'tectonic · not run';
+    if (compilationStatus === 'error') return `tectonic · failed ${freshness}`;
+    const elapsed = lastCompileTime != null ? ` in ${(lastCompileTime / 1000).toFixed(1)}s` : '';
+    return `tectonic${elapsed} · ${freshness}`;
+  }, [compilationStatus, lastCompileAt, lastCompileTime, freshness]);
 
-  const statusColor =
-    compilationStatus === 'error' ? 'var(--red)' : 'var(--green)';
+  const zoomPercent = zoom === 'fit' ? Math.round(renderedScale * 100) : zoom;
+  const compiling = compilationStatus === 'compiling';
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    fontSize: layout.compactControls ? 15 : 17,
-    color: active ? 'var(--accent)' : 'var(--text-dim)',
-    padding: layout.compactControls ? '4px 6px' : '4px 10px',
-    borderRadius: 4,
-    cursor: 'pointer',
-    background: active ? 'var(--accent-bg)' : 'transparent',
+    fontSize: fs.toolbar,
+    color: active ? 'var(--text)' : 'var(--text-faint)',
     fontWeight: active ? 500 : 400,
-    whiteSpace: 'nowrap',
+    padding: '0 2px',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+    cursor: 'pointer',
+    transition: `color ${motion.color}`,
   });
 
-  // The HTML (LaTeXML) renderer is a self-contained view. All PDF hooks above
-  // run unconditionally but no-op here (their container isn't mounted).
+  // The HTML (LaTeXML) renderer is a self-contained view. Every hook above runs
+  // unconditionally but no-ops here — its container is not mounted.
   if (previewMode === 'html') {
     return <HtmlPreview onRenderHtml={onRenderHtml} />;
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-warm)', overflow: 'hidden' }}>
-      {/* Preview Toolbar */}
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--surface-sunken)',
+        overflow: 'hidden',
+      }}
+    >
       <div
         ref={toolbarRef}
         style={{
-          height: 36,
-          background: 'var(--bg-panel)',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          padding: layout.padding,
-          gap: layout.gap,
+          height: metrics.bar,
           flexShrink: 0,
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: layout.gap,
+          padding: layout.padding,
+          borderBottom: '1px solid var(--line)',
+          background: 'var(--surface-chrome)',
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
         }}
       >
-        {/* Everything left of the action button gives up space first, and is
-            clipped rather than allowed to push the button off the end. */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: layout.gap,
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: layout.gap, minWidth: 0, overflow: 'hidden' }}>
           <PreviewModeToggle compact={layout.compactControls} />
-          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>
-            View
-          </div>
+          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>View</div>
           <div onClick={() => setShowLog(true)} style={tabStyle(showLog)}>
             Log
             {(errors.length > 0 || warnings.length > 0) && (
-              <span
-                style={{
-                  marginLeft: 5,
-                  fontSize: 12,
-                  color: errors.length > 0 ? 'var(--red)' : 'var(--orange)',
-                }}
-              >
+              <span style={{ fontSize: fs.meta, color: errors.length > 0 ? 'var(--error)' : 'var(--warn)' }}>
                 {errors.length + warnings.length}
               </span>
             )}
           </div>
-          {!showLog && layout.showSelect && (
-            <select
-              value={zoomLevel}
-              onChange={(e) => setZoomLevel(e.target.value as ZoomOption)}
+          {layout.showStatusText && (
+            <span
               style={{
-                fontSize: 16,
-                padding: '2px 4px',
-                borderRadius: 4,
-                border: '1px solid var(--border)',
-                background: 'var(--bg-editor)',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                outline: 'none',
+                fontSize: fs.meta,
+                color: 'var(--text-faint)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 minWidth: 0,
-                maxWidth: layout.showButtonLabels ? undefined : 92,
               }}
             >
-              {ZOOM_LEVELS.map((z) => (
-                <option key={z.value} value={z.value}>
-                  {z.label}
-                </option>
-              ))}
-            </select>
+              {engineLabel}
+            </span>
           )}
         </div>
+
         <div
           style={{
             marginLeft: 'auto',
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 6,
             flexShrink: 0,
           }}
         >
-          {pdfData && (
-            <button
-              onClick={handleDownloadPdf}
-              title="Download PDF"
-              style={{
-                fontSize: 16,
-                color: 'var(--text-secondary)',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                padding: '4px 8px',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <DownloadIcon size={13} />
-              {layout.showButtonLabels && 'PDF'}
-            </button>
+          {!showLog && layout.showSelect && (
+            <>
+              <IconButton icon={<MinusIcon size={12} />} title="Zoom out" size={24} onClick={() => stepZoom(-1)} />
+              <input
+                value={zoomDraft ?? `${zoomPercent}%`}
+                onChange={(e) => setZoomDraft(e.target.value)}
+                onFocus={() => setZoomDraft(String(zoomPercent))}
+                onBlur={() => {
+                  const parsed = parseInt((zoomDraft ?? '').replace('%', ''), 10);
+                  if (!Number.isNaN(parsed)) setZoom(Math.min(800, Math.max(10, parsed)));
+                  setZoomDraft(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') {
+                    setZoomDraft(null);
+                    e.currentTarget.blur();
+                  }
+                }}
+                title="Zoom level"
+                style={{
+                  width: 56,
+                  textAlign: 'center',
+                  fontFamily: font.mono,
+                  fontSize: fs.meta,
+                  padding: '3px 4px',
+                  border: '1px solid var(--line)',
+                  borderRadius: radius.chip,
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                }}
+              />
+              <IconButton icon={<PlusIcon size={12} />} title="Zoom in" size={24} onClick={() => stepZoom(1)} />
+              <OutlinedButton
+                onClick={() => setZoom('fit')}
+                title="Fit page width"
+                style={{ borderColor: zoom === 'fit' ? 'var(--accent)' : undefined, color: zoom === 'fit' ? 'var(--accent)' : undefined }}
+              >
+                Fit
+              </OutlinedButton>
+              <BarDivider />
+            </>
           )}
-          <div
-            title={statusText}
-            style={{
-              fontSize: 16,
-              color: statusColor,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: statusColor,
-                flexShrink: 0,
-              }}
-            />
-            {layout.showStatusText && statusText}
-          </div>
-          <button
+          {pdfData && (
+            <IconButton icon={<DownloadIcon size={13} />} title="Download PDF" size={26} onClick={handleDownloadPdf} />
+          )}
+          <OutlinedButton
+            accent
             onClick={onCompile}
-            disabled={compilationStatus === 'compiling'}
-            title={compilationStatus === 'compiling' ? 'Compiling…' : 'Compile (Ctrl+S)'}
-            style={{
-              fontSize: 17,
-              color: 'white',
-              background: compilationStatus === 'compiling' ? 'var(--accent-light)' : 'var(--accent)',
-              border: '1px solid var(--accent)',
-              padding: layout.showButtonLabels ? '4px 12px' : '4px 8px',
-              borderRadius: 6,
-              cursor: compilationStatus === 'compiling' ? 'wait' : 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
+            disabled={compiling}
+            title={compiling ? 'Compiling…' : `Compile (${mod('S')})`}
+            icon={compiling ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
-            {compilationStatus === 'compiling' ? <SpinnerIcon size={12} /> : <PlayIcon size={10} />}
-            {layout.showButtonLabels && (compilationStatus === 'compiling' ? 'Compiling' : 'Compile')}
-          </button>
+            {layout.showButtonLabels && (compiling ? 'Compiling' : 'Compile')}
+          </OutlinedButton>
+          {/* Only bar on screen when the editor is hidden — see ViewModeControl. */}
+          {ownsViewModeControl(viewMode, 'preview') && (
+            <>
+              <BarDivider />
+              <ViewModeControl />
+            </>
+          )}
         </div>
       </div>
 
-      {/* Content */}
       {!showLog ? (
         <div
           key="pdf"
@@ -445,37 +433,21 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
           onDoubleClick={handleInverseSync}
           style={{
             flex: 1,
+            minHeight: 0,
             overflow: 'auto',
-            padding: '30px 20px',
-            background: 'var(--bg-sidebar)',
+            padding: `${metrics.padPage}px ${metrics.padPage}px 0`,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
           }}
         >
           {!pdfData && compilationStatus === 'idle' && (
-            <div
-              style={{
-                color: 'var(--text-dim)',
-                fontSize: 18,
-                marginTop: 60,
-                textAlign: 'center',
-              }}
-            >
-              Click <strong>Compile</strong> or press <code>Ctrl+S</code> to
-              generate PDF preview
+            <div style={{ color: 'var(--text-faint)', fontSize: fs.title, marginTop: 60, textAlign: 'center' }}>
+              Press <strong>Compile</strong> or <code style={{ fontFamily: font.mono }}>Ctrl+S</code> to build a preview
             </div>
           )}
-          {compilationStatus === 'compiling' && (
-            <div
-              style={{
-                color: 'var(--text-dim)',
-                fontSize: 18,
-                marginTop: 60,
-              }}
-            >
-              Compiling...
-            </div>
+          {!pdfData && compiling && (
+            <div style={{ color: 'var(--text-faint)', fontSize: fs.title, marginTop: 60 }}>Compiling…</div>
           )}
         </div>
       ) : (
@@ -483,63 +455,75 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
           key="log"
           style={{
             flex: 1,
+            minHeight: 0,
             overflow: 'auto',
-            padding: 16,
-            fontFamily: "'Source Code Pro', monospace",
-            fontSize: 17,
-            lineHeight: 1.6,
+            padding: metrics.padPane,
+            fontFamily: font.mono,
+            fontSize: fs.control,
+            lineHeight: 1.7,
             whiteSpace: 'pre-wrap',
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-editor)',
+            color: 'var(--text-muted)',
+            background: 'var(--surface-editor)',
           }}
         >
-          {errors.length > 0 && (
-            <div style={{ color: 'var(--red)', marginBottom: 12 }}>
-              {errors.map((e, i) => {
-                const lineNum = parseLineNumber(e);
-                return (
-                  <div
-                    key={i}
-                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
-                    style={{
-                      cursor: lineNum ? 'pointer' : 'default',
-                      textDecoration: lineNum ? 'underline' : 'none',
-                      textDecorationStyle: 'dotted',
-                      padding: '1px 0',
-                    }}
-                    title={lineNum ? `Go to line ${lineNum}` : undefined}
-                  >
-                    {e}
-                  </div>
-                );
-              })}
-            </div>
+          {[...errors.map((m) => ({ m, tone: 'error' as const })), ...warnings.map((m) => ({ m, tone: 'warn' as const }))].map(
+            ({ m, tone }, i) => {
+              const lineNum = parseLineNumber(m);
+              return (
+                <div
+                  key={`${tone}-${i}`}
+                  onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
+                  title={lineNum ? `Go to line ${lineNum}` : undefined}
+                  style={{
+                    color: tone === 'error' ? 'var(--error)' : 'var(--warn)',
+                    borderLeft: `2px solid ${tone === 'error' ? 'var(--error)' : 'var(--warn)'}`,
+                    paddingLeft: 8,
+                    marginBottom: 4,
+                    cursor: lineNum ? 'pointer' : 'default',
+                  }}
+                >
+                  {m}
+                </div>
+              );
+            }
           )}
-          {warnings.length > 0 && (
-            <div style={{ color: 'var(--orange)', marginBottom: 12 }}>
-              {warnings.map((w, i) => {
-                const lineNum = parseLineNumber(w);
-                return (
-                  <div
-                    key={i}
-                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
-                    style={{
-                      cursor: lineNum ? 'pointer' : 'default',
-                      textDecoration: lineNum ? 'underline' : 'none',
-                      textDecorationStyle: 'dotted',
-                      padding: '1px 0',
-                    }}
-                    title={lineNum ? `Go to line ${lineNum}` : undefined}
-                  >
-                    {w}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {(errors.length > 0 || warnings.length > 0) && <div style={{ height: 12 }} />}
           {log || 'No compilation log yet.'}
         </div>
       )}
+
+      <div
+        style={{
+          height: metrics.status,
+          flexShrink: 0,
+          borderTop: '1px solid var(--line)',
+          background: 'var(--surface-chrome)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          padding: `0 ${metrics.padPanel}px`,
+          fontSize: fs.meta,
+          color: 'var(--text-faint)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}
+      >
+        <span>Page {currentPage} / {pdfDoc?.numPages ?? 0}</span>
+        <span style={{ borderLeft: '1px solid var(--line)', paddingLeft: 14 }}>
+          SyncTeX {pdfData ? 'linked' : 'idle'}
+        </span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Dot
+            color={
+              compilationStatus === 'error' ? 'var(--error)' :
+              compiling ? 'var(--warn)' :
+              'var(--ok)'
+            }
+            filled
+          />
+          {compilationStatus === 'error' ? 'compile failed' : compiling ? 'compiling' : 'tectonic ready'}
+        </span>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { createProjectsRouter } from './routes/projects.js';
 import { createSyncTeXRouter } from './routes/synctex.js';
 import { createReferencesRouter } from './routes/references.js';
 import { createPyramidRouter } from './routes/pyramid.js';
+import { createScopeRouter } from './routes/scope.js';
 import { initProjectContext, getCurrent } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
@@ -56,6 +57,7 @@ app.use('/api/render-html', createRenderHtmlRouter(() => getCurrent().projectRoo
 app.use('/api/synctex', createSyncTeXRouter(() => getCurrent().projectRoot));
 app.use('/api/references', createReferencesRouter(() => getCurrent().projectRoot));
 app.use('/api/pyramid', createPyramidRouter(() => getCurrent(), PYRAMID_URL));
+app.use('/api/scope', createScopeRouter(() => getCurrent().projectRoot));
 
 app.get('/api/health', (_req, res) => {
   const { projectName, projectRoot } = getCurrent();

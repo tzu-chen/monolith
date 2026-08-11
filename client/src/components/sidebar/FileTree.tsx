@@ -1,14 +1,34 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import type { ReactNode } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
-import { ChevronDown, ChevronRight, DiamondIcon, ArrowUp, ArrowRight, PlusIcon, CloseIcon } from '../shared/Icons';
+import { ChevronDown, ChevronRight, ArrowUp, ArrowRight } from '../shared/Icons';
+import { rowStyle, hoverRow, leaveRow } from '../shared/ui';
+import { fs, font, metrics, radius } from '../../theme/tokens';
+
+/**
+ * Project file tree.
+ *
+ * Folders expand in place; the arrow on a hovered folder scopes the tree to it
+ * instead, which is how deep projects stay legible in a 268px panel. The active
+ * file carries the 2px accent left edge and a 5px dot when it has unsaved
+ * changes.
+ *
+ * The panel chrome (header, find row) lives in `FilesPanel`; this renders the
+ * tree body and owns the file operations reachable from it.
+ */
 
 interface TreeNode {
   name: string;
   path: string;
   isDir: boolean;
   children: TreeNode[];
+}
+
+export interface FileTreeHandle {
+  startNewFile: () => void;
+  startNewFolder: () => void;
+  upload: () => void;
 }
 
 function buildTree(files: string[]): TreeNode[] {
@@ -22,23 +42,13 @@ function buildTree(files: string[]): TreeNode[] {
     const name = parts[parts.length - 1];
     const parentPath = parts.slice(0, -1).join('/');
 
-    const node: TreeNode = {
-      name,
-      path: cleanPath,
-      isDir,
-      children: [],
-    };
-
-    if (isDir) {
-      dirMap.set(cleanPath, node);
-    }
+    const node: TreeNode = { name, path: cleanPath, isDir, children: [] };
+    if (isDir) dirMap.set(cleanPath, node);
 
     if (parentPath && dirMap.has(parentPath)) {
       dirMap.get(parentPath)!.children.push(node);
-    } else if (!parentPath) {
-      root.push(node);
     } else {
-      // Parent directory wasn't listed — add to root
+      // No parent listed — surface it at the root rather than dropping it.
       root.push(node);
     }
   }
@@ -57,32 +67,7 @@ function findNode(tree: TreeNode[], path: string): TreeNode | null {
   return null;
 }
 
-function FileIcon({ isDir, isOpen }: { isDir: boolean; isOpen?: boolean }) {
-  if (isDir) {
-    return (
-      <span style={{ width: 16, textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-      </span>
-    );
-  }
-  return (
-    <span
-      style={{
-        width: 16,
-        textAlign: 'center',
-        flexShrink: 0,
-        color: 'var(--text-dim)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <DiamondIcon size={10} />
-    </span>
-  );
-}
-
-// ── Context Menu ──
+// ── Context menu ──
 
 interface ContextMenuState {
   x: number;
@@ -113,16 +98,16 @@ function ContextMenu({
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (submenu) setSubmenu(null);
-        else onClose();
-      }
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      if (submenu) setSubmenu(null);
+      else onClose();
     };
     document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener('keydown', handleKey, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('keydown', handleKey, true);
     };
   }, [onClose, submenu]);
 
@@ -130,108 +115,64 @@ function ContextMenu({
     position: 'fixed',
     left: menu.x,
     top: menu.y,
-    background: 'var(--bg-panel)',
-    border: '1px solid var(--border-strong)',
-    borderRadius: 4,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    background: 'var(--surface-paper)',
+    border: '1px solid var(--line-strong)',
+    borderRadius: 7,
+    boxShadow: 'var(--shadow-popover)',
     zIndex: 1000,
-    minWidth: 160,
+    minWidth: 190,
     padding: '4px 0',
+    overflow: 'hidden',
   };
 
-  const itemStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: '5px 14px',
-    fontSize: 17,
-    cursor: 'pointer',
-    color: 'var(--text-primary)',
-    ...extra,
-  });
+  const item = (label: string, onClick: () => void, tone?: 'danger' | 'muted') => (
+    <div
+      key={label}
+      onClick={onClick}
+      style={{
+        padding: '6px 14px',
+        fontSize: fs.control,
+        cursor: 'pointer',
+        color: tone === 'danger' ? 'var(--error)' : tone === 'muted' ? 'var(--text-faint)' : 'var(--text)',
+        whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-wash)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      {label}
+    </div>
+  );
 
   if (submenu) {
-    const otherProjects = projects.filter((p) => p !== currentProject);
+    const others = projects.filter((p) => p !== currentProject);
     return (
       <div ref={ref} style={containerStyle}>
-        <div
-          onClick={() => setSubmenu(null)}
-          style={itemStyle({
-            color: 'var(--text-dim)',
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 2,
-          })}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }}
-        >
-          ← {submenu === 'copy' ? 'Copy to project' : 'Move to project'}
+        <div style={{ borderBottom: '1px solid var(--line)', marginBottom: 2 }}>
+          {item(`← ${submenu === 'copy' ? 'Copy to project' : 'Move to project'}`, () => setSubmenu(null), 'muted')}
         </div>
-        {otherProjects.length === 0 ? (
-          <div style={itemStyle({ color: 'var(--text-dim)', cursor: 'default' })}>
-            No other projects
-          </div>
-        ) : (
-          otherProjects.map((p) => (
-            <div
-              key={p}
-              onClick={() => onTransfer(p, submenu)}
-              style={itemStyle()}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'transparent';
-              }}
-            >
-              {p}
-            </div>
-          ))
-        )}
+        {others.length === 0
+          ? item('No other projects', () => {}, 'muted')
+          : others.map((p) => item(p, () => onTransfer(p, submenu)))}
       </div>
     );
   }
 
-  type Item = { label: string; action?: string; submenu?: 'copy' | 'move'; danger?: boolean };
-  const items: Item[] = [];
+  const items: ReactNode[] = [];
   if (!menu.node || menu.node.isDir) {
-    items.push({ label: 'New File', action: 'newFile' });
-    items.push({ label: 'New Folder', action: 'newFolder' });
+    items.push(item('New file', () => onAction('newFile')));
+    items.push(item('New folder', () => onAction('newFolder')));
   }
   if (menu.node) {
-    items.push({ label: 'Rename', action: 'rename' });
-    items.push({ label: 'Copy to project…', submenu: 'copy' });
-    items.push({ label: 'Move to project…', submenu: 'move' });
-    items.push({ label: 'Delete', action: 'delete', danger: true });
+    items.push(item('Rename', () => onAction('rename')));
+    items.push(item('Copy to project…', () => setSubmenu('copy')));
+    items.push(item('Move to project…', () => setSubmenu('move')));
+    items.push(item('Delete', () => onAction('delete'), 'danger'));
   }
 
-  return (
-    <div ref={ref} style={containerStyle}>
-      {items.map((item) => (
-        <div
-          key={item.action ?? `submenu-${item.submenu}`}
-          onClick={() => {
-            if (item.submenu) setSubmenu(item.submenu);
-            else if (item.action) onAction(item.action);
-          }}
-          style={itemStyle({
-            color: item.danger ? 'var(--error, #e06c75)' : 'var(--text-primary)',
-          })}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }}
-        >
-          {item.label}
-        </div>
-      ))}
-    </div>
-  );
+  return <div ref={ref} style={containerStyle}>{items}</div>;
 }
 
-// ── Inline inputs ──
+// ── Inline input ──
 
 function InlineInput({
   icon,
@@ -239,14 +180,14 @@ function InlineInput({
   placeholder,
   onSubmit,
   onCancel,
-  style: extraStyle,
+  indent = 0,
 }: {
   icon: ReactNode;
   initialValue?: string;
   placeholder?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
-  style?: React.CSSProperties;
+  indent?: number;
 }) {
   const [value, setValue] = useState(initialValue ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -261,24 +202,13 @@ function InlineInput({
     if (submitted.current) return;
     submitted.current = true;
     const trimmed = value.trim();
-    if (trimmed && trimmed !== initialValue) {
-      onSubmit(trimmed);
-    } else {
-      onCancel();
-    }
+    if (trimmed && trimmed !== initialValue) onSubmit(trimmed);
+    else onCancel();
   };
 
   return (
-    <div style={{ padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4, ...extraStyle }}>
-      <span
-        style={{
-          fontSize: 16,
-          width: 16,
-          textAlign: 'center',
-          flexShrink: 0,
-          color: 'var(--text-dim)',
-        }}
-      >
+    <div style={{ padding: `2px ${metrics.padPanel}px 2px ${metrics.padPanel + indent}px`, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-faint)', flexShrink: 0 }}>
         {icon}
       </span>
       <input
@@ -293,14 +223,15 @@ function InlineInput({
         placeholder={placeholder}
         style={{
           flex: 1,
-          fontSize: 17,
-          padding: '2px 4px',
-          border: '1px solid var(--border-strong)',
-          borderRadius: 3,
-          background: 'var(--bg-editor)',
-          color: 'var(--text-primary)',
+          minWidth: 0,
+          fontSize: fs.toolbar,
+          fontFamily: font.mono,
+          padding: '2px 6px',
+          border: '1px solid var(--accent)',
+          borderRadius: radius.chip,
+          background: 'var(--surface-editor)',
+          color: 'var(--text)',
           outline: 'none',
-          fontFamily: 'inherit',
         }}
       />
     </div>
@@ -310,8 +241,7 @@ function InlineInput({
 // ── Helpers ──
 
 async function refreshFileTree() {
-  const files = await api.listFiles();
-  useEditorStore.getState().setFileTree(files);
+  useEditorStore.getState().setFileTree(await api.listFiles());
 }
 
 function closeTabsUnderPath(path: string) {
@@ -323,7 +253,7 @@ function closeTabsUnderPath(path: string) {
   }
 }
 
-// ── TreeItem ──
+// ── Tree item ──
 
 function TreeItem({
   node,
@@ -345,9 +275,10 @@ function TreeItem({
   const [expanded, setExpanded] = useState(true);
   const [hovered, setHovered] = useState(false);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
+  const dirtyPaths = useEditorStore((s) => s.openTabs);
   const openFile = useEditorStore((s) => s.openFile);
   const isActive = node.path === activeTabPath;
-  const isRenaming = renamingPath === node.path;
+  const isDirty = dirtyPaths.some((t) => t.path === node.path && t.dirty);
 
   const handleClick = useCallback(async () => {
     if (node.isDir) {
@@ -355,27 +286,25 @@ function TreeItem({
       return;
     }
     const state = useEditorStore.getState();
-    const existing = state.openTabs.find((t) => t.path === node.path);
-    if (existing) {
+    if (state.openTabs.some((t) => t.path === node.path)) {
       state.setActiveTab(node.path);
       return;
     }
     try {
-      const content = await api.readFile(node.path);
-      openFile(node.path, content);
+      openFile(node.path, await api.readFile(node.path));
     } catch (err) {
       console.error('Failed to open file:', err);
     }
   }, [node.path, node.isDir, openFile]);
 
-  if (isRenaming) {
+  if (renamingPath === node.path) {
     return (
       <InlineInput
-        icon={node.isDir ? <ChevronRight size={11} /> : <DiamondIcon size={10} />}
+        icon={node.isDir ? <ChevronRight size={11} /> : null}
         initialValue={node.name}
         onSubmit={(newName) => onRenameSubmit(node.path, newName)}
         onCancel={onRenameCancel}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        indent={depth * 16}
       />
     );
   }
@@ -385,56 +314,42 @@ function TreeItem({
       <div
         onClick={handleClick}
         onContextMenu={(e) => onContextMenu(e, node)}
-        onMouseEnter={(e) => {
-          setHovered(true);
-          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-        }}
-        onMouseLeave={(e) => {
-          setHovered(false);
-          if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '3px 8px',
-          paddingLeft: 8 + depth * 14,
-          fontSize: 17,
-          cursor: 'pointer',
-          color: isActive ? 'var(--accent)' : 'var(--text-primary)',
-          background: isActive ? 'var(--accent-bg)' : 'transparent',
-          fontWeight: isActive ? 500 : 400,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          position: 'relative',
-        }}
+        onMouseEnter={(e) => { setHovered(true); hoverRow(e, isActive); }}
+        onMouseLeave={(e) => { setHovered(false); leaveRow(e, isActive); }}
         title={node.path}
+        style={rowStyle(isActive, {
+          gap: 6,
+          padding: `4px ${metrics.padPanel}px 4px ${metrics.padPanel - 2 + depth * 16}px`,
+          fontFamily: node.isDir ? font.ui : font.mono,
+          fontSize: node.isDir ? fs.toolbar : fs.row,
+          overflow: 'hidden',
+        })}
       >
-        <FileIcon isDir={node.isDir} isOpen={expanded} />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{node.name}</span>
+        <span style={{ width: 12, display: 'flex', justifyContent: 'center', flexShrink: 0, color: 'var(--text-faint)' }}>
+          {node.isDir && (expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />)}
+        </span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+          {node.name}
+          {node.isDir && '/'}
+        </span>
+        {isDirty && (
+          <span
+            title="Unsaved changes"
+            style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }}
+          />
+        )}
         {node.isDir && hovered && (
           <span
             onClick={(e) => {
               e.stopPropagation();
               onNavigateInto(node.path);
             }}
-            title="Open folder"
-            style={{
-              fontSize: 16,
-              color: 'var(--text-dim)',
-              flexShrink: 0,
-              padding: '0 2px',
-              lineHeight: 1,
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)';
-            }}
+            title={`Scope tree to ${node.path}`}
+            style={{ marginLeft: 'auto', display: 'flex', color: 'var(--text-faint)', flexShrink: 0 }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-faint)'; }}
           >
-            <ArrowRight size={11} />
+            <ArrowRight size={12} />
           </span>
         )}
       </div>
@@ -454,11 +369,10 @@ function TreeItem({
   );
 }
 
-// ── FileTree (main component) ──
+// ── FileTree ──
 
-export default function FileTree() {
+const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
   const fileTree = useEditorStore((s) => s.fileTree);
-  const projectRoot = useEditorStore((s) => s.projectRoot);
   const projects = useEditorStore((s) => s.projects);
   const currentProject = useEditorStore((s) => s.currentProject);
   const [currentDir, setCurrentDir] = useState('');
@@ -468,27 +382,20 @@ export default function FileTree() {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const tree = buildTree(fileTree);
+  useImperativeHandle(ref, () => ({
+    startNewFile: () => setCreatingFile(true),
+    startNewFolder: () => setCreatingFolder(true),
+    upload: () => fileInputRef.current?.click(),
+  }));
 
-  // Get visible nodes for the current directory
-  let visibleNodes: TreeNode[];
-  if (!currentDir) {
-    visibleNodes = tree;
-  } else {
-    const dirNode = findNode(tree, currentDir);
-    visibleNodes = dirNode ? dirNode.children : tree;
-  }
+  const tree = buildTree(fileTree);
+  const visibleNodes = currentDir ? findNode(tree, currentDir)?.children ?? tree : tree;
 
   const handleNavigateUp = useCallback(() => {
     setCurrentDir((dir) => {
-      if (!dir) return '';
       const lastSlash = dir.lastIndexOf('/');
       return lastSlash === -1 ? '' : dir.substring(0, lastSlash);
     });
-  }, []);
-
-  const handleNavigateInto = useCallback((path: string) => {
-    setCurrentDir(path);
   }, []);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode) => {
@@ -498,11 +405,9 @@ export default function FileTree() {
   }, []);
 
   const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
-    // Only if the click target is the container itself (not a tree item)
-    if (e.target === e.currentTarget) {
-      e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, node: null });
-    }
+    if (e.target !== e.currentTarget) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, node: null });
   }, []);
 
   const handleDelete = useCallback(async (node: TreeNode) => {
@@ -524,17 +429,15 @@ export default function FileTree() {
     const newPath = parentDir ? `${parentDir}/${newName}` : newName;
     try {
       await api.renameFile(oldPath, newPath);
-      // Update open tabs that reference the old path
       const state = useEditorStore.getState();
       for (const tab of state.openTabs) {
         if (tab.path === oldPath || tab.path.startsWith(oldPath + '/')) {
           const updatedPath = newPath + tab.path.substring(oldPath.length);
           state.closeTab(tab.path);
           try {
-            const content = await api.readFile(updatedPath);
-            state.openFile(updatedPath, content);
+            state.openFile(updatedPath, await api.readFile(updatedPath));
           } catch {
-            // File might not be readable after rename (e.g., binary)
+            // Not readable after rename (e.g. binary) — leave it closed.
           }
         }
       }
@@ -550,8 +453,7 @@ export default function FileTree() {
     try {
       await api.createFile(fullPath);
       await refreshFileTree();
-      const content = await api.readFile(fullPath);
-      useEditorStore.getState().openFile(fullPath, content);
+      useEditorStore.getState().openFile(fullPath, await api.readFile(fullPath));
     } catch (err) {
       console.error('Failed to create file:', err);
     }
@@ -576,18 +478,15 @@ export default function FileTree() {
       try {
         const result = await api.uploadFile(file, currentDir);
         await refreshFileTree();
-        // Try to open text-based files in the editor
         try {
-          const content = await api.readFile(result.path);
-          useEditorStore.getState().openFile(result.path, content);
+          useEditorStore.getState().openFile(result.path, await api.readFile(result.path));
         } catch {
-          // Binary file — just refresh the tree, don't open
+          // Binary upload — it lands in the tree without opening.
         }
       } catch (err) {
         console.error('Failed to upload file:', err);
       }
     }
-    // Reset the input so the same file can be uploaded again
     e.target.value = '';
   }, [currentDir]);
 
@@ -601,10 +500,7 @@ export default function FileTree() {
       } catch (err: any) {
         const msg = String(err?.message || err);
         if (msg.includes('Destination already exists') || msg.includes('409')) {
-          const ok = window.confirm(
-            `"${node.path}" already exists in "${toProject}". Overwrite?`
-          );
-          if (!ok) return;
+          if (!window.confirm(`"${node.path}" already exists in "${toProject}". Overwrite?`)) return;
           await api.transferFile(node.path, toProject, { mode, overwrite: true });
         } else {
           throw err;
@@ -620,7 +516,6 @@ export default function FileTree() {
     }
   }, [contextMenu]);
 
-  // Context menu action: may target a directory (for "new file"/"new folder" inside it)
   const handleContextAction = useCallback((action: string) => {
     const node = contextMenu?.node ?? null;
     setContextMenu(null);
@@ -629,209 +524,93 @@ export default function FileTree() {
       handleDelete(node);
     } else if (action === 'rename' && node) {
       setRenamingPath(node.path);
-    } else if (action === 'newFile') {
-      // If right-clicked a directory, create inside it; otherwise use currentDir
-      if (node?.isDir) {
-        setCurrentDir(node.path);
-      }
-      setCreatingFile(true);
-    } else if (action === 'newFolder') {
-      if (node?.isDir) {
-        setCurrentDir(node.path);
-      }
-      setCreatingFolder(true);
+    } else if (action === 'newFile' || action === 'newFolder') {
+      if (node?.isDir) setCurrentDir(node.path);
+      if (action === 'newFile') setCreatingFile(true);
+      else setCreatingFolder(true);
     }
   }, [contextMenu, handleDelete]);
 
-  // Build breadcrumb segments from currentDir
   const breadcrumbs = currentDir ? currentDir.split('/') : [];
 
   return (
-    <div
-      style={{ flex: 1, overflow: 'auto' }}
-      onContextMenu={handleBackgroundContextMenu}
-    >
-      {/* Header */}
-      <div
-        style={{
-          padding: '8px 12px 4px',
-          fontSize: 15,
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-          color: 'var(--text-dim)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span>Files</span>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          style={{ display: 'none' }}
-          onChange={handleFileUpload}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          title="Upload file"
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 17,
-            lineHeight: 1,
-            color: 'var(--text-dim)',
-            padding: '0 2px',
-            borderRadius: 3,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)';
-          }}
-        >
-          <PlusIcon size={12} />
-        </button>
-      </div>
+    <div style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '6px 0' }} onContextMenu={handleBackgroundContextMenu}>
+      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
 
-      {/* Project path */}
-      {projectRoot && (
-        <div
-          style={{
-            padding: '0 12px 4px',
-            fontSize: 15,
-            color: 'var(--text-dim)',
-            fontFamily: "'Source Code Pro', monospace",
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={projectRoot}
-        >
-          {projectRoot}
-        </div>
-      )}
-
-      {/* Current directory breadcrumb bar */}
       {currentDir && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            padding: '3px 8px',
-            fontSize: 16,
-            color: 'var(--text-secondary)',
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 2,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
-            onClick={() => setCurrentDir('')}
+        <>
+          <div
             style={{
-              cursor: 'pointer',
-              color: 'var(--accent-light)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: `4px ${metrics.padPanel}px`,
+              fontSize: fs.meta,
+              fontFamily: font.mono,
+              color: 'var(--text-faint)',
+              borderBottom: '1px solid var(--line-faint)',
+              flexWrap: 'wrap',
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-            }}
-            title="Go to root"
           >
-            ~
-          </span>
-          {breadcrumbs.map((segment, i) => {
-            const segmentPath = breadcrumbs.slice(0, i + 1).join('/');
-            const isLast = i === breadcrumbs.length - 1;
-            return (
-              <span key={segmentPath} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <span style={{ color: 'var(--text-dim)' }}>/</span>
-                {isLast ? (
-                  <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{segment}</span>
-                ) : (
+            <span onClick={() => setCurrentDir('')} style={{ cursor: 'pointer', color: 'var(--accent)' }} title="Go to project root">
+              ~
+            </span>
+            {breadcrumbs.map((segment, i) => {
+              const segmentPath = breadcrumbs.slice(0, i + 1).join('/');
+              const isLast = i === breadcrumbs.length - 1;
+              return (
+                <span key={segmentPath} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <span>/</span>
                   <span
-                    onClick={() => setCurrentDir(segmentPath)}
+                    onClick={isLast ? undefined : () => setCurrentDir(segmentPath)}
                     style={{
-                      cursor: 'pointer',
-                      color: 'var(--accent-light)',
+                      cursor: isLast ? 'default' : 'pointer',
+                      color: isLast ? 'var(--text)' : 'var(--accent)',
                     }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-                    }}
-                    title={`Go to ${segmentPath}`}
                   >
                     {segment}
                   </span>
-                )}
-              </span>
-            );
-          })}
-        </div>
+                </span>
+              );
+            })}
+          </div>
+          <div
+            onClick={handleNavigateUp}
+            title="Go up one level"
+            style={rowStyle(false, {
+              gap: 6,
+              padding: `4px ${metrics.padPanel}px`,
+              fontSize: fs.toolbar,
+            })}
+            onMouseEnter={(e) => hoverRow(e, false)}
+            onMouseLeave={(e) => leaveRow(e, false)}
+          >
+            <span style={{ width: 12, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <ArrowUp size={11} />
+            </span>
+            ..
+          </div>
+        </>
       )}
 
-      {/* Go up row */}
-      {currentDir && (
-        <div
-          onClick={handleNavigateUp}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '3px 8px',
-            fontSize: 17,
-            cursor: 'pointer',
-            color: 'var(--text-secondary)',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }}
-          title="Go up one level"
-        >
-          <span style={{ width: 16, textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ArrowUp size={12} /></span>
-          <span>..</span>
-        </div>
-      )}
-
-      {/* New file input */}
       {creatingFile && (
-        <InlineInput
-          icon={<DiamondIcon size={10} />}
-          placeholder="filename.tex"
-          onSubmit={handleNewFileSubmit}
-          onCancel={() => setCreatingFile(false)}
-        />
+        <InlineInput placeholder="filename.tex" icon={null} onSubmit={handleNewFileSubmit} onCancel={() => setCreatingFile(false)} />
       )}
-
-      {/* New folder input */}
       {creatingFolder && (
         <InlineInput
-          icon={<ChevronRight size={11} />}
           placeholder="folder name"
+          icon={<ChevronRight size={11} />}
           onSubmit={handleNewFolderSubmit}
           onCancel={() => setCreatingFolder(false)}
         />
       )}
 
-      {/* File tree items */}
       {visibleNodes.map((node) => (
         <TreeItem
           key={node.path}
           node={node}
           depth={0}
-          onNavigateInto={handleNavigateInto}
+          onNavigateInto={setCurrentDir}
           onContextMenu={handleContextMenu}
           renamingPath={renamingPath}
           onRenameSubmit={handleRenameSubmit}
@@ -839,7 +618,12 @@ export default function FileTree() {
         />
       ))}
 
-      {/* Context menu */}
+      {visibleNodes.length === 0 && (
+        <div style={{ padding: '20px 14px', textAlign: 'center', color: 'var(--text-faint)', fontSize: fs.control }}>
+          {currentProject ? 'No files here yet' : 'No project loaded'}
+        </div>
+      )}
+
       {contextMenu && (
         <ContextMenu
           menu={contextMenu}
@@ -852,4 +636,6 @@ export default function FileTree() {
       )}
     </div>
   );
-}
+});
+
+export default FileTree;

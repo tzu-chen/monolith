@@ -1,31 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import type { HtmlSplitLevel } from '../../stores/editorStore';
-import { PlayIcon, SpinnerIcon, DownloadIcon } from '../shared/Icons';
+import { PlayIcon, SpinnerIcon, DownloadIcon, ExternalIcon } from '../shared/Icons';
+import { OutlinedButton, IconButton, Dot, BarDivider } from '../shared/ui';
+import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl';
 import { downloadBlob } from '../../lib/download';
 import * as api from '../../lib/api';
+import { THEME_VAR_NAMES } from '../../colorSchemes';
 import PreviewModeToggle from './PreviewModeToggle';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { useFreshness } from '../../hooks/useFreshness';
 import { toolbarLayout } from './toolbarLayout';
+import { parseLineNumber } from '../../lib/diagnostics';
+import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 
-/** Try to extract a line number from a LaTeXML diagnostic string. */
-function parseLineNumber(msg: string): number | null {
-  const patterns = [/\bline\s+(\d+)\b/i, /:(\d+):/, /\bl\.(\d+)\b/];
-  for (const pat of patterns) {
-    const m = msg.match(pat);
-    if (m) return parseInt(m[1], 10);
-  }
-  return null;
-}
-
-// CSS custom properties forwarded into the iframe so the HTML preview tracks the
-// app's active colour scheme (see colorSchemes.ts / global.css).
-const THEME_VARS = [
-  '--paper', '--bg-warm', '--bg-panel', '--bg-editor', '--bg-sidebar',
-  '--bg-hover', '--bg-active', '--border', '--border-strong', '--text-primary',
-  '--text-secondary', '--text-dim', '--accent', '--accent-light', '--accent-bg',
-  '--green', '--blue', '--red', '--purple', '--orange', '--teal', '--paper-shadow',
-];
+/**
+ * LaTeXML HTML preview.
+ *
+ * Unlike the PDF page, this one follows the theme: it is a themed document
+ * view, not a sheet of paper. The rendered document runs in a sandboxed iframe
+ * and receives the active colour scheme by postMessage.
+ */
 
 const SPLIT_OPTIONS: { value: HtmlSplitLevel; label: string }[] = [
   { value: 'none', label: 'Single page' },
@@ -42,6 +37,7 @@ interface HtmlPreviewProps {
 export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const currentProject = useEditorStore((s) => s.currentProject);
   const previewMode = useEditorStore((s) => s.previewMode);
+  const viewMode = useEditorStore((s) => s.viewMode);
   const htmlRenderStatus = useEditorStore((s) => s.htmlRenderStatus);
   const htmlSplitAt = useEditorStore((s) => s.htmlSplitAt);
   const setHtmlSplitAt = useEditorStore((s) => s.setHtmlSplitAt);
@@ -49,9 +45,11 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const htmlLog = useEditorStore((s) => s.htmlLog);
   const htmlErrors = useEditorStore((s) => s.htmlErrors);
   const htmlWarnings = useEditorStore((s) => s.htmlWarnings);
+  const htmlRenderedAt = useEditorStore((s) => s.htmlRenderedAt);
   const theme = useEditorStore((s) => s.theme);
   const colorScheme = useEditorStore((s) => s.colorScheme);
   const autoRecompile = useEditorStore((s) => s.autoRecompile);
+  const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -59,6 +57,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const [downloading, setDownloading] = useState(false);
   const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
   const layout = toolbarLayout(toolbarWidth);
+  const freshness = useFreshness(htmlRenderedAt);
 
   const handleDownload = useCallback(async () => {
     if (downloading) return;
@@ -85,11 +84,10 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
     if (!iframe || !iframe.contentWindow) return;
     const cs = getComputedStyle(document.documentElement);
     const vars: Record<string, string> = {};
-    for (const v of THEME_VARS) vars[v] = cs.getPropertyValue(v).trim();
+    for (const v of THEME_VAR_NAMES) vars[v] = cs.getPropertyValue(v).trim();
     iframe.contentWindow.postMessage({ type: 'monolith-theme', theme, vars }, '*');
   }, [theme]);
 
-  // Re-forward whenever the scheme changes.
   useEffect(() => {
     postTheme();
   }, [theme, colorScheme, htmlNonce, postTheme]);
@@ -97,7 +95,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   // Respond to the iframe announcing it's ready (covers load-order races).
   useEffect(() => {
     const handler = (e: MessageEvent) => {
-      // Only honor messages from our own iframe window. It's sandboxed without
+      // Only honour messages from our own iframe window. It's sandboxed without
       // allow-same-origin, so its origin is the opaque "null"; also accept the
       // app's own origin in case sandboxing is ever relaxed.
       if (e.source !== iframeRef.current?.contentWindow) return;
@@ -111,195 +109,165 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   // Kick an initial render the first time the user opens the HTML preview for a
   // project that hasn't been rendered yet. Skipped when auto-recompile is off —
   // there the user renders explicitly with the Render button.
-  const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const triggeredRef = useRef(false);
   const lastProjectRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!autoRecompile) return;
-    if (previewMode !== 'html') return;
-    // Re-arm the one-shot auto-render whenever the project changes.
+    if (!autoRecompile || previewMode !== 'html') return;
     if (lastProjectRef.current !== currentProject) {
       lastProjectRef.current = currentProject;
       triggeredRef.current = false;
     }
     if (triggeredRef.current) return;
     if (htmlNonce > 0 || htmlRenderStatus === 'rendering') return;
-    if (activeTabPath && activeTabPath.endsWith('.tex')) {
+    if (activeTabPath?.endsWith('.tex')) {
       triggeredRef.current = true;
       onRenderHtml();
     }
   }, [autoRecompile, previewMode, currentProject, activeTabPath, htmlNonce, htmlRenderStatus, onRenderHtml]);
 
-  const statusText = (() => {
-    switch (htmlRenderStatus) {
-      case 'rendering': return 'rendering...';
-      case 'success': return 'rendered';
-      case 'error': return 'render failed';
-      case 'unavailable': return 'LaTeXML not installed';
-      default: return 'ready';
-    }
+  const rendering = htmlRenderStatus === 'rendering';
+  const failed = htmlRenderStatus === 'error' || htmlRenderStatus === 'unavailable';
+
+  const engineLabel = (() => {
+    if (rendering) return 'latexml · rendering…';
+    if (htmlRenderStatus === 'unavailable') return 'latexml not installed';
+    if (htmlRenderStatus === 'error') return 'latexml · render failed';
+    if (htmlNonce === 0) return 'latexml · not run';
+    return `latexml · MathML · ${freshness}`;
   })();
 
-  const statusColor =
-    htmlRenderStatus === 'error' || htmlRenderStatus === 'unavailable'
-      ? 'var(--red)'
-      : 'var(--green)';
-
-  const rendering = htmlRenderStatus === 'rendering';
-
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    fontSize: layout.compactControls ? 15 : 17,
-    color: active ? 'var(--accent)' : 'var(--text-dim)',
-    padding: layout.compactControls ? '4px 6px' : '4px 10px',
-    borderRadius: 4,
-    cursor: 'pointer',
-    background: active ? 'var(--accent-bg)' : 'transparent',
+    fontSize: fs.toolbar,
+    color: active ? 'var(--text)' : 'var(--text-faint)',
     fontWeight: active ? 500 : 400,
-    whiteSpace: 'nowrap',
+    padding: '0 2px',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+    cursor: 'pointer',
+    transition: `color ${motion.color}`,
   });
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-warm)', overflow: 'hidden' }}>
-      {/* Toolbar */}
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--surface-sunken)',
+        overflow: 'hidden',
+      }}
+    >
       <div
         ref={toolbarRef}
         style={{
-          height: 36,
-          background: 'var(--bg-panel)',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          padding: layout.padding,
-          gap: layout.gap,
+          height: metrics.bar,
           flexShrink: 0,
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: layout.gap,
+          padding: layout.padding,
+          borderBottom: '1px solid var(--line)',
+          background: 'var(--surface-chrome)',
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
         }}
       >
-        {/* Everything left of the action button gives up space first, and is
-            clipped rather than allowed to push the button off the end. */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: layout.gap,
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: layout.gap, minWidth: 0, overflow: 'hidden' }}>
           <PreviewModeToggle compact={layout.compactControls} />
-          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>
-            View
-          </div>
+          <div onClick={() => setShowLog(false)} style={tabStyle(!showLog)}>View</div>
           <div onClick={() => setShowLog(true)} style={tabStyle(showLog)}>
             Log
             {(htmlErrors.length > 0 || htmlWarnings.length > 0) && (
-              <span
-                style={{
-                  marginLeft: 5,
-                  fontSize: 12,
-                  color: htmlErrors.length > 0 ? 'var(--red)' : 'var(--orange)',
-                }}
-              >
+              <span style={{ fontSize: fs.meta, color: htmlErrors.length > 0 ? 'var(--error)' : 'var(--warn)' }}>
                 {htmlErrors.length + htmlWarnings.length}
               </span>
             )}
           </div>
-          {!showLog && layout.showSelect && (
-            <select
-              value={htmlSplitAt}
-              onChange={(e) => {
-                setHtmlSplitAt(e.target.value as HtmlSplitLevel);
-                onRenderHtml();
-              }}
-              title="How to paginate the HTML output"
+          {layout.showStatusText && (
+            <span
               style={{
-                fontSize: 16,
-                padding: '2px 4px',
-                borderRadius: 4,
-                border: '1px solid var(--border)',
-                background: 'var(--bg-editor)',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                outline: 'none',
+                fontSize: fs.meta,
+                color: 'var(--text-faint)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 minWidth: 0,
-                maxWidth: layout.showButtonLabels ? undefined : 92,
               }}
             >
-              {SPLIT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              {engineLabel}
+            </span>
           )}
         </div>
-        <div
-          style={{
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            flexShrink: 0,
-          }}
-        >
-          {htmlNonce > 0 && (
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              title="Download HTML (.zip with assets)"
-              style={{
-                fontSize: 16,
-                color: 'var(--text-secondary)',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                padding: '4px 8px',
-                borderRadius: 6,
-                cursor: downloading ? 'wait' : 'pointer',
-                fontFamily: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              {downloading ? <SpinnerIcon size={13} /> : <DownloadIcon size={13} />}
-              {layout.showButtonLabels && 'HTML'}
-            </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {!showLog && layout.showSelect && (
+            <>
+              <select
+                value={htmlSplitAt}
+                onChange={(e) => {
+                  setHtmlSplitAt(e.target.value as HtmlSplitLevel);
+                  onRenderHtml();
+                }}
+                title="How to paginate the HTML output"
+                style={{
+                  fontSize: fs.meta,
+                  padding: '3px 6px',
+                  borderRadius: radius.chip,
+                  border: '1px solid var(--line)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  maxWidth: layout.showButtonLabels ? undefined : 110,
+                }}
+              >
+                {SPLIT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <BarDivider />
+            </>
           )}
-          <div
-            title={statusText}
-            style={{ fontSize: 16, color: statusColor, display: 'flex', alignItems: 'center', gap: 5 }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
-            {layout.showStatusText && statusText}
-          </div>
-          <button
+          {iframeSrc && (
+            <IconButton
+              icon={<ExternalIcon size={13} />}
+              title="Open in a new tab"
+              size={26}
+              onClick={() => window.open(iframeSrc, '_blank', 'noopener,noreferrer')}
+            />
+          )}
+          {htmlNonce > 0 && (
+            <IconButton
+              icon={downloading ? <SpinnerIcon size={13} /> : <DownloadIcon size={13} />}
+              title="Download HTML (.zip with assets)"
+              size={26}
+              onClick={handleDownload}
+            />
+          )}
+          <OutlinedButton
+            accent
             onClick={onRenderHtml}
             disabled={rendering}
             title={rendering ? 'Rendering HTML…' : 'Render HTML'}
-            style={{
-              fontSize: 17,
-              color: 'white',
-              background: rendering ? 'var(--accent-light)' : 'var(--accent)',
-              border: '1px solid var(--accent)',
-              padding: layout.showButtonLabels ? '4px 12px' : '4px 8px',
-              borderRadius: 6,
-              cursor: rendering ? 'wait' : 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
+            icon={rendering ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
-            {rendering ? <SpinnerIcon size={12} /> : <PlayIcon size={10} />}
             {layout.showButtonLabels && (rendering ? 'Rendering' : 'Render')}
-          </button>
+          </OutlinedButton>
+          {/* Only bar on screen when the editor is hidden — see ViewModeControl. */}
+          {ownsViewModeControl(viewMode, 'preview') && (
+            <>
+              <BarDivider />
+              <ViewModeControl />
+            </>
+          )}
         </div>
       </div>
 
-      {/* Content */}
       {!showLog ? (
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: 'var(--bg-sidebar)' }}>
+        <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
           {iframeSrc ? (
             <iframe
               ref={iframeRef}
@@ -311,33 +279,37 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
               // rendered document runs in an opaque origin and cannot reach the
               // app's storage/cookies/API even if the .tex injects script.
               sandbox="allow-scripts"
-              style={{ width: '100%', height: '100%', border: 'none', background: 'var(--bg-warm)' }}
+              style={{ width: '100%', height: '100%', border: 'none', background: 'var(--surface-chrome)' }}
             />
           ) : (
             <div
               style={{
-                color: 'var(--text-dim)',
-                fontSize: 18,
+                color: 'var(--text-faint)',
+                fontSize: fs.title,
                 marginTop: 60,
                 textAlign: 'center',
-                padding: '0 24px',
+                padding: `0 ${metrics.padPage}px`,
+                lineHeight: 1.7,
               }}
             >
               {htmlRenderStatus === 'unavailable' ? (
                 <>
                   <strong>LaTeXML is not installed.</strong>
-                  <div style={{ fontSize: 15, marginTop: 10, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: fs.control, marginTop: 10 }}>
                     Install it to enable HTML rendering:<br />
-                    <code>apt install latexml</code> (Debian/Ubuntu) ·{' '}
-                    <code>brew install latexml</code> (macOS)
+                    <code style={{ fontFamily: font.mono }}>apt install latexml</code> (Debian/Ubuntu) ·{' '}
+                    <code style={{ fontFamily: font.mono }}>brew install latexml</code> (macOS)
+                    <div style={{ marginTop: 8, color: 'var(--text-disabled)' }}>
+                      The PDF preview is unaffected.
+                    </div>
                   </div>
                 </>
-              ) : htmlRenderStatus === 'rendering' ? (
-                'Rendering HTML...'
+              ) : rendering ? (
+                'Rendering HTML…'
               ) : htmlRenderStatus === 'error' ? (
                 <>Render failed — see the <strong>Log</strong> tab.</>
               ) : (
-                <>Click <strong>Render</strong> to generate the HTML preview</>
+                <>Press <strong>Render</strong> to generate the HTML preview</>
               )}
             </div>
           )}
@@ -346,63 +318,79 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
         <div
           style={{
             flex: 1,
+            minHeight: 0,
             overflow: 'auto',
-            padding: 16,
-            fontFamily: "'Source Code Pro', monospace",
-            fontSize: 17,
-            lineHeight: 1.6,
+            padding: metrics.padPane,
+            fontFamily: font.mono,
+            fontSize: fs.control,
+            lineHeight: 1.7,
             whiteSpace: 'pre-wrap',
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-editor)',
+            color: 'var(--text-muted)',
+            background: 'var(--surface-editor)',
           }}
         >
-          {htmlErrors.length > 0 && (
-            <div style={{ color: 'var(--red)', marginBottom: 12 }}>
-              {htmlErrors.map((e, i) => {
-                const lineNum = parseLineNumber(e);
-                return (
-                  <div
-                    key={i}
-                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
-                    style={{
-                      cursor: lineNum ? 'pointer' : 'default',
-                      textDecoration: lineNum ? 'underline' : 'none',
-                      textDecorationStyle: 'dotted',
-                      padding: '1px 0',
-                    }}
-                    title={lineNum ? `Go to line ${lineNum}` : undefined}
-                  >
-                    {e}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {htmlWarnings.length > 0 && (
-            <div style={{ color: 'var(--orange)', marginBottom: 12 }}>
-              {htmlWarnings.map((w, i) => {
-                const lineNum = parseLineNumber(w);
-                return (
-                  <div
-                    key={i}
-                    onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
-                    style={{
-                      cursor: lineNum ? 'pointer' : 'default',
-                      textDecoration: lineNum ? 'underline' : 'none',
-                      textDecorationStyle: 'dotted',
-                      padding: '1px 0',
-                    }}
-                    title={lineNum ? `Go to line ${lineNum}` : undefined}
-                  >
-                    {w}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {[
+            ...htmlErrors.map((m) => ({ m, tone: 'error' as const })),
+            ...htmlWarnings.map((m) => ({ m, tone: 'warn' as const })),
+          ].map(({ m, tone }, i) => {
+            const lineNum = parseLineNumber(m);
+            return (
+              <div
+                key={`${tone}-${i}`}
+                onClick={lineNum ? () => requestScrollToLine(lineNum) : undefined}
+                title={lineNum ? `Go to line ${lineNum}` : undefined}
+                style={{
+                  color: tone === 'error' ? 'var(--error)' : 'var(--warn)',
+                  borderLeft: `2px solid ${tone === 'error' ? 'var(--error)' : 'var(--warn)'}`,
+                  paddingLeft: 8,
+                  marginBottom: 4,
+                  cursor: lineNum ? 'pointer' : 'default',
+                }}
+              >
+                {m}
+              </div>
+            );
+          })}
+          {(htmlErrors.length > 0 || htmlWarnings.length > 0) && <div style={{ height: 12 }} />}
           {htmlLog || 'No render log yet.'}
         </div>
       )}
+
+      <div
+        style={{
+          height: metrics.status,
+          flexShrink: 0,
+          borderTop: '1px solid var(--line)',
+          background: 'var(--surface-chrome)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          padding: `0 ${metrics.padPanel}px`,
+          fontSize: fs.meta,
+          color: 'var(--text-faint)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}
+      >
+        <span>latexml</span>
+        {htmlWarnings.length > 0 && (
+          <span style={{ borderLeft: '1px solid var(--line)', paddingLeft: 14, color: 'var(--warn)' }}>
+            {htmlWarnings.length} warning{htmlWarnings.length === 1 ? '' : 's'} — review
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Dot color={failed ? 'var(--error)' : rendering ? 'var(--warn)' : 'var(--ok)'} filled />
+          {htmlRenderStatus === 'unavailable'
+            ? 'latexml unavailable'
+            : htmlRenderStatus === 'error'
+              ? 'render failed'
+              : rendering
+                ? 'rendering'
+                : htmlNonce > 0
+                  ? `rendered ${freshness}`
+                  : 'ready'}
+        </span>
+      </div>
     </div>
   );
 }

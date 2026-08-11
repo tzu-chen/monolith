@@ -2,7 +2,18 @@ import { EditorView } from '@codemirror/view';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import type { ColorScheme } from '../colorSchemes';
-import type { FontSettings } from './light';
+
+export interface FontSettings {
+  fontSize: number;
+  fontFamily: string;
+}
+
+/**
+ * Editor line-height is 1.85 per the handoff: a blank source line must occupy a
+ * full line box so gutter markers (diagnostics, compile-diff bars) line up with
+ * the real line numbers beside them.
+ */
+export const EDITOR_LINE_HEIGHT = 1.85;
 
 function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -14,142 +25,171 @@ function hexToRgba(hex: string, alpha: number): string {
 export function createEditorTheme(scheme: ColorScheme, font: FontSettings) {
   const { colors, type } = scheme;
   const isDark = type === 'dark';
-  const gutterFontSize = `${Math.max(8, font.fontSize - 1.5)}px`;
 
-  return EditorView.theme({
-    '&': {
-      backgroundColor: colors.bgEditor,
-      color: colors.textPrimary,
-      fontSize: `${font.fontSize}px`,
-      fontFamily: font.fontFamily,
-      height: '100%',
+  return EditorView.theme(
+    {
+      '&': {
+        backgroundColor: colors.surfaceEditor,
+        color: colors.text,
+        fontSize: `${font.fontSize}px`,
+        fontFamily: font.fontFamily,
+        height: '100%',
+      },
+      '.cm-scroller': {
+        overflow: 'auto',
+        lineHeight: String(EDITOR_LINE_HEIGHT),
+      },
+      '.cm-content': {
+        fontFamily: font.fontFamily,
+        lineHeight: String(EDITOR_LINE_HEIGHT),
+        padding: '10px 0',
+        caretColor: colors.accent,
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: colors.accent,
+        borderLeftWidth: '2px',
+      },
+      // Gutters sit on the editor surface, divided by a hairline.
+      '.cm-gutters': {
+        backgroundColor: colors.surfaceEditor,
+        color: colors.textDisabled,
+        borderRight: `1px solid ${colors.lineFaint}`,
+        fontFamily: font.fontFamily,
+        fontSize: `${Math.max(8, font.fontSize - 1.5)}px`,
+      },
+      '.cm-lineNumbers .cm-gutterElement': {
+        paddingRight: '9px',
+        minWidth: '44px',
+        textAlign: 'right',
+      },
+      '.cm-activeLine': { backgroundColor: colors.accentWash },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'transparent',
+        color: colors.accent,
+      },
+      '.cm-selectionBackground': {
+        backgroundColor: `${hexToRgba(colors.accent, isDark ? 0.18 : 0.12)} !important`,
+      },
+      '&.cm-focused .cm-selectionBackground': {
+        backgroundColor: `${hexToRgba(colors.accent, isDark ? 0.24 : 0.15)} !important`,
+      },
+      '.cm-line': { paddingLeft: '4px' },
+      '.cm-matchingBracket': {
+        backgroundColor: hexToRgba(colors.accent, isDark ? 0.2 : 0.15),
+        outline: 'none',
+      },
+      '.cm-searchMatch': { backgroundColor: hexToRgba(colors.warn, isDark ? 0.25 : 0.2) },
+      '.cm-searchMatch.cm-searchMatch-selected': {
+        backgroundColor: hexToRgba(colors.warn, isDark ? 0.45 : 0.4),
+      },
+      '.cm-foldPlaceholder': {
+        backgroundColor: colors.accentWash,
+        border: `1px solid ${colors.line}`,
+        color: colors.textFaint,
+      },
+
+      // Popovers: 1px --line-strong, radius 7, paper surface, popover shadow.
+      '.cm-tooltip': {
+        border: `1px solid ${colors.lineStrong}`,
+        borderRadius: '7px',
+        backgroundColor: colors.surfacePaper,
+        boxShadow: colors.shadowPopover,
+        overflow: 'hidden',
+      },
+      '.cm-tooltip-autocomplete > ul': {
+        fontFamily: font.fontFamily,
+        fontSize: `${Math.max(8, font.fontSize - 1)}px`,
+        maxHeight: '16em',
+      },
+      '.cm-tooltip-autocomplete > ul > li': {
+        padding: '5px 10px',
+        borderLeft: '2px solid transparent',
+      },
+      '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+        backgroundColor: colors.accentWash,
+        borderLeftColor: colors.accent,
+        color: colors.text,
+      },
+      '.cm-completionLabel': { color: colors.text },
+      '.cm-completionDetail': {
+        color: colors.textFaint,
+        fontStyle: 'normal',
+        marginLeft: '10px',
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+      },
+      '.cm-snippetFieldPosition': { border: `1px solid ${colors.accent}` },
+
+      '.cm-tooltip.cm-math-preview': {
+        backgroundColor: colors.surfacePaper,
+        border: `1px solid ${colors.lineStrong}`,
+        borderRadius: '7px',
+        padding: '8px 14px',
+        maxWidth: '600px',
+        overflowX: 'auto',
+        color: colors.text,
+        fontSize: '15px',
+        lineHeight: '1.6',
+        boxShadow: colors.shadowPopover,
+      },
+      '.cm-math-preview-display': { textAlign: 'center' },
+
+      // Diagnostics and compile-diff gutters (see diagnostics-gutter.ts /
+      // compile-diff.ts). The diff bar is flush to the gutter's left edge.
+      '.cm-diagnosticGutter': { width: '18px' },
+      '.cm-diagnosticGutter .cm-gutterElement': {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      '.cm-diffGutter': { width: '2px', paddingLeft: 0 },
+      '.cm-diffGutter .cm-gutterElement': { width: '2px' },
+      '.cm-diff-added': { backgroundColor: colors.ok },
+      '.cm-diff-modified': { backgroundColor: colors.accent },
+
+      // User macro and broken-citation decorations.
+      '.cm-macro-token': {
+        color: colors.synMacro,
+        borderBottom: `1px dotted ${colors.lineStrong}`,
+        cursor: 'pointer',
+      },
+      '.cm-broken-cite': {
+        color: colors.error,
+        borderBottom: `1px dotted ${colors.error}`,
+      },
     },
-    '.cm-scroller': {
-      overflow: 'auto',
-    },
-    '.cm-content': {
-      fontFamily: font.fontFamily,
-      lineHeight: '1.75',
-      padding: '16px 0',
-      caretColor: colors.accent,
-    },
-    '.cm-cursor, .cm-dropCursor': {
-      borderLeftColor: colors.accent,
-      borderLeftWidth: '2px',
-    },
-    '.cm-gutters': {
-      backgroundColor: colors.bgEditor,
-      color: isDark ? colors.textDim : colors.borderStrong,
-      border: 'none',
-      fontFamily: font.fontFamily,
-      fontSize: gutterFontSize,
-    },
-    '.cm-lineNumbers .cm-gutterElement': {
-      paddingRight: '18px',
-      minWidth: '52px',
-      textAlign: 'right',
-    },
-    '.cm-activeLine': {
-      backgroundColor: colors.accentBg,
-    },
-    '.cm-activeLineGutter': {
-      backgroundColor: 'transparent',
-      color: colors.accent,
-    },
-    '.cm-selectionBackground': {
-      backgroundColor: hexToRgba(colors.accent, isDark ? 0.15 : 0.12) + ' !important',
-    },
-    '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: hexToRgba(colors.accent, isDark ? 0.2 : 0.15) + ' !important',
-    },
-    '.cm-line': {
-      paddingLeft: '4px',
-    },
-    '.cm-matchingBracket': {
-      backgroundColor: hexToRgba(colors.accent, isDark ? 0.2 : 0.15),
-      outline: 'none',
-    },
-    '.cm-searchMatch': {
-      backgroundColor: hexToRgba(colors.orange, isDark ? 0.25 : 0.2),
-    },
-    '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: hexToRgba(colors.orange, isDark ? 0.45 : 0.4),
-    },
-    '.cm-foldPlaceholder': {
-      backgroundColor: hexToRgba(colors.accent, isDark ? 0.1 : 0.06),
-      border: `1px solid ${colors.border}`,
-      color: colors.textSecondary,
-    },
-    '.cm-tooltip': {
-      border: `1px solid ${colors.border}`,
-      backgroundColor: isDark ? colors.bgPanel : colors.paper,
-      boxShadow: `0 2px 8px ${colors.paperShadow}`,
-    },
-    '.cm-tooltip-autocomplete > ul': {
-      fontFamily: font.fontFamily,
-      fontSize: `${Math.max(8, font.fontSize - 1.5)}px`,
-    },
-    '.cm-tooltip-autocomplete > ul > li': {
-      padding: '3px 8px',
-    },
-    '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-      backgroundColor: hexToRgba(colors.accent, isDark ? 0.15 : 0.12),
-      color: colors.textPrimary,
-    },
-    '.cm-completionLabel': {
-      color: colors.textPrimary,
-    },
-    '.cm-completionDetail': {
-      color: colors.textSecondary,
-      fontStyle: 'italic',
-      marginLeft: '8px',
-    },
-    '.cm-snippetFieldPosition': {
-      border: `1px solid ${colors.accent}`,
-    },
-    '.cm-tooltip.cm-math-preview': {
-      backgroundColor: isDark ? colors.bgPanel : colors.paper,
-      border: `1px solid ${colors.border}`,
-      borderRadius: '6px',
-      padding: '8px 14px',
-      maxWidth: '600px',
-      overflowX: 'auto',
-      color: colors.textPrimary,
-      fontSize: '15px',
-      lineHeight: '1.6',
-      boxShadow: `0 2px 12px ${colors.paperShadow}`,
-    },
-    '.cm-math-preview-display': {
-      textAlign: 'center',
-    },
-  }, { dark: isDark });
+    { dark: isDark }
+  );
 }
 
+/**
+ * The handoff's six syntax roles. Tags are produced by `latex-lang.ts`.
+ */
 export function createHighlightStyle(scheme: ColorScheme) {
   const { colors } = scheme;
   return syntaxHighlighting(
     HighlightStyle.define([
-      // \begin, \end → accent
-      { tag: tags.keyword, color: colors.accent, fontWeight: '500' },
-      // \section, \subsection → orange, bold
-      { tag: tags.heading, color: colors.orange, fontWeight: '600' },
-      // \cmd (commands like \usepackage, \documentclass) → blue
-      { tag: tags.tagName, color: colors.blue },
-      { tag: tags.processingInstruction, color: colors.blue },
-      // Math mode content → purple
-      { tag: tags.string, color: colors.purple },
-      // Environment names inside \begin{...} → green
-      { tag: tags.typeName, color: colors.green, fontWeight: '500' },
-      // Comments → dim italic
-      { tag: tags.comment, color: colors.textDim, fontStyle: 'italic' },
-      { tag: tags.lineComment, color: colors.textDim, fontStyle: 'italic' },
-      // Braces → secondary
-      { tag: tags.bracket, color: colors.textSecondary },
-      { tag: tags.paren, color: colors.textSecondary },
-      { tag: tags.squareBracket, color: colors.textSecondary },
-      { tag: tags.brace, color: colors.textSecondary },
-      // Argument content (like package names) → teal
-      { tag: tags.attributeValue, color: colors.teal },
+      // Control sequences and math delimiters
+      { tag: tags.keyword, color: colors.synCommand },
+      { tag: tags.heading, color: colors.synCommand, fontWeight: '600' },
+      // Environment names
+      { tag: tags.typeName, color: colors.synEnv },
+      // Argument text and math symbols
+      { tag: tags.string, color: colors.synArg },
+      { tag: tags.attributeValue, color: colors.synArg },
+      // Reference, cite and include commands
+      { tag: tags.labelName, color: colors.synRef },
+      { tag: tags.tagName, color: colors.synRef },
+      { tag: tags.processingInstruction, color: colors.synRef },
+      // Lengths and numbers
+      { tag: tags.number, color: colors.synNumber },
+      // Comments
+      { tag: tags.comment, color: colors.textFaint, fontStyle: 'italic' },
+      { tag: tags.lineComment, color: colors.textFaint, fontStyle: 'italic' },
+      // Braces recede
+      { tag: tags.bracket, color: colors.textFaint },
+      { tag: tags.paren, color: colors.textFaint },
+      { tag: tags.squareBracket, color: colors.textFaint },
+      { tag: tags.brace, color: colors.textFaint },
     ])
   );
 }

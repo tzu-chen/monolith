@@ -74,6 +74,12 @@ export function useFileWatcher() {
           const files = await api.listFiles();
           useEditorStore.getState().setFileTree(files);
 
+          // A change anywhere in the include chain invalidates the scope graph:
+          // a new \usepackage in preamble.tex changes what main.tex has.
+          if (useEditorStore.getState().scopeChainIncludes(msg.path)) {
+            useEditorStore.getState().invalidateScope();
+          }
+
           // Re-fetch preamble macros when preamble.tex changes
           if (msg.path === 'preamble.tex' && (msg.event === 'change' || msg.event === 'add')) {
             try {

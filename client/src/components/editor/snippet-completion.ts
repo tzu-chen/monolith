@@ -1,5 +1,6 @@
 import { autocompletion, CompletionContext, snippet } from '@codemirror/autocomplete';
 import { latexSnippets, loadCustomSnippets } from './latex-snippets';
+import { pathCompletionSource } from './path-completion';
 
 function snippetCompletions(context: CompletionContext) {
   const word = context.matchBefore(/[a-zA-Z]+/);
@@ -23,6 +24,12 @@ function snippetCompletions(context: CompletionContext) {
   };
 }
 
+/**
+ * Completion sources, in priority order. The path source only fires inside the
+ * brace of a path-taking command, so the two never compete for the same
+ * position.
+ */
 export const latexSnippetCompletion = autocompletion({
-  override: [snippetCompletions],
+  override: [pathCompletionSource, snippetCompletions],
+  icons: false,
 });

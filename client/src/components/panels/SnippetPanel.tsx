@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { CloseIcon } from '../shared/Icons';
+import { Pill, OutlinedButton, Badge } from '../shared/ui';
+import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 import {
   latexSnippets,
   loadCustomSnippets,
@@ -10,16 +12,28 @@ import {
   type LatexSnippet,
 } from '../editor/latex-snippets';
 
+/**
+ * Snippet list — the `Snippets` pane of the editor drawer.
+ *
+ * Same insertion model as the symbol palette: click inserts at the cursor. Each
+ * card shows the trigger, what it expands to, and its rendered preview.
+ */
+
 const MAX_RECENT = 10;
 
-export default function SnippetPanel() {
-  const [tab, setTab] = useState<'All' | 'Recent'>(() => {
-    const recent = loadRecentSnippets();
-    return recent.length > 0 ? 'Recent' : 'All';
-  });
+interface SnippetPanelProps {
+  search: string;
+  onFocusEntry: (snippet: LatexSnippet | null) => void;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+}
+
+export default function SnippetPanel({ search, onFocusEntry, editing, onEditingChange }: SnippetPanelProps) {
+  const [tab, setTab] = useState<'All' | 'Recent'>(() =>
+    loadRecentSnippets().length > 0 ? 'Recent' : 'All'
+  );
   const [customSnippets, setCustomSnippets] = useState(loadCustomSnippets);
   const [recentLabels, setRecentLabels] = useState(loadRecentSnippets);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newTrigger, setNewTrigger] = useState('');
   const [newDetail, setNewDetail] = useState('');
   const [newTemplate, setNewTemplate] = useState('');
@@ -30,6 +44,15 @@ export default function SnippetPanel() {
   );
 
   const displayedSnippets = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    if (query) {
+      return allSnippets.filter(
+        (s) =>
+          s.label.toLowerCase().includes(query) ||
+          s.detail.toLowerCase().includes(query) ||
+          s.template.toLowerCase().includes(query)
+      );
+    }
     if (tab === 'Recent') {
       const results: LatexSnippet[] = [];
       for (const label of recentLabels) {
@@ -39,14 +62,11 @@ export default function SnippetPanel() {
       return results;
     }
     return allSnippets;
-  }, [tab, recentLabels, allSnippets]);
+  }, [search, tab, recentLabels, allSnippets]);
 
   const recordRecent = useCallback(
     (label: string) => {
-      const updated = [label, ...recentLabels.filter((l) => l !== label)].slice(
-        0,
-        MAX_RECENT
-      );
+      const updated = [label, ...recentLabels.filter((l) => l !== label)].slice(0, MAX_RECENT);
       setRecentLabels(updated);
       saveRecentSnippets(updated);
     },
@@ -54,30 +74,20 @@ export default function SnippetPanel() {
   );
 
   function insertSnippet(snip: LatexSnippet) {
-    const view = useEditorStore.getState().editorView;
-    if (!view) return;
-
     const expanded = snip.template
       .replace(/#\{\d+:([^}]+)\}/g, '$1')
       .replace(/#\{\d*\}/g, '');
-
-    const { head } = view.state.selection.main;
-    view.dispatch({
-      changes: { from: head, insert: expanded },
-      selection: { anchor: head + expanded.length },
-    });
-    view.focus();
+    useEditorStore.getState().insertAtCursor(expanded);
     recordRecent(snip.label);
   }
 
   function handleAddCustom() {
     const trigger = newTrigger.trim();
-    const detail = newDetail.trim();
     const template = newTemplate.trim();
     if (!trigger || !template) return;
     const entry: LatexSnippet = {
       label: trigger,
-      detail: detail || trigger,
+      detail: newDetail.trim() || trigger,
       template,
       preview: template.replace(/#\{\d+:([^}]+)\}/g, '$1').replace(/#\{\d*\}/g, '...'),
     };
@@ -87,7 +97,7 @@ export default function SnippetPanel() {
     setNewTrigger('');
     setNewDetail('');
     setNewTemplate('');
-    setShowAddForm(false);
+    onEditingChange(false);
   }
 
   function deleteCustom(label: string) {
@@ -96,283 +106,167 @@ export default function SnippetPanel() {
     saveCustomSnippets(updated);
   }
 
-  const isCustom = (label: string) =>
-    customSnippets.some((s) => s.label === label);
+  const isCustom = (label: string) => customSnippets.some((s) => s.label === label);
 
   const inputStyle: React.CSSProperties = {
-    fontSize: 16,
+    fontSize: fs.control,
     padding: '4px 8px',
-    border: '1px solid var(--border)',
-    borderRadius: 3,
-    background: 'var(--bg-editor)',
-    color: 'var(--text-primary)',
-    fontFamily: 'inherit',
+    border: '1px solid var(--line)',
+    borderRadius: radius.chip,
+    background: 'var(--surface-editor)',
+    color: 'var(--text)',
+    fontFamily: font.mono,
     outline: 'none',
   };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        background: 'var(--bg-panel)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header with tabs and add button */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 10px',
-          borderBottom: '1px solid var(--border)',
-          fontSize: 16,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 2 }}>
-          {(['All', 'Recent'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                fontSize: 15,
-                padding: '3px 10px',
-                borderRadius: 3,
-                border: '1px solid var(--border)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                background: tab === t ? 'var(--accent)' : 'transparent',
-                color: tab === t ? 'white' : 'var(--text-secondary)',
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <span style={{ color: 'var(--text-dim)', flex: 1 }}>
-          Type trigger in editor or click Insert
-        </span>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          title="Add custom snippet"
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+      {!search && (
+        <div
           style={{
-            fontSize: 18,
-            width: 28,
-            height: 26,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid var(--border)',
-            borderRadius: 3,
-            background: showAddForm ? 'var(--accent)' : 'transparent',
-            color: showAddForm ? 'white' : 'var(--text-secondary)',
-            cursor: 'pointer',
+            gap: 6,
+            padding: `8px ${metrics.padPane}px`,
+            borderBottom: '1px solid var(--line-faint)',
             flexShrink: 0,
           }}
         >
-          +
-        </button>
-      </div>
+          {(['All', 'Recent'] as const).map((t) => (
+            <Pill key={t} mono={false} active={tab === t} onClick={() => setTab(t)}>
+              {t}
+            </Pill>
+          ))}
+        </div>
+      )}
 
-      {/* Add form */}
-      {showAddForm && (
+      {editing && (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            padding: '4px 10px',
-            borderBottom: '1px solid var(--border)',
-            fontSize: 16,
+            gap: 7,
+            padding: `7px ${metrics.padPane}px`,
+            borderBottom: '1px solid var(--line-faint)',
+            flexShrink: 0,
           }}
         >
           <input
-            type="text"
-            placeholder="Trigger"
+            placeholder="trigger"
             value={newTrigger}
             onChange={(e) => setNewTrigger(e.target.value)}
-            style={{ ...inputStyle, width: 60 }}
-          />
-          <input
-            type="text"
-            placeholder="Description"
-            value={newDetail}
-            onChange={(e) => setNewDetail(e.target.value)}
             style={{ ...inputStyle, width: 100 }}
           />
           <input
-            type="text"
-            placeholder="Template (use #{} for cursor)"
+            placeholder="description"
+            value={newDetail}
+            onChange={(e) => setNewDetail(e.target.value)}
+            style={{ ...inputStyle, width: 150, fontFamily: font.ui }}
+          />
+          <input
+            placeholder="\begin{env}#{1:body}\end{env}"
             value={newTemplate}
             onChange={(e) => setNewTemplate(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 120 }}
           />
-          <button
-            onClick={handleAddCustom}
-            style={{
-              fontSize: 15,
-              padding: '3px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 3,
-              background: 'var(--accent)',
-              color: 'white',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setShowAddForm(false)}
-            style={{
-              fontSize: 15,
-              padding: '3px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 3,
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Cancel
-          </button>
+          <OutlinedButton accent onClick={handleAddCustom}>Add</OutlinedButton>
+          <OutlinedButton onClick={() => onEditingChange(false)}>Cancel</OutlinedButton>
         </div>
       )}
 
-      {/* Snippet list */}
       <div
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '2px 10px',
+          minHeight: 0,
+          padding: `10px ${metrics.padPane}px`,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: 8,
+          alignContent: 'flex-start',
         }}
       >
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: 16,
-          }}
-        >
-          <thead>
-            <tr
+        {displayedSnippets.map((snip) => (
+          <div
+            key={snip.label}
+            onClick={() => insertSnippet(snip)}
+            onMouseEnter={(e) => {
+              onFocusEntry(snip);
+              e.currentTarget.style.borderColor = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--line)';
+            }}
+            title={snip.template}
+            style={{
+              border: '1px solid var(--line)',
+              borderRadius: radius.card,
+              padding: '8px 10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              cursor: 'pointer',
+              minWidth: 0,
+              position: 'relative',
+              transition: `border-color ${motion.color}`,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+              <span style={{ fontFamily: font.mono, fontSize: fs.row, color: 'var(--accent)' }}>
+                {snip.label}
+              </span>
+              {isCustom(snip.label) && <Badge>custom</Badge>}
+              {isCustom(snip.label) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteCustom(snip.label);
+                  }}
+                  title="Remove custom snippet"
+                  style={{ marginLeft: 'auto', display: 'flex', color: 'var(--text-faint)' }}
+                >
+                  <CloseIcon size={11} />
+                </button>
+              )}
+            </div>
+            <div
               style={{
-                color: 'var(--text-dim)',
-                textAlign: 'left',
-                borderBottom: '1px solid var(--border)',
+                fontSize: fs.control,
+                color: 'var(--text-muted)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <th style={{ padding: '3px 6px', fontWeight: 500 }}>Trigger</th>
-              <th style={{ padding: '3px 6px', fontWeight: 500 }}>
-                Description
-              </th>
-              <th style={{ padding: '3px 6px', fontWeight: 500 }}>Preview</th>
-              <th style={{ padding: '3px 6px', width: 50 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayedSnippets.map((snip) => (
-              <tr
-                key={snip.label}
-                style={{ borderBottom: '1px solid var(--border)' }}
-              >
-                <td
-                  style={{
-                    padding: '3px 6px',
-                    fontFamily: "'Source Code Pro', monospace",
-                    color: 'var(--accent)',
-                    fontWeight: 500,
-                  }}
-                >
-                  {snip.label}
-                </td>
-                <td
-                  style={{
-                    padding: '3px 6px',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {snip.detail}
-                </td>
-                <td
-                  style={{
-                    padding: '3px 6px',
-                    fontFamily: "'Source Code Pro', monospace",
-                    color: 'var(--text-secondary)',
-                    fontSize: 15,
-                    whiteSpace: 'pre',
-                    maxWidth: 260,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {snip.preview.split('\n')[0]}
-                </td>
-                <td
-                  style={{
-                    padding: '3px 6px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <button
-                    onClick={() => insertSnippet(snip)}
-                    style={{
-                      fontSize: 15,
-                      padding: '2px 10px',
-                      border: '1px solid var(--border)',
-                      borderRadius: 3,
-                      background: 'transparent',
-                      color: 'var(--accent)',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    Insert
-                  </button>
-                  {isCustom(snip.label) && (
-                    <button
-                      onClick={() => deleteCustom(snip.label)}
-                      title="Remove custom snippet"
-                      style={{
-                        fontSize: 15,
-                        padding: '2px 6px',
-                        marginLeft: 2,
-                        border: '1px solid var(--border)',
-                        borderRadius: 3,
-                        background: 'transparent',
-                        color: 'var(--text-dim)',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      <CloseIcon size={10} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {displayedSnippets.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  style={{
-                    padding: 10,
-                    color: 'var(--text-dim)',
-                    fontSize: 16,
-                  }}
-                >
-                  {tab === 'Recent'
-                    ? 'No recently used snippets yet'
-                    : 'No snippets available'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              {snip.detail}
+            </div>
+            <div
+              style={{
+                fontFamily: font.mono,
+                fontSize: fs.meta,
+                color: 'var(--text-faint)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {snip.preview}
+            </div>
+          </div>
+        ))}
+        {displayedSnippets.length === 0 && (
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              color: 'var(--text-faint)',
+              fontSize: fs.control,
+              padding: '18px 0',
+              textAlign: 'center',
+            }}
+          >
+            {tab === 'Recent' ? 'No recently used snippets yet' : 'No snippets found'}
+          </div>
+        )}
       </div>
     </div>
   );

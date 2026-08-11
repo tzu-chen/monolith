@@ -1,18 +1,59 @@
+/*
+ * Base tokens mirror the "Parchment" scheme in colorSchemes.ts so the first
+ * paint is correct before applyColorScheme() runs. After that, every variable
+ * below is overwritten on :root by JS — edit colorSchemes.ts, not these.
+ */
 :root {
+  --surface-editor: #ffffff;
+  --surface-paper: #fffef9;
+  --surface-chrome: #faf8f4;
+  --surface-sunken: #f3f0ea;
+  --paper-sheet: #fffef9;
+  --paper-ink: #2c2820;
+
+  --line: #e2ddd3;
+  --line-strong: #cdc6b8;
+  --line-faint: #f0ece4;
+
+  --text: #2c2820;
+  --text-muted: #6b6358;
+  --text-faint: #9e9588;
+  --text-disabled: #cdc6b8;
+
+  --accent: #8b5e3c;
+  --accent-hover: #b07d56;
+  --accent-wash: rgba(139, 94, 60, 0.05);
+  --accent-wash-strong: rgba(139, 94, 60, 0.07);
+
+  --error: #b04a4a;
+  --warn: #b07830;
+  --ok: #4a8c5e;
+
+  --syn-command: #7a5a99;
+  --syn-env: #3d8080;
+  --syn-arg: #3d6b8e;
+  --syn-ref: #9e9588;
+  --syn-number: #b07830;
+  --syn-macro: #8b5e3c;
+
+  --shadow-popover: 0 8px 24px rgba(45, 40, 30, 0.13);
+  --shadow-paper: 0 2px 10px rgba(45, 40, 30, 0.07);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  /* Legacy aliases — see LEGACY_VAR_MAP in colorSchemes.ts */
   --bg-warm: #faf8f4;
   --bg-panel: #f3f0ea;
   --bg-editor: #ffffff;
-  --bg-sidebar: #f6f4ef;
-  --bg-hover: #eeeae2;
-  --bg-active: #e8e3d9;
+  --bg-sidebar: #f3f0ea;
+  --bg-hover: #f3f0ea;
+  --bg-active: #e2ddd3;
   --border: #e2ddd3;
   --border-strong: #cdc6b8;
   --text-primary: #2c2820;
   --text-secondary: #6b6358;
   --text-dim: #9e9588;
-  --accent: #8b5e3c;
   --accent-light: #b07d56;
-  --accent-bg: rgba(139, 94, 60, 0.06);
+  --accent-bg: rgba(139, 94, 60, 0.05);
   --green: #4a8c5e;
   --blue: #3d6b8e;
   --red: #b04a4a;
@@ -20,15 +61,15 @@
   --orange: #b07830;
   --teal: #3d8080;
   --paper: #fffef9;
-  --paper-shadow: rgba(45, 40, 30, 0.08);
+  --paper-shadow: rgba(45, 40, 30, 0.07);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--bg-warm);
-  color: var(--text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--surface-chrome);
+  color: var(--text);
   height: 100vh;
   overflow: hidden;
 }
@@ -36,38 +77,59 @@ body {
 #root {
   height: 100vh;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 
-:root[data-theme="dark"] {
-  --bg-warm: #12121c;
-  --bg-panel: #0d0d14;
-  --bg-editor: #1a1a26;
-  --bg-sidebar: #10101a;
-  --bg-hover: #1e1e2e;
-  --bg-active: #252538;
-  --border: #2a2a3e;
-  --border-strong: #3a3a52;
-  --text-primary: #c8c8d8;
-  --text-secondary: #6a6a88;
-  --text-dim: #44445a;
-  --accent: #7c6ff0;
-  --accent-light: #9a8ff5;
-  --accent-bg: rgba(124, 111, 240, 0.08);
-  --green: #5ccf8a;
-  --blue: #5cc8cf;
-  --red: #e06060;
-  --purple: #b088e0;
-  --orange: #e8a855;
-  --teal: #5cc8cf;
-  --paper: #1a1a26;
-  --paper-shadow: rgba(0, 0, 0, 0.3);
+/*
+ * Structure is carried by 1px borders and 2px accent edges — no control ever
+ * gains a fill on hover. Buttons opt into this by staying transparent and
+ * letting the border and text colour do the work.
+ */
+button {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
-::-webkit-scrollbar { width: 7px; }
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface-editor);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder { color: var(--text-faint); }
+
+/* Focus is an accent hairline plus a wash halo — never the browser default. */
+:focus-visible {
+  outline: 2px solid var(--accent-wash-strong);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+/* Single-line bars never wrap or reflow. */
+.bar { white-space: nowrap; flex-shrink: 0; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}

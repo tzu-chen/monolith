@@ -6,18 +6,33 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { Extension, Compartment } from '@codemirror/state';
 import { vim } from '@replit/codemirror-vim';
 import { latexLanguage } from './latex-lang';
-import type { FontSettings } from '../../themes/light';
-import { createEditorTheme, createHighlightStyle } from '../../themes/editor-theme';
+import { createEditorTheme, createHighlightStyle, type FontSettings } from '../../themes/editor-theme';
 import { getSchemeById } from '../../colorSchemes';
 import { autoCloseEnv } from './auto-close-env';
 import { latexSnippetCompletion } from './snippet-completion';
+import { expandedAcceptKeymap, fileTreeFacet } from './path-completion';
 import { mathPreview, preambleMacrosFacet } from './math-preview';
+import {
+  scopeFacet,
+  scopeDecorations,
+  macroTooltip,
+  macroClickHandler,
+  goToDefinitionFacet,
+} from './scope-decorations';
+import { compileBaselineFacet, compileDiffGutter, compileDiffTheme } from './compile-diff';
+import { diagnosticsFacet, diagnosticsGutter } from './diagnostics-gutter';
+import type { ScopeGraph } from '../../lib/scope-api';
+import type { Diagnostic } from '../../lib/diagnostics';
 
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const lineWrapCompartment = new Compartment();
 export const lineNumbersCompartment = new Compartment();
 export const preambleCompartment = new Compartment();
+export const scopeCompartment = new Compartment();
+export const diagnosticsCompartment = new Compartment();
+export const baselineCompartment = new Compartment();
+export const fileTreeCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
 
@@ -31,11 +46,31 @@ function lineNumbersExtensions(show: boolean): Extension {
   return show ? [lineNumbers(), highlightActiveLineGutter()] : [];
 }
 
-export function createExtensions(colorScheme: string = 'light', vimMode: boolean = false, font: FontSettings = defaultFont, lineWrap: boolean = false, preambleMacros: string = '', showLineNumbers: boolean = true): Extension[] {
+export interface EditorConfig {
+  colorScheme: string;
+  vimMode: boolean;
+  font: FontSettings;
+  lineWrap: boolean;
+  preambleMacros: string;
+  showLineNumbers: boolean;
+  scope: ScopeGraph | null;
+  diagnostics: Diagnostic[];
+  /** Content as of the last successful compile, for the diff gutter. */
+  baseline: string | null;
+  fileTree: string[];
+  onGoToDefinition: (file: string, line: number) => void;
+}
+
+export function createExtensions(config: EditorConfig): Extension[] {
   return [
-    vimCompartment.of(vimMode ? vim() : []),
-    lineWrapCompartment.of(lineWrap ? EditorView.lineWrapping : []),
-    lineNumbersCompartment.of(lineNumbersExtensions(showLineNumbers)),
+    vimCompartment.of(config.vimMode ? vim() : []),
+    lineWrapCompartment.of(config.lineWrap ? EditorView.lineWrapping : []),
+    // Gutters render left to right in the order they are added: the compile
+    // diff bar sits flush to the outer edge, then diagnostics, then numbers.
+    compileDiffGutter,
+    compileDiffTheme,
+    diagnosticsGutter,
+    lineNumbersCompartment.of(lineNumbersExtensions(config.showLineNumbers)),
     highlightActiveLine(),
     history(),
     bracketMatching(),
@@ -43,9 +78,20 @@ export function createExtensions(colorScheme: string = 'light', vimMode: boolean
     indentOnInput(),
     highlightSelectionMatches(),
     latexLanguage,
-    themeCompartment.of(getThemeExtensions(colorScheme, font)),
-    preambleCompartment.of(preambleMacrosFacet.of(preambleMacros)),
+    themeCompartment.of(getThemeExtensions(config.colorScheme, config.font)),
+    preambleCompartment.of(preambleMacrosFacet.of(config.preambleMacros)),
+    scopeCompartment.of(scopeFacet.of(config.scope)),
+    diagnosticsCompartment.of(diagnosticsFacet.of(config.diagnostics)),
+    baselineCompartment.of(compileBaselineFacet.of(config.baseline)),
+    fileTreeCompartment.of(fileTreeFacet.of(config.fileTree)),
+    goToDefinitionFacet.of(config.onGoToDefinition),
+    scopeDecorations,
+    macroTooltip,
+    // Must precede the SyncTeX click handler so a modifier-click on a macro
+    // jumps to its definition instead of forward-syncing the PDF.
+    macroClickHandler,
     latexSnippetCompletion,
+    expandedAcceptKeymap,
     mathPreview,
     // autoCloseEnv must come before defaultKeymap so it handles Enter first
     autoCloseEnv,
@@ -79,4 +125,20 @@ export function getLineNumbersReconfiguration(showLineNumbers: boolean) {
 
 export function getPreambleReconfiguration(macros: string) {
   return preambleCompartment.reconfigure(preambleMacrosFacet.of(macros));
+}
+
+export function getScopeReconfiguration(scope: ScopeGraph | null) {
+  return scopeCompartment.reconfigure(scopeFacet.of(scope));
+}
+
+export function getDiagnosticsReconfiguration(diagnostics: Diagnostic[]) {
+  return diagnosticsCompartment.reconfigure(diagnosticsFacet.of(diagnostics));
+}
+
+export function getBaselineReconfiguration(baseline: string | null) {
+  return baselineCompartment.reconfigure(compileBaselineFacet.of(baseline));
+}
+
+export function getFileTreeReconfiguration(files: string[]) {
+  return fileTreeCompartment.reconfigure(fileTreeFacet.of(files));
 }

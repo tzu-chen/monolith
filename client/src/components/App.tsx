@@ -1,16 +1,12 @@
 import { useCallback, useEffect } from 'react';
-import TopBar from './nav/TopBar';
-import BottomBar from './nav/BottomBar';
-import Layout from './Layout';
-import ReferenceModal from './panels/ReferenceModal';
-import PyramidPlotPanel from './panels/PyramidPlotPanel';
-import ProjectManager from './nav/ProjectManager';
+import Shell from './shell/Shell';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
 import { useCompilation } from '../hooks/useCompilation';
 import { useHtmlRender } from '../hooks/useHtmlRender';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
+import { useScope } from '../hooks/useScope';
 import * as api from '../lib/api';
 import { extractMacroDefinitions } from './editor/math-preview';
 
@@ -18,9 +14,6 @@ export default function App() {
   const { doCompile } = useCompilation();
   const { doRender } = useHtmlRender();
   const { saveNow } = useAutosave();
-  const showReferences = useEditorStore((s) => s.showReferences);
-  const showProjectManager = useEditorStore((s) => s.showProjectManager);
-  const showPyramidPlots = useEditorStore((s) => s.showPyramidPlots);
 
   // Ctrl+S: save file to disk then compile
   const handleSave = useCallback(async () => {
@@ -31,8 +24,7 @@ export default function App() {
   // Initialize color scheme on mount, and tick auto-switch each minute
   const autoSwitchEnabled = useEditorStore((s) => s.autoSwitch.enabled);
   useEffect(() => {
-    const schemeId = useEditorStore.getState().colorScheme;
-    applyColorScheme(getSchemeById(schemeId));
+    applyColorScheme(getSchemeById(useEditorStore.getState().colorScheme));
   }, []);
 
   useEffect(() => {
@@ -50,7 +42,6 @@ export default function App() {
       try {
         const store = useEditorStore.getState();
 
-        // Fetch project list and current project
         const [projects, currentInfo] = await Promise.all([
           api.listProjects(),
           api.getCurrentProject(),
@@ -59,25 +50,18 @@ export default function App() {
         store.setCurrentProject(currentInfo.project ?? '');
         store.setProjectRoot(currentInfo.projectRoot);
 
-        // Only load files if a project is selected
         if (!currentInfo.project) return;
 
-        // Fetch file tree
-        const files = await api.listFiles();
-        store.setFileTree(files);
+        store.setFileTree(await api.listFiles());
 
-        // Open main.tex as the default file if it exists
         try {
-          const content = await api.readFile('main.tex');
-          store.openFile('main.tex', content);
+          store.openFile('main.tex', await api.readFile('main.tex'));
         } catch {
           // main.tex doesn't exist — no file opened by default
         }
 
-        // Load preamble macros for math preview
         try {
-          const preamble = await api.readFile('preamble.tex');
-          store.setPreambleMacros(extractMacroDefinitions(preamble));
+          store.setPreambleMacros(extractMacroDefinitions(await api.readFile('preamble.tex')));
         } catch {
           // No preamble.tex — no custom macros
         }
@@ -88,17 +72,50 @@ export default function App() {
     init();
   }, []);
 
-  // Connect file watcher
+  // Global shortcuts. Everything here also has a visible control somewhere in
+  // the shell — these are accelerators, never the only way in.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const store = useEditorStore.getState();
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (e.key === 'Escape') {
+        if (store.finder) {
+          store.setFinder(null);
+          e.preventDefault();
+        } else if (store.showSettings) {
+          store.setShowSettings(false);
+          e.preventDefault();
+        } else if (store.activeDrawer) {
+          store.setActiveDrawer(null);
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (!mod) return;
+
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        store.setFinder(e.shiftKey ? 'projects' : 'files');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleSave]);
+
   useFileWatcher();
+  useScope();
 
   return (
-    <>
-      <TopBar />
-      <Layout onSave={handleSave} onManualSave={saveNow} onCompile={doCompile} onRenderHtml={doRender} />
-      <BottomBar />
-      {showReferences && <ReferenceModal />}
-      {showPyramidPlots && <PyramidPlotPanel />}
-      {showProjectManager && <ProjectManager />}
-    </>
+    <Shell
+      onSave={handleSave}
+      onManualSave={saveNow}
+      onCompile={doCompile}
+      onRenderHtml={doRender}
+    />
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { CloseIcon } from '../shared/Icons';
+import { Pill, OutlinedButton } from '../shared/ui';
+import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 import {
   symbolCategories,
   findSymbolByCommand,
@@ -11,35 +13,47 @@ import {
   type SymbolEntry,
 } from './symbol-data';
 
-const MAX_RECENT = 20;
+/**
+ * Symbol palette — the `Symbols` pane of the editor drawer.
+ *
+ * Category pills over a key grid. Each key is a square outlined cell with the
+ * glyph set in serif italic, the way it will read once typeset; hovering or
+ * selecting one moves its border and glyph to accent rather than filling it.
+ */
 
-export default function SymbolPalette() {
-  const [search, setSearch] = useState('');
+const MAX_RECENT = 20;
+/** Keys per row in the handoff's grid. */
+const COLUMNS = 14;
+
+interface SymbolPaletteProps {
+  search: string;
+  /** Reports the key under the cursor so the drawer footer can describe it. */
+  onFocusEntry: (entry: SymbolEntry | null) => void;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+}
+
+export default function SymbolPalette({ search, onFocusEntry, editing, onEditingChange }: SymbolPaletteProps) {
   const [activeCategory, setActiveCategory] = useState(() => {
     const recent = loadRecentSymbols();
     return recent.length > 0 ? 'Recent' : symbolCategories[0].name;
   });
   const [customSymbols, setCustomSymbols] = useState(loadCustomSymbols);
   const [recentCommands, setRecentCommands] = useState(loadRecentSymbols);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newCommand, setNewCommand] = useState('');
   const [newDisplay, setNewDisplay] = useState('');
   const [newName, setNewName] = useState('');
 
   const allCategories = useMemo(() => {
     const cats = [...symbolCategories];
-    if (customSymbols.length > 0) {
-      cats.push({ name: 'Custom', symbols: customSymbols });
-    }
+    if (customSymbols.length > 0) cats.push({ name: 'Custom', symbols: customSymbols });
     return cats;
   }, [customSymbols]);
 
   const recentSymbols = useMemo(() => {
     const results: SymbolEntry[] = [];
     for (const cmd of recentCommands) {
-      const found =
-        findSymbolByCommand(cmd) ||
-        customSymbols.find((s) => s.command === cmd);
+      const found = findSymbolByCommand(cmd) || customSymbols.find((s) => s.command === cmd);
       if (found) results.push(found);
     }
     return results;
@@ -50,54 +64,43 @@ export default function SymbolPalette() {
     if (query) {
       const all = allCategories.flatMap((cat) => cat.symbols);
       return all.filter(
-        (s) =>
-          s.name.toLowerCase().includes(query) ||
-          s.command.toLowerCase().includes(query)
+        (s) => s.name.toLowerCase().includes(query) || s.command.toLowerCase().includes(query)
       );
     }
     if (activeCategory === 'Recent') return recentSymbols;
-    const cat = allCategories.find((c) => c.name === activeCategory);
-    return cat ? cat.symbols : [];
+    return allCategories.find((c) => c.name === activeCategory)?.symbols ?? [];
   }, [search, activeCategory, allCategories, recentSymbols]);
 
   const recordRecent = useCallback(
     (command: string) => {
-      const updated = [command, ...recentCommands.filter((c) => c !== command)].slice(
-        0,
-        MAX_RECENT
-      );
+      const updated = [command, ...recentCommands.filter((c) => c !== command)].slice(0, MAX_RECENT);
       setRecentCommands(updated);
       saveRecentSymbols(updated);
     },
     [recentCommands]
   );
 
-  function insertSymbol(command: string) {
-    const view = useEditorStore.getState().editorView;
-    if (!view) return;
-    const { head } = view.state.selection.main;
-    view.dispatch({
-      changes: { from: head, insert: command },
-      selection: { anchor: head + command.length },
-    });
-    view.focus();
-    recordRecent(command);
-  }
+  const insertSymbol = useCallback(
+    (command: string) => {
+      useEditorStore.getState().insertAtCursor(command);
+      recordRecent(command);
+    },
+    [recordRecent]
+  );
 
   function handleAddCustom() {
     const cmd = newCommand.trim();
     const disp = newDisplay.trim();
     const nm = newName.trim();
     if (!cmd || !disp || !nm) return;
-    const entry: SymbolEntry = { command: cmd, display: disp, name: nm };
-    const updated = [...customSymbols, entry];
+    const updated = [...customSymbols, { command: cmd, display: disp, name: nm }];
     setCustomSymbols(updated);
     saveCustomSymbols(updated);
     setNewCommand('');
     setNewDisplay('');
     setNewName('');
-    setShowAddForm(false);
-    if (activeCategory !== 'Custom') setActiveCategory('Custom');
+    onEditingChange(false);
+    setActiveCategory('Custom');
   }
 
   function deleteCustom(command: string) {
@@ -106,214 +109,130 @@ export default function SymbolPalette() {
     saveCustomSymbols(updated);
   }
 
-  // Tabs to show
-  const tabs = useMemo(() => {
+  const categories = useMemo(() => {
     const result: string[] = [];
     if (recentCommands.length > 0) result.push('Recent');
     result.push(...symbolCategories.map((c) => c.name));
-    if (customSymbols.length > 0 || activeCategory === 'Custom')
-      result.push('Custom');
+    if (customSymbols.length > 0 || activeCategory === 'Custom') result.push('Custom');
     return result;
   }, [recentCommands.length, customSymbols.length, activeCategory]);
 
   const inputStyle: React.CSSProperties = {
-    fontSize: 16,
+    fontSize: fs.control,
     padding: '4px 8px',
-    border: '1px solid var(--border)',
-    borderRadius: 3,
-    background: 'var(--bg-editor)',
-    color: 'var(--text-primary)',
-    fontFamily: 'inherit',
+    border: '1px solid var(--line)',
+    borderRadius: radius.chip,
+    background: 'var(--surface-editor)',
+    color: 'var(--text)',
+    fontFamily: font.mono,
     outline: 'none',
   };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        background: 'var(--bg-panel)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header row: search + category tabs + add button */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '5px 10px',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <input
-          type="text"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+      {!search && (
+        <div
           style={{
-            width: 140,
-            fontSize: 16,
-            padding: '5px 8px',
-            border: '1px solid var(--border)',
-            borderRadius: 3,
-            background: 'var(--bg-editor)',
-            color: 'var(--text-primary)',
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        />
-        {!search && (
-          <div style={{ display: 'flex', gap: 1, flex: 1, flexWrap: 'wrap' }}>
-            {tabs.map((name) => (
-              <button
-                key={name}
-                onClick={() => setActiveCategory(name)}
-                style={{
-                  fontSize: 15,
-                  padding: '3px 10px',
-                  borderRadius: 3,
-                  border: '1px solid var(--border)',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  background:
-                    activeCategory === name ? 'var(--accent)' : 'transparent',
-                  color:
-                    activeCategory === name ? 'white' : 'var(--text-secondary)',
-                }}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          title="Add custom symbol"
-          style={{
-            fontSize: 18,
-            width: 28,
-            height: 26,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid var(--border)',
-            borderRadius: 3,
-            background: showAddForm ? 'var(--accent)' : 'transparent',
-            color: showAddForm ? 'white' : 'var(--text-secondary)',
-            cursor: 'pointer',
+            gap: 6,
+            flexWrap: 'wrap',
+            padding: `8px ${metrics.padPane}px`,
+            borderBottom: '1px solid var(--line-faint)',
             flexShrink: 0,
           }}
         >
-          +
-        </button>
-      </div>
+          {categories.map((name) => (
+            <Pill
+              key={name}
+              mono={false}
+              active={activeCategory === name}
+              onClick={() => setActiveCategory(name)}
+            >
+              {name}
+            </Pill>
+          ))}
+        </div>
+      )}
 
-      {/* Add custom symbol form */}
-      {showAddForm && (
+      {editing && (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            borderBottom: '1px solid var(--border)',
-            fontSize: 16,
+            gap: 7,
+            padding: `7px ${metrics.padPane}px`,
+            borderBottom: '1px solid var(--line-faint)',
+            flexShrink: 0,
           }}
         >
           <input
-            type="text"
-            placeholder="\\cmd"
+            placeholder="\cmd"
             value={newCommand}
             onChange={(e) => setNewCommand(e.target.value)}
-            style={{ ...inputStyle, width: 80 }}
+            style={{ ...inputStyle, width: 110 }}
           />
           <input
-            type="text"
-            placeholder="Display"
+            placeholder="Glyph"
             value={newDisplay}
             onChange={(e) => setNewDisplay(e.target.value)}
-            style={{ ...inputStyle, width: 50 }}
+            style={{ ...inputStyle, width: 70, fontFamily: font.serif }}
           />
           <input
-            type="text"
             placeholder="Name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
-            style={{ ...inputStyle, width: 80 }}
+            style={{ ...inputStyle, width: 120, fontFamily: font.ui }}
           />
-          <button
-            onClick={handleAddCustom}
-            style={{
-              fontSize: 15,
-              padding: '3px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 3,
-              background: 'var(--accent)',
-              color: 'white',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setShowAddForm(false)}
-            style={{
-              fontSize: 15,
-              padding: '3px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 3,
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Cancel
-          </button>
+          <OutlinedButton accent onClick={handleAddCustom}>Add</OutlinedButton>
+          <OutlinedButton onClick={() => onEditingChange(false)}>Cancel</OutlinedButton>
         </div>
       )}
 
-      {/* Symbol grid */}
       <div
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '4px 10px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 3,
+          minHeight: 0,
+          padding: `10px ${metrics.padPane}px`,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${COLUMNS}, 1fr)`,
+          gap: 5,
           alignContent: 'flex-start',
         }}
       >
         {filteredSymbols.map((sym) => {
-          const isCustom = customSymbols.some(
-            (c) => c.command === sym.command
-          );
+          const isCustom = customSymbols.some((c) => c.command === sym.command);
           return (
-            <div
-              key={sym.command}
-              style={{ position: 'relative', display: 'inline-flex' }}
-            >
+            <div key={sym.command} style={{ position: 'relative' }}>
               <button
                 onClick={() => insertSymbol(sym.command)}
+                onMouseEnter={(e) => {
+                  onFocusEntry(sym);
+                  e.currentTarget.style.borderColor = 'var(--accent)';
+                  e.currentTarget.style.color = 'var(--accent)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--line)';
+                  e.currentTarget.style.color = 'var(--text)';
+                }}
+                onFocus={() => onFocusEntry(sym)}
                 title={`${sym.command} — ${sym.name}`}
                 style={{
-                  width: 32,
-                  height: 28,
+                  width: '100%',
+                  aspectRatio: '1',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 15,
-                  border: '1px solid var(--border)',
-                  borderRadius: 3,
-                  background: 'var(--bg-editor)',
-                  color: 'var(--text-primary)',
+                  border: '1px solid var(--line)',
+                  borderRadius: radius.control,
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  fontFamily: font.serif,
+                  fontStyle: 'italic',
+                  fontSize: 21,
                   cursor: 'pointer',
-                  fontFamily: "'Source Code Pro', monospace",
+                  transition: `color ${motion.color}, border-color ${motion.color}`,
                 }}
               >
                 {sym.display}
@@ -327,24 +246,21 @@ export default function SymbolPalette() {
                   title="Remove custom symbol"
                   style={{
                     position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    width: 14,
-                    height: 14,
-                    fontSize: 9,
-                    lineHeight: '14px',
+                    top: -5,
+                    right: -5,
+                    width: 15,
+                    height: 15,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: '1px solid var(--border)',
+                    border: '1px solid var(--line)',
                     borderRadius: '50%',
-                    background: 'var(--bg-panel)',
-                    color: 'var(--text-dim)',
+                    background: 'var(--surface-chrome)',
+                    color: 'var(--text-faint)',
                     cursor: 'pointer',
-                    padding: 0,
                   }}
                 >
-                  <CloseIcon size={10} />
+                  <CloseIcon size={9} />
                 </button>
               )}
             </div>
@@ -353,15 +269,17 @@ export default function SymbolPalette() {
         {filteredSymbols.length === 0 && (
           <div
             style={{
-              color: 'var(--text-dim)',
-              fontSize: 16,
-              padding: 10,
+              gridColumn: '1 / -1',
+              color: 'var(--text-faint)',
+              fontSize: fs.control,
+              padding: '18px 0',
+              textAlign: 'center',
             }}
           >
             {activeCategory === 'Recent'
               ? 'No recently used symbols yet'
               : activeCategory === 'Custom'
-                ? 'No custom symbols yet — click + to add one'
+                ? 'No custom symbols yet — use Edit palette… to add one'
                 : 'No symbols found'}
           </div>
         )}

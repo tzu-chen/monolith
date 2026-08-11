@@ -1,8 +1,22 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
-import { createExtensions, getThemeReconfiguration, getVimReconfiguration, getLineWrapReconfiguration, getLineNumbersReconfiguration, getPreambleReconfiguration } from './extensions';
+import {
+  createExtensions,
+  getThemeReconfiguration,
+  getVimReconfiguration,
+  getLineWrapReconfiguration,
+  getLineNumbersReconfiguration,
+  getPreambleReconfiguration,
+  getScopeReconfiguration,
+  getDiagnosticsReconfiguration,
+  getBaselineReconfiguration,
+  getFileTreeReconfiguration,
+  type EditorConfig,
+} from './extensions';
 import { useEditorStore } from '../../stores/editorStore';
+import { diagnosticsForFile } from '../../lib/diagnostics';
+import { claimMacroClick } from './scope-decorations';
 import * as api from '../../lib/api';
 
 interface EditorPaneProps {
@@ -28,189 +42,144 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const content = useEditorStore((s) => s.content);
   const scrollToLine = useEditorStore((s) => s.scrollToLine);
   const clearScrollToLine = useEditorStore((s) => s.clearScrollToLine);
-  const updateContent = useEditorStore((s) => s.updateContent);
   const setEditorView = useEditorStore((s) => s.setEditorView);
   const colorScheme = useEditorStore((s) => s.colorScheme);
   const vimMode = useEditorStore((s) => s.vimMode);
   const fontSize = useEditorStore((s) => s.fontSize);
   const fontFamily = useEditorStore((s) => s.fontFamily);
-  const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
   const lineWrap = useEditorStore((s) => s.lineWrap);
   const showLineNumbers = useEditorStore((s) => s.showLineNumbers);
-  const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
   const preambleMacros = useEditorStore((s) => s.preambleMacros);
+  const scope = useEditorStore((s) => s.scope);
+  const diagnostics = useEditorStore((s) => s.diagnostics);
+  const compiledFile = useEditorStore((s) => s.compiledFile);
+  const compileSnapshot = useEditorStore((s) => s.compileSnapshot);
+  const fileTree = useEditorStore((s) => s.fileTree);
 
   // Stable ref for onSave so we don't recreate the editor on every render
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
-  const createView = useCallback(
-    (doc: string, parent: HTMLElement): EditorView => {
-      const s = useEditorStore.getState();
-      const currentColorScheme = s.colorScheme;
-      const currentVim = s.vimMode;
-      const currentFont = { fontSize: s.fontSize, fontFamily: s.fontFamily };
-      const currentLineWrap = s.lineWrap;
-      const currentShowLineNumbers = s.showLineNumbers;
-      const currentPreambleMacros = s.preambleMacros;
-
-      const saveKeymap = keymap.of([
-        {
-          key: 'Mod-s',
-          run: () => {
-            onSaveRef.current();
-            return true;
-          },
-        },
-      ]);
-
-      const updateListener = EditorView.updateListener.of(
-        (update: ViewUpdate) => {
-          if (update.docChanged) {
-            const newContent = update.state.doc.toString();
-            useEditorStore.getState().updateContent(newContent);
-          }
-          // Track cursor position
-          if (update.selectionSet || update.docChanged) {
-            const head = update.state.selection.main.head;
-            const line = update.state.doc.lineAt(head);
-            useEditorStore.getState().setCursorPosition(line.number, head - line.from + 1);
-          }
+  /** Open a file (if needed) and put the cursor on `line`. */
+  const goToDefinition = useCallback(async (file: string, line: number) => {
+    const store = useEditorStore.getState();
+    if (store.activeTabPath !== file) {
+      const existing = store.openTabs.find((t) => t.path === file);
+      if (existing) {
+        store.setActiveTab(file);
+      } else {
+        try {
+          store.openFile(file, await api.readFile(file));
+        } catch {
+          return;
         }
-      );
+      }
+    }
+    store.requestScrollToLine(line);
+  }, []);
 
-      // SyncTeX forward: Ctrl+Click
-      const syncTexHandler = EditorView.domEventHandlers({
-        click: (event, view) => {
-          if (!event.ctrlKey && !event.metaKey) return false;
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-          if (pos == null) return false;
-          const line = view.state.doc.lineAt(pos);
-          const col = pos - line.from + 1;
-          const filePath = useEditorStore.getState().activeTabPath;
-          if (!filePath) return false;
+  /** Everything the editor needs, read fresh from the store. */
+  const currentConfig = useCallback((): EditorConfig => {
+    const s = useEditorStore.getState();
+    const path = s.activeTabPath;
+    return {
+      colorScheme: s.colorScheme,
+      vimMode: s.vimMode,
+      font: { fontSize: s.fontSize, fontFamily: s.fontFamily },
+      lineWrap: s.lineWrap,
+      preambleMacros: s.preambleMacros,
+      showLineNumbers: s.showLineNumbers,
+      scope: s.scope,
+      diagnostics: diagnosticsForFile(s.diagnostics, path, s.compiledFile),
+      baseline: path ? s.compileSnapshot[path] ?? null : null,
+      fileTree: s.fileTree,
+      onGoToDefinition: goToDefinition,
+    };
+  }, [goToDefinition]);
 
-          api.syncTexForward(filePath, line.number, col)
-            .then((highlight) => {
-              if (highlight) {
-                useEditorStore.getState().setSyncTexHighlight(highlight);
-              }
-            })
-            .catch(() => {});
-          return false;
+  /** Listeners and handlers that are identical for a fresh and a restored view. */
+  const sharedExtensions = useCallback(() => {
+    const saveKeymap = keymap.of([
+      {
+        key: 'Mod-s',
+        run: () => {
+          onSaveRef.current();
+          return true;
         },
-      });
+      },
+    ]);
 
-      const state = EditorState.create({
-        doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros, currentShowLineNumbers), updateListener, syncTexHandler],
-      });
+    const updateListener = EditorView.updateListener.of((update: ViewUpdate) => {
+      if (update.docChanged) {
+        useEditorStore.getState().updateContent(update.state.doc.toString());
+      }
+      if (update.selectionSet || update.docChanged) {
+        const head = update.state.selection.main.head;
+        const line = update.state.doc.lineAt(head);
+        useEditorStore.getState().setCursorPosition(line.number, head - line.from + 1);
+      }
+    });
 
-      return new EditorView({ state, parent });
-    },
-    []
-  );
+    // SyncTeX forward on modifier-click. The macro handler runs first on
+    // mousedown; when it jumped to a definition, the click it left behind is
+    // its own and must not also forward-sync.
+    const syncTexHandler = EditorView.domEventHandlers({
+      click: (event, view) => {
+        if (!event.ctrlKey && !event.metaKey) return false;
+        if (claimMacroClick()) return false;
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos == null) return false;
+        const line = view.state.doc.lineAt(pos);
+        const col = pos - line.from + 1;
+        const filePath = useEditorStore.getState().activeTabPath;
+        if (!filePath) return false;
 
-  // Create/swap EditorView when active tab changes
+        api
+          .syncTexForward(filePath, line.number, col)
+          .then((highlight) => {
+            if (highlight) useEditorStore.getState().setSyncTexHighlight(highlight);
+          })
+          .catch(() => {});
+        return false;
+      },
+    });
+
+    return [saveKeymap, updateListener, syncTexHandler];
+  }, []);
+
+  // Create/swap EditorView when the active tab changes.
   useEffect(() => {
     if (!containerRef.current || !activeTabPath) return;
 
-    // Save current editor state to cache before switching
+    // Persist the outgoing view's state before replacing it.
     if (viewRef.current) {
       const currentKey = viewRef.current.dom.dataset.cacheKey;
-      if (currentKey) {
-        stateCache.set(currentKey, viewRef.current.state);
-      }
+      if (currentKey) stateCache.set(currentKey, viewRef.current.state);
       viewRef.current.destroy();
       viewRef.current = null;
     }
 
-    // Check if we have a cached state for this file
     const key = cacheKeyFor(activeTabPath);
     const cached = stateCache.get(key);
-    const currentColorScheme = useEditorStore.getState().colorScheme;
-    const currentVim = useEditorStore.getState().vimMode;
-    const currentFont = { fontSize: useEditorStore.getState().fontSize, fontFamily: useEditorStore.getState().fontFamily };
-    const currentLineWrap = useEditorStore.getState().lineWrap;
-    const currentShowLineNumbers = useEditorStore.getState().showLineNumbers;
-    const currentPreambleMacros = useEditorStore.getState().preambleMacros;
+    const extensions = [...sharedExtensions(), ...createExtensions(currentConfig())];
 
+    const state = EditorState.create({
+      doc: cached ? cached.doc : useEditorStore.getState().content,
+      extensions,
+      selection: cached?.selection,
+    });
+
+    const view = new EditorView({ state, parent: containerRef.current });
+    view.dom.dataset.cacheKey = key;
     if (cached) {
-      // Restore cached state (preserves undo history)
-      const saveKeymap = keymap.of([
-        {
-          key: 'Mod-s',
-          run: () => {
-            onSaveRef.current();
-            return true;
-          },
-        },
-      ]);
-
-      const updateListener = EditorView.updateListener.of(
-        (update: ViewUpdate) => {
-          if (update.docChanged) {
-            const newContent = update.state.doc.toString();
-            useEditorStore.getState().updateContent(newContent);
-          }
-          if (update.selectionSet || update.docChanged) {
-            const head = update.state.selection.main.head;
-            const line = update.state.doc.lineAt(head);
-            useEditorStore.getState().setCursorPosition(line.number, head - line.from + 1);
-          }
-        }
-      );
-
-      const syncTexHandler = EditorView.domEventHandlers({
-        click: (event, view) => {
-          if (!event.ctrlKey && !event.metaKey) return false;
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-          if (pos == null) return false;
-          const line = view.state.doc.lineAt(pos);
-          const col = pos - line.from + 1;
-          const filePath = useEditorStore.getState().activeTabPath;
-          if (!filePath) return false;
-          api.syncTexForward(filePath, line.number, col)
-            .then((highlight) => {
-              if (highlight) {
-                useEditorStore.getState().setSyncTexHighlight(highlight);
-              }
-            })
-            .catch(() => {});
-          return false;
-        },
-      });
-
-      // Recreate state with cached doc + extensions
-      const state = EditorState.create({
-        doc: cached.doc,
-        extensions: [saveKeymap, ...createExtensions(currentColorScheme, currentVim, currentFont, currentLineWrap, currentPreambleMacros, currentShowLineNumbers), updateListener, syncTexHandler],
-        selection: cached.selection,
-      });
-
-      const view = new EditorView({
-        state,
-        parent: containerRef.current,
-      });
-      view.dom.dataset.cacheKey = key;
       // A fresh view starts scrolled to the top; bring the restored cursor back
       // into view so the editing location is preserved, not just the selection.
       view.dispatch({
         effects: EditorView.scrollIntoView(cached.selection.main.head, { y: 'center' }),
       });
-      viewRef.current = view;
-      setEditorView(view);
-    } else {
-      // Create new editor with content from store
-      const view = createView(content, containerRef.current);
-      view.dom.dataset.cacheKey = key;
-      viewRef.current = view;
-      setEditorView(view);
     }
-
-    return () => {
-      // Don't destroy on cleanup — we handle it at the top of this effect
-    };
+    viewRef.current = view;
+    setEditorView(view);
   }, [activeTabPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On unmount (e.g. switching the view to PDF-only), persist the live editor
@@ -223,50 +192,53 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       if (key) stateCache.set(key, view.state);
       view.destroy();
       viewRef.current = null;
+      setEditorView(null);
     };
-  }, []);
+  }, [setEditorView]);
 
-  // Reconfigure theme dynamically (also triggered by font/color scheme changes)
   useEffect(() => {
-    if (!viewRef.current) return;
-    viewRef.current.dispatch({
+    viewRef.current?.dispatch({
       effects: getThemeReconfiguration(colorScheme, { fontSize, fontFamily }),
     });
   }, [colorScheme, fontSize, fontFamily]);
 
-  // Reconfigure vim mode dynamically
   useEffect(() => {
-    if (!viewRef.current) return;
-    viewRef.current.dispatch({
-      effects: getVimReconfiguration(vimMode),
-    });
+    viewRef.current?.dispatch({ effects: getVimReconfiguration(vimMode) });
   }, [vimMode]);
 
-  // Reconfigure line wrap dynamically
   useEffect(() => {
-    if (!viewRef.current) return;
-    viewRef.current.dispatch({
-      effects: getLineWrapReconfiguration(lineWrap),
-    });
+    viewRef.current?.dispatch({ effects: getLineWrapReconfiguration(lineWrap) });
   }, [lineWrap]);
 
-  // Reconfigure line-number gutter dynamically
   useEffect(() => {
-    if (!viewRef.current) return;
-    viewRef.current.dispatch({
-      effects: getLineNumbersReconfiguration(showLineNumbers),
-    });
+    viewRef.current?.dispatch({ effects: getLineNumbersReconfiguration(showLineNumbers) });
   }, [showLineNumbers]);
 
-  // Reconfigure preamble macros for math preview
   useEffect(() => {
-    if (!viewRef.current) return;
-    viewRef.current.dispatch({
-      effects: getPreambleReconfiguration(preambleMacros),
-    });
+    viewRef.current?.dispatch({ effects: getPreambleReconfiguration(preambleMacros) });
   }, [preambleMacros]);
 
-  // Handle scroll-to-line requests from outline
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: getScopeReconfiguration(scope) });
+  }, [scope]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: getDiagnosticsReconfiguration(diagnosticsForFile(diagnostics, activeTabPath, compiledFile)),
+    });
+  }, [diagnostics, activeTabPath, compiledFile]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: getBaselineReconfiguration(activeTabPath ? compileSnapshot[activeTabPath] ?? null : null),
+    });
+  }, [compileSnapshot, activeTabPath]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: getFileTreeReconfiguration(fileTree) });
+  }, [fileTree]);
+
+  // Handle scroll-to-line requests from the outline, panels and status bar.
   useEffect(() => {
     if (scrollToLine == null || !viewRef.current) return;
     const view = viewRef.current;
@@ -275,36 +247,18 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       selection: { anchor: line.from },
       effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
     });
+    view.focus();
     clearScrollToLine();
   }, [scrollToLine, clearScrollToLine]);
 
-  // Show empty state when no tabs are open
-  if (!activeTabPath) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'var(--bg-editor)',
-          color: 'var(--text-dim)',
-          fontSize: 18,
-        }}
-      >
-        Open a file from the sidebar to start editing
-      </div>
-    );
-  }
+  // `content` drives the editor only on the initial mount of a tab; afterwards
+  // the editor is the source of truth and writes back through updateContent.
+  void content;
 
   return (
     <div
       ref={containerRef}
-      style={{
-        height: '100%',
-        overflow: 'hidden',
-        backgroundColor: 'var(--bg-editor)',
-      }}
+      style={{ height: '100%', overflow: 'hidden', backgroundColor: 'var(--surface-editor)' }}
     />
   );
 }

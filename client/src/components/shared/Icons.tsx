@@ -1,7 +1,16 @@
 import type { CSSProperties } from 'react';
 
+/**
+ * Line icons.
+ *
+ * All icons are stroke-only: `fill: none`, `stroke: currentColor`, round caps
+ * and joins. The handoff draws rail glyphs at `stroke-width: 1.6` and inline
+ * glyphs at 1.8–2.2, so `strokeWidth` defaults to 1.8 and rail icons pass 1.6.
+ */
+
 interface IconProps {
   size?: number;
+  strokeWidth?: number;
   style?: CSSProperties;
 }
 
@@ -14,7 +23,7 @@ function svg(props: IconProps, children: React.ReactNode, viewBox = '0 0 24 24')
       viewBox={viewBox}
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={props.strokeWidth ?? 1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...props.style }}
@@ -24,29 +33,85 @@ function svg(props: IconProps, children: React.ReactNode, viewBox = '0 0 24 24')
   );
 }
 
+// ── Chevrons and arrows ──
+
 export function ChevronDown(props: IconProps) {
-  return svg(props, <polyline points="6 9 12 15 18 9" />);
+  return svg({ strokeWidth: 2.2, ...props }, <path d="M5 8l7 7 7-7" />);
 }
 
 export function ChevronRight(props: IconProps) {
-  return svg(props, <polyline points="9 6 15 12 9 18" />);
+  return svg({ strokeWidth: 2.2, ...props }, <path d="M8 5l7 7-7 7" />);
 }
 
 export function ChevronLeft(props: IconProps) {
-  return svg(props, <polyline points="15 6 9 12 15 18" />);
+  return svg({ strokeWidth: 2.2, ...props }, <path d="M16 5l-7 7 7 7" />);
 }
 
 export function ChevronUp(props: IconProps) {
-  return svg(props, <polyline points="18 15 12 9 6 15" />);
+  return svg({ strokeWidth: 2.2, ...props }, <path d="M5 16l7-7 7 7" />);
 }
 
+export function ArrowUp(props: IconProps) {
+  return svg(props, <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>);
+}
+
+export function ArrowRight(props: IconProps) {
+  return svg({ strokeWidth: 2, ...props }, <path d="M4 12h16M14 6l6 6-6 6" />);
+}
+
+// ── Status glyphs ──
+
 export function PlayIcon(props: IconProps) {
-  return svg(props, <polygon points="6 3 20 12 6 21" fill="currentColor" stroke="none" />);
+  return svg(props, <path d="M7 4l12 8-12 8z" />);
 }
 
 export function CloseIcon(props: IconProps) {
   return svg(props, <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>);
 }
+
+export function ErrorIcon(props: IconProps) {
+  return svg(props, <><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5v.01" /></>);
+}
+
+export function WarningIcon(props: IconProps) {
+  return svg(props, <><path d="M12 4l9 16H3z" /><path d="M12 10v4M12 17v.01" /></>);
+}
+
+export function SpinnerIcon(props: IconProps) {
+  const s = props.size ?? 14;
+  return (
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={props.strokeWidth ?? 2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        display: 'inline-block',
+        verticalAlign: 'middle',
+        flexShrink: 0,
+        animation: 'spin 1s linear infinite',
+        ...props.style,
+      }}
+    >
+      <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+    </svg>
+  );
+}
+
+export function RefreshIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M20 11a8 8 0 1 0-.9 4.6" />
+      <path d="M20 5v6h-6" />
+    </>
+  ));
+}
+
+// ── Editing ──
 
 export function EditIcon(props: IconProps) {
   return svg(props, (
@@ -65,75 +130,12 @@ export function DotIcon(props: IconProps) {
   return svg(props, <circle cx="12" cy="12" r="5" fill="currentColor" stroke="none" />);
 }
 
-export function ArrowUp(props: IconProps) {
-  return svg(props, <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>);
-}
-
-export function ArrowRight(props: IconProps) {
-  return svg(props, <><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></>);
-}
-
-export function SpinnerIcon(props: IconProps) {
-  const s = props.size ?? 14;
-  return (
-    <svg
-      width={s}
-      height={s}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        display: 'inline-block',
-        verticalAlign: 'middle',
-        flexShrink: 0,
-        animation: 'spin 1s linear infinite',
-        ...props.style,
-      }}
-    >
-      <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-    </svg>
-  );
-}
-
-export function SunIcon(props: IconProps) {
-  return svg(props, (
-    <>
-      <circle cx="12" cy="12" r="4" />
-      <line x1="12" y1="2" x2="12" y2="4" />
-      <line x1="12" y1="20" x2="12" y2="22" />
-      <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
-      <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
-      <line x1="2" y1="12" x2="4" y2="12" />
-      <line x1="20" y1="12" x2="22" y2="12" />
-      <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
-      <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
-    </>
-  ));
-}
-
-export function MoonIcon(props: IconProps) {
-  return svg(props, <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />);
-}
-
-export function DownloadIcon(props: IconProps) {
-  return svg(props, (
-    <>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </>
-  ));
-}
-
 export function PlusIcon(props: IconProps) {
-  return svg(props, <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>);
+  return svg({ strokeWidth: 2, ...props }, <path d="M12 5v14M5 12h14" />);
 }
 
 export function MinusIcon(props: IconProps) {
-  return svg(props, <line x1="5" y1="12" x2="19" y2="12" />);
+  return svg({ strokeWidth: 2, ...props }, <path d="M5 12h14" />);
 }
 
 export function CopyIcon(props: IconProps) {
@@ -141,6 +143,46 @@ export function CopyIcon(props: IconProps) {
     <>
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ));
+}
+
+export function SearchIcon(props: IconProps) {
+  return svg(props, <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" /></>);
+}
+
+export function DownloadIcon(props: IconProps) {
+  return svg(props, <path d="M12 3v12M8 11l4 4 4-4M4 20h16" />);
+}
+
+export function UploadIcon(props: IconProps) {
+  return svg(props, <path d="M12 16V4M8 8l4-4 4 4M4 20h16" />);
+}
+
+export function NewFolderIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z" />
+      <path d="M12 11v6M9 14h6" />
+    </>
+  ));
+}
+
+export function NewFileIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M12 12v5M9.5 14.5h5" />
+    </>
+  ));
+}
+
+export function ExternalIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M20 4L11 13" />
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
     </>
   ));
 }
@@ -175,41 +217,36 @@ export function UnarchiveIcon(props: IconProps) {
   ));
 }
 
-export function SettingsIcon(props: IconProps) {
+export function SunIcon(props: IconProps) {
   return svg(props, (
     <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
     </>
   ));
 }
 
-export function CodeIcon(props: IconProps) {
+export function MoonIcon(props: IconProps) {
+  return svg(props, <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />);
+}
+
+// ── Rail tools ──
+
+export function FilesIcon(props: IconProps) {
   return svg(props, (
-    <>
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
-    </>
+    <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z" />
   ));
 }
 
-export function OmegaIcon(props: IconProps) {
-  return svg(props, (
-    <>
-      <path d="M3 20h5.5" />
-      <path d="M15.5 20H21" />
-      <path d="M6.5 20c.6-2 1-4 1-6a5.5 5.5 0 1 1 9 0c0 2 .4 4 1 6" />
-    </>
-  ), '0 0 24 24');
+export function OutlineIcon(props: IconProps) {
+  return svg(props, <path d="M4 6h16M7 11h13M10 16h10M4 11h.01M7 16h.01" />);
 }
 
-export function SnippetIcon(props: IconProps) {
+export function ScopeIcon(props: IconProps) {
   return svg(props, (
     <>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="8" y1="13" x2="16" y2="13" />
-      <line x1="8" y1="17" x2="12" y2="17" />
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+      <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" />
     </>
   ));
 }
@@ -218,18 +255,52 @@ export function BookIcon(props: IconProps) {
   return svg(props, (
     <>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      <path d="M6.5 3H20v19H6.5A2.5 2.5 0 0 1 4 19.5v-14A2.5 2.5 0 0 1 6.5 3z" />
     </>
   ));
 }
 
 export function ChartIcon(props: IconProps) {
+  return svg(props, <><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 4-5" /></>);
+}
+
+export function OmegaIcon(props: IconProps) {
+  return svg(props, (
+    <path d="M3 20h5.5M15.5 20H21M6.5 20c.6-2 1-4 1-6a5.5 5.5 0 1 1 9 0c0 2 .4 4 1 6" />
+  ));
+}
+
+export function SnippetIcon(props: IconProps) {
   return svg(props, (
     <>
-      <path d="M3 3v18h18" />
-      <path d="M7 14l3-3 3 3 4-5" />
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M8 13h8M8 17h5" />
     </>
   ));
+}
+
+export function ProjectsIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    </>
+  ));
+}
+
+export function SettingsIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </>
+  ));
+}
+
+export function CodeIcon(props: IconProps) {
+  return svg(props, <><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></>);
 }
 
 export function PanelIcon(props: IconProps & { side: 'left' | 'right' | 'both' }) {

@@ -7,6 +7,8 @@ import {
   DEFAULT_LIGHT_SCHEME_ID,
   DEFAULT_DARK_SCHEME_ID,
 } from '../colorSchemes';
+import { parseDiagnostics, type Diagnostic } from '../lib/diagnostics';
+import type { ScopeGraph } from '../lib/scope-api';
 
 export interface AutoSwitchSettings {
   enabled: boolean;
@@ -32,14 +34,33 @@ export function getSchemeForCurrentTime(s: AutoSwitchSettings): string {
 }
 
 export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
-export type ActivePanel = 'symbols' | 'snippets' | null;
 export type Theme = 'light' | 'dark';
 export type ViewMode = 'both' | 'editor' | 'pdf';
+
+/**
+ * Rail tools that open a side panel. Only one is open at a time; clicking the
+ * active tool collapses it and the editor/preview expand to fill.
+ */
+export type SidePanel =
+  | 'files'
+  | 'outline'
+  | 'scope'
+  | 'references'
+  | 'plots'
+  | 'projects';
+
+/** Rail tools that open the drawer docked at the bottom of the editor pane. */
+export type Drawer = 'symbols' | 'snippets';
+
+/** Overlay finders: Mod+P files, Mod+Shift+P projects. */
+export type Finder = 'files' | 'projects';
 
 // HTML render (LaTeXML) — additive web-render path alongside the Tectonic PDF.
 export type PreviewMode = 'pdf' | 'html';
 export type HtmlSplitLevel = 'none' | 'part' | 'chapter' | 'section' | 'subsection';
 export type HtmlRenderStatus = 'idle' | 'rendering' | 'success' | 'error' | 'unavailable';
+
+export type ScopeStatus = 'idle' | 'resolving' | 'ready' | 'error';
 
 export interface SyncTexHighlight {
   page: number;
@@ -74,7 +95,21 @@ interface EditorState {
   log: string;
   errors: string[];
   warnings: string[];
+  /** Elapsed compile duration in ms. */
   lastCompileTime: number | null;
+  /** Wall-clock time of the last compile, for the freshness label. */
+  lastCompileAt: number | null;
+  diagnostics: Diagnostic[];
+  /**
+   * File the last compile ran on. Diagnostics that name no file belong to it,
+   * so the gutter puts them on the right document.
+   */
+  compiledFile: string | null;
+  /**
+   * Content of each file as of the last successful compile, keyed by path.
+   * Drives the gutter diff bars and the `+N ~M since last compile` summary.
+   */
+  compileSnapshot: Record<string, string>;
 
   // HTML render (LaTeXML) state — runs beside the PDF path, same .tex source
   previewMode: PreviewMode;
@@ -84,18 +119,22 @@ interface EditorState {
   htmlErrors: string[];
   htmlWarnings: string[];
   htmlNonce: number; // bumped on each successful render to bust the iframe cache
+  htmlRenderedAt: number | null;
 
-  // Sidebar visibility
-  sidebarVisible: boolean;
+  // Shell state
+  activePanel: SidePanel | null;
+  activeDrawer: Drawer | null;
+  finder: Finder | null;
+  showSettings: boolean;
 
-  // Panel state (symbols, snippets)
-  activePanel: ActivePanel;
   editorView: EditorView | null;
 
-  // Modal dialogs (references browser, project manager, Pyramid plots)
-  showReferences: boolean;
-  showProjectManager: boolean;
-  showPyramidPlots: boolean;
+  // Scope graph (packages/macros/environments in scope for the active file)
+  scope: ScopeGraph | null;
+  scopeStatus: ScopeStatus;
+  scopeError: string | null;
+  /** Bumped to force a re-resolve — on save, and on a watcher event in the chain. */
+  scopeNonce: number;
 
   // Scroll-to-line request for outline clicks
   scrollToLine: number | null;
@@ -104,6 +143,12 @@ interface EditorState {
   theme: Theme;
   colorScheme: string;
   autoSwitch: AutoSwitchSettings;
+  /**
+   * Invert the PDF canvas in dark mode. The design treats the rendered page as
+   * real paper (a dimmed light sheet), so this is off by default; the older
+   * inverted rendering stays available for low-light work.
+   */
+  invertPdfInDark: boolean;
 
   // Vim mode
   vimMode: boolean;
@@ -160,6 +205,8 @@ interface EditorState {
     errors: string[];
     warnings: string[];
     elapsed: number;
+    /** File the compile ran on, for attributing file-less diagnostics. */
+    file: string | null;
   }) => void;
 
   // HTML render actions
@@ -174,19 +221,24 @@ interface EditorState {
     warnings: string[];
   }) => void;
 
-  // Sidebar
-  toggleSidebar: () => void;
+  // Shell
+  setActivePanel: (panel: SidePanel | null) => void;
+  toggleActivePanel: (panel: SidePanel) => void;
+  setActiveDrawer: (drawer: Drawer | null) => void;
+  toggleDrawer: (drawer: Drawer) => void;
+  setFinder: (finder: Finder | null) => void;
+  setShowSettings: (show: boolean) => void;
 
-  // Panels
-  setActivePanel: (panel: ActivePanel) => void;
   setEditorView: (view: EditorView | null) => void;
   /** Insert text at the active editor's cursor and focus it. */
   insertAtCursor: (text: string) => void;
 
-  // Modal dialogs
-  setShowReferences: (show: boolean) => void;
-  setShowProjectManager: (show: boolean) => void;
-  setShowPyramidPlots: (show: boolean) => void;
+  // Scope
+  setScope: (scope: ScopeGraph | null) => void;
+  setScopeStatus: (status: ScopeStatus, error?: string | null) => void;
+  invalidateScope: () => void;
+  /** True when `path` is part of the resolved chain, so a change to it matters. */
+  scopeChainIncludes: (path: string) => boolean;
 
   // Outline
   requestScrollToLine: (line: number) => void;
@@ -196,6 +248,7 @@ interface EditorState {
   setColorScheme: (id: string) => void;
   setAutoSwitch: (settings: AutoSwitchSettings) => void;
   applyAutoSwitchScheme: () => void;
+  toggleInvertPdfInDark: () => void;
 
   // Vim mode
   toggleVimMode: () => void;
@@ -266,32 +319,19 @@ function getInitialTheme(): Theme {
   return getSchemeById(getInitialColorScheme()).type;
 }
 
-function getInitialVimMode(): boolean {
+function readFlag(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem('monolith-vim') === 'true';
+    const stored = localStorage.getItem(key);
+    if (stored === 'true') return true;
+    if (stored === 'false') return false;
   } catch {}
-  return false;
+  return fallback;
 }
 
-function getInitialLineWrap(): boolean {
+function writeFlag(key: string, value: boolean): void {
   try {
-    return localStorage.getItem('monolith-line-wrap') === 'true';
+    localStorage.setItem(key, String(value));
   } catch {}
-  return false;
-}
-
-function getInitialAutoRecompile(): boolean {
-  try {
-    return localStorage.getItem('monolith-auto-recompile') === 'true';
-  } catch {}
-  return false;
-}
-
-function getInitialShowLineNumbers(): boolean {
-  try {
-    return localStorage.getItem('monolith-line-numbers') !== 'false';
-  } catch {}
-  return true;
 }
 
 function getInitialFontSize(): number {
@@ -333,6 +373,17 @@ function getInitialHtmlSplit(): HtmlSplitLevel {
   return 'none';
 }
 
+const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'projects'];
+
+function getInitialPanel(): SidePanel | null {
+  try {
+    const stored = localStorage.getItem('monolith-panel');
+    if (stored === 'none') return null;
+    if (stored && (SIDE_PANELS as string[]).includes(stored)) return stored as SidePanel;
+  } catch {}
+  return 'files';
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
   projectRoot: null,
@@ -346,6 +397,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   errors: [],
   warnings: [],
   lastCompileTime: null,
+  lastCompileAt: null,
+  compiledFile: null,
+  diagnostics: [],
+  compileSnapshot: {},
   previewMode: getInitialPreviewMode(),
   htmlSplitAt: getInitialHtmlSplit(),
   htmlRenderStatus: 'idle',
@@ -353,23 +408,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   htmlErrors: [],
   htmlWarnings: [],
   htmlNonce: 0,
-  sidebarVisible: true,
-  activePanel: null,
+  htmlRenderedAt: null,
+  activePanel: getInitialPanel(),
+  activeDrawer: null,
+  finder: null,
+  showSettings: false,
   editorView: null,
-  showReferences: false,
-  showProjectManager: false,
-  showPyramidPlots: false,
+  scope: null,
+  scopeStatus: 'idle',
+  scopeError: null,
+  scopeNonce: 0,
   scrollToLine: null,
   theme: getInitialTheme(),
   colorScheme: getInitialColorScheme(),
   autoSwitch: getInitialAutoSwitch(),
-  vimMode: getInitialVimMode(),
-  autoRecompile: getInitialAutoRecompile(),
+  invertPdfInDark: readFlag('monolith-invert-pdf-dark', false),
+  vimMode: readFlag('monolith-vim', false),
+  autoRecompile: readFlag('monolith-auto-recompile', false),
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
   fontFamily: getInitialFontFamily(),
-  lineWrap: getInitialLineWrap(),
-  showLineNumbers: getInitialShowLineNumbers(),
+  lineWrap: readFlag('monolith-line-wrap', false),
+  showLineNumbers: readFlag('monolith-line-numbers', true),
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -394,11 +454,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       errors: [],
       warnings: [],
       lastCompileTime: null,
+      lastCompileAt: null,
+      compiledFile: null,
+      diagnostics: [],
+      compileSnapshot: {},
       htmlRenderStatus: 'idle',
       htmlLog: '',
       htmlErrors: [],
       htmlWarnings: [],
       htmlNonce: 0,
+      htmlRenderedAt: null,
       content: '',
       filePath: 'main.tex',
       dirty: false,
@@ -406,6 +471,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       projectRoot: null,
       syncTexHighlight: null,
       preambleMacros: '',
+      scope: null,
+      scopeStatus: 'idle',
+      scopeError: null,
     }),
 
   openFile: (path, content) => {
@@ -494,14 +562,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setCompilationStatus: (compilationStatus) => set({ compilationStatus }),
   setPdfData: (pdfData) => set({ pdfData }),
   setCompileResult: (result) =>
-    set({
+    set((state) => ({
       compilationStatus: result.success ? 'success' : 'error',
-      pdfData: result.pdf ?? null,
+      pdfData: result.pdf ?? state.pdfData,
       log: result.log,
       errors: result.errors,
       warnings: result.warnings,
       lastCompileTime: result.elapsed,
-    }),
+      lastCompileAt: Date.now(),
+      compiledFile: result.file,
+      diagnostics: parseDiagnostics(result.errors, result.warnings),
+      // Only a successful compile establishes a new diff baseline — after a
+      // failed one, the bars should still point at what the user has changed
+      // since the last version that actually built.
+      compileSnapshot: result.success
+        ? Object.fromEntries(state.openTabs.map((t) => [t.path, t.content]))
+        : state.compileSnapshot,
+    })),
 
   setPreviewMode: (previewMode) => {
     try { localStorage.setItem('monolith-preview-mode', previewMode); } catch {}
@@ -522,11 +599,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       htmlErrors: result.errors,
       htmlWarnings: result.warnings,
       htmlNonce: result.ok ? state.htmlNonce + 1 : state.htmlNonce,
+      htmlRenderedAt: result.ok ? Date.now() : state.htmlRenderedAt,
     })),
 
-  toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
+  setActivePanel: (activePanel) => {
+    try { localStorage.setItem('monolith-panel', activePanel ?? 'none'); } catch {}
+    set({ activePanel });
+  },
 
-  setActivePanel: (activePanel) => set({ activePanel }),
+  toggleActivePanel: (panel) => {
+    const next = get().activePanel === panel ? null : panel;
+    try { localStorage.setItem('monolith-panel', next ?? 'none'); } catch {}
+    set({ activePanel: next });
+  },
+
+  setActiveDrawer: (activeDrawer) => set({ activeDrawer }),
+  toggleDrawer: (drawer) =>
+    set((state) => ({ activeDrawer: state.activeDrawer === drawer ? null : drawer })),
+
+  setFinder: (finder) => set({ finder }),
+  setShowSettings: (showSettings) => set({ showSettings }),
+
   setEditorView: (editorView) => set({ editorView }),
   insertAtCursor: (text) => {
     const view = get().editorView;
@@ -535,9 +628,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     view.dispatch({ changes: { from: head, insert: text }, selection: { anchor: head + text.length } });
     view.focus();
   },
-  setShowReferences: (showReferences) => set({ showReferences }),
-  setShowProjectManager: (showProjectManager) => set({ showProjectManager }),
-  setShowPyramidPlots: (showPyramidPlots) => set({ showPyramidPlots }),
+
+  setScope: (scope) => set({ scope, scopeStatus: 'ready', scopeError: null }),
+  setScopeStatus: (scopeStatus, scopeError = null) => set({ scopeStatus, scopeError }),
+  invalidateScope: () => set((state) => ({ scopeNonce: state.scopeNonce + 1 })),
+  scopeChainIncludes: (path) => {
+    const { scope } = get();
+    return !!scope && (scope.root === path || scope.chain.includes(path));
+  },
 
   requestScrollToLine: (line) => set({ scrollToLine: line }),
   clearScrollToLine: () => set({ scrollToLine: null }),
@@ -580,27 +678,33 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ colorScheme: scheme.id, theme: scheme.type });
   },
 
+  toggleInvertPdfInDark: () => {
+    const next = !get().invertPdfInDark;
+    writeFlag('monolith-invert-pdf-dark', next);
+    set({ invertPdfInDark: next });
+  },
+
   toggleVimMode: () => {
-    const newVim = !get().vimMode;
-    try { localStorage.setItem('monolith-vim', String(newVim)); } catch {}
-    set({ vimMode: newVim });
+    const next = !get().vimMode;
+    writeFlag('monolith-vim', next);
+    set({ vimMode: next });
   },
 
   toggleAutoRecompile: () => {
     const next = !get().autoRecompile;
-    try { localStorage.setItem('monolith-auto-recompile', String(next)); } catch {}
+    writeFlag('monolith-auto-recompile', next);
     set({ autoRecompile: next });
   },
 
   toggleLineWrap: () => {
-    const newWrap = !get().lineWrap;
-    try { localStorage.setItem('monolith-line-wrap', String(newWrap)); } catch {}
-    set({ lineWrap: newWrap });
+    const next = !get().lineWrap;
+    writeFlag('monolith-line-wrap', next);
+    set({ lineWrap: next });
   },
 
   toggleShowLineNumbers: () => {
     const next = !get().showLineNumbers;
-    try { localStorage.setItem('monolith-line-numbers', String(next)); } catch {}
+    writeFlag('monolith-line-numbers', next);
     set({ showLineNumbers: next });
   },
 

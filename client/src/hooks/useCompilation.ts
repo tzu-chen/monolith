@@ -30,6 +30,7 @@ export function useCompilation() {
           errors: ['No .tex file is currently open'],
           warnings: [],
           elapsed: 0,
+          file: null,
         });
         return;
       }
@@ -39,7 +40,7 @@ export function useCompilation() {
       const startTime = Date.now();
       const result = await api.compile(activeFile, compileContent);
       const elapsed = Date.now() - startTime;
-      setCompileResult({ ...result, elapsed });
+      setCompileResult({ ...result, elapsed, file: activeFile });
     } catch (err) {
       setCompileResult({
         success: false,
@@ -47,6 +48,7 @@ export function useCompilation() {
         errors: [String(err)],
         warnings: [],
         elapsed: 0,
+        file: useEditorStore.getState().activeTabPath,
       });
     } finally {
       isCompilingRef.current = false;

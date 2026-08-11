@@ -25,6 +25,9 @@ export function useAutosave() {
         if (tab && tab.content === fileContent) {
           markSaved(path);
         }
+        // What is now on disk may declare different packages or macros than
+        // the graph was resolved from.
+        if (current.scopeChainIncludes(path)) current.invalidateScope();
       } catch (err) {
         console.error('Autosave failed:', err);
       } finally {
