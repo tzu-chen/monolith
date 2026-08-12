@@ -279,33 +279,152 @@
 
   /* ---- 6. QED tombstone ------------------------------------------------ */
 
-  // LaTeXML ends a proof with a bare ∎ text node (no element), which CSS can't
-  // target. Wrap that glyph in a .ltx_qed span so the stylesheet can float it
-  // flush right. If a build already emits an .ltx_qed element, leave it be.
+  // LaTeXML renders every tombstone — the one \end{proof} adds, an explicit
+  // \qed, \qedsymbol, \openbox — as a bare ∎ text node with no element of its
+  // own, which CSS can't target. Wrap each one in a .ltx_qed span so the
+  // stylesheet can colour it and float it flush right, wherever it lands: at
+  // the end of a proof, inside a theorem, or in a plain paragraph. \qedhere
+  // instead leaves the glyph as a trailing <mo> inside the display's MathML,
+  // where it rides along centred with the formula; that one is lifted out onto
+  // the equation row so it reaches the right margin like the rest.
   var QED = '∎'; // ∎
-  function setupQed() {
-    document.querySelectorAll('.ltx_proof').forEach(function (proof) {
-      if (proof.querySelector('.ltx_qed')) return;
+  // Verbatim/listing text is quoted source, not markup we should rewrite, and
+  // the TOC is chrome. An .ltx_qed a build already emitted is left alone.
+  var QED_SKIP =
+    '.ltx_qed, .monolith-toc, .ltx_verbatim, .ltx_listing, .ltx_lstlisting, ' +
+    'pre, code, script, style';
 
-      var walker = document.createTreeWalker(proof, NodeFilter.SHOW_TEXT);
-      var node, target = null;
-      while ((node = walker.nextNode())) {
-        if (node.nodeValue.indexOf(QED) !== -1) target = node; // keep the last
-      }
-      if (!target) return;
+  function qedMark() {
+    var span = document.createElement('span');
+    span.className = 'ltx_qed';
+    span.textContent = QED;
+    return span;
+  }
 
-      var idx = target.nodeValue.lastIndexOf(QED);
-      var mark = target.splitText(idx); // mark starts at the glyph
-      mark.splitText(1); // mark is now exactly the glyph
-
-      var span = document.createElement('span');
-      span.className = 'ltx_qed';
-      span.textContent = QED;
-      mark.parentNode.replaceChild(span, mark);
-
+  // Replace every ∎ in one text node with a .ltx_qed span.
+  function wrapQedIn(node) {
+    var idx;
+    while (node && (idx = node.nodeValue.indexOf(QED)) !== -1) {
+      var mark = node.splitText(idx); // mark starts at the glyph
+      var rest = mark.splitText(1); // mark is now exactly the glyph
+      mark.parentNode.replaceChild(qedMark(), mark);
       // Drop the whitespace LaTeXML leaves before the mark so the floated span
       // doesn't ride on a stray trailing space.
-      target.nodeValue = target.nodeValue.replace(/\s+$/, '');
+      node.nodeValue = node.nodeValue.replace(/\s+$/, '');
+      node = rest;
+    }
+  }
+
+  function wrapTextQed(root) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        if (node.nodeValue.indexOf(QED) === -1) return NodeFilter.FILTER_REJECT;
+        var parent = node.parentElement;
+        if (!parent) return NodeFilter.FILTER_REJECT;
+        // Glyphs inside math are handled by hoistMathQed below.
+        if (parent.closest('math') || parent.closest(QED_SKIP)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    // Collect first: wrapping splits the node the walker is standing on.
+    var nodes = [], node;
+    while ((node = walker.nextNode())) nodes.push(node);
+    nodes.forEach(wrapQedIn);
+  }
+
+  // The right-hand spacer cell of a display equation's row. LaTeXML centres a
+  // display by padding it with two 50%-wide cells and parks the equation number
+  // in a zero-width cell after them, so the spacer's right edge is the display's
+  // right margin — exactly where \qedhere puts the mark in print.
+  function eqnQedCell(math) {
+    var row = math.closest('tr.ltx_eqn_row');
+    return row ? row.querySelector('td.ltx_eqn_center_padright') : null;
+  }
+
+  // Drop a token from the MathML, along with any wrapper row it just emptied.
+  function pruneToken(tok) {
+    var parent = tok.parentNode;
+    parent.removeChild(tok);
+    while (
+      parent &&
+      parent.localName === 'mrow' &&
+      parent.children.length === 0 &&
+      parent.parentNode
+    ) {
+      var grandparent = parent.parentNode;
+      grandparent.removeChild(parent);
+      parent = grandparent;
+    }
+  }
+
+  function hoistMathQed() {
+    document.querySelectorAll('math').forEach(function (math) {
+      var text = math.textContent.replace(/\s+$/, '');
+      if (text.charAt(text.length - 1) !== QED) return; // only a trailing mark
+
+      var tok = null;
+      math.querySelectorAll('mo, mi, mtext').forEach(function (el) {
+        if (el.textContent.replace(/\s+/g, '') === QED) tok = el; // keep the last
+      });
+      if (!tok) return;
+
+      var cell = eqnQedCell(math);
+      if (!cell) {
+        // Inline math (or a display we can't place into): leave the glyph where
+        // it sits and settle for the accent colour, upright — LaTeXML sets the
+        // whole formula in italic, but the tombstone is a symbol.
+        var cls = (tok.getAttribute('class') || '')
+          .replace(/\bltx_mathvariant_italic\b/, '')
+          .trim();
+        tok.setAttribute('class', cls ? cls + ' ltx_qed' : 'ltx_qed');
+        tok.setAttribute('mathvariant', 'normal');
+        return;
+      }
+      pruneToken(tok);
+      cell.appendChild(qedMark());
+    });
+  }
+
+  // An equation number lives in a zero-width cell and hangs leftwards off the
+  // right margin, i.e. over the very strip a hoisted mark aligns to. Reserve the
+  // number's width so the mark sits just inside it, as \qedhere does in print.
+  function offsetQedFromEqno() {
+    document.querySelectorAll('.ltx_eqn_cell > span.ltx_qed').forEach(function (mark) {
+      var row = mark.closest('tr.ltx_eqn_row');
+      var tag = row && row.querySelector('.ltx_eqn_eqno .ltx_tag');
+      var width = tag ? tag.offsetWidth : 0;
+      // Unnumbered rows keep the mark flush with the margin.
+      mark.style.marginRight = width ? 'calc(' + width + 'px + 0.5em)' : '';
+    });
+  }
+
+  function setupQed() {
+    wrapTextQed(document.body);
+    hoistMathQed();
+    offsetQedFromEqno();
+    // Equation numbers are set in the body face; re-measure once it has loaded.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready
+        .then(function () { offsetQedFromEqno(); })
+        .catch(function () {});
+    }
+
+    // A mark that doesn't fit on its paragraph's last line floats down to a line
+    // of its own, where it would escape the paragraph box and collide with what
+    // follows. Let the enclosing block clear it.
+    document.querySelectorAll('span.ltx_qed').forEach(function (span) {
+      if (span.closest('.ltx_eqn_cell')) return; // hoisted marks don't float
+      var host = span.closest(
+        '.ltx_para, .ltx_proof, .ltx_theorem, li, blockquote, .ltx_caption'
+      );
+      if (!host) return;
+      host.classList.add('monolith-qed-host');
+      // A list item's body is shrink-wrapped, so the float would stop at the
+      // text; the stylesheet stretches an item that carries a mark.
+      var item = span.closest('li.ltx_item');
+      if (item) item.classList.add('monolith-qed-item');
     });
   }
 

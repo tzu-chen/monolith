@@ -406,14 +406,49 @@ math[display="block"] {
   margin-left: 0.3em;
 }
 
-/* QED tombstone — flush right on the proof's final line. LaTeXML emits a bare
-   ∎ glyph with no element of its own, so monolith-theme.js wraps it in a
-   .ltx_qed span for us to align here. */
-.ltx_proof .ltx_qed,
+/* QED tombstone — accent-coloured and flush right wherever it lands: the end of
+   a proof, an explicit \qed inside a theorem or a plain paragraph, or \qedhere
+   on a display. LaTeXML emits a bare ∎ glyph with no element of its own, so
+   monolith-theme.js wraps every occurrence in a .ltx_qed span for us to style
+   here (and lifts the \qedhere mark out of the display's MathML into the
+   equation row's right-hand spacer cell). */
 .ltx_qed {
+  color: var(--accent);
+}
+
+span.ltx_qed {
   float: right;
   margin-left: 0.5em;
-  color: var(--accent);
+  /* The tombstone is a symbol, not text — it stays upright inside the italic
+     body of a theorem. */
+  font-style: normal;
+}
+
+/* Hoisted onto an equation row: the spacer cell's right edge is already the
+   display's right margin, so the mark aligns there instead of floating. On a
+   numbered row monolith-theme.js adds a margin-right that clears the number. */
+.ltx_eqn_cell > span.ltx_qed {
+  float: none;
+  display: block;
+  margin-left: 0;
+  text-align: right;
+}
+
+/* Contain a mark that floated down to a line of its own (monolith-theme.js tags
+   the block that holds one) so it can't overlap what follows. */
+.monolith-qed-host::after {
+  content: '';
+  display: block;
+  clear: right;
+}
+
+/* LaTeXML shrink-wraps a list item's body (`.ltx_tag + .ltx_para` is an
+   inline-block), which strands the mark beside the text instead of at the
+   item's margin. Stretch a body that carries a mark to the item's width — the
+   bullet hangs in the padding on a negative margin, so the only width it costs
+   the line is the space between it and the body. */
+.ltx_item.monolith-qed-item > .ltx_tag + .ltx_para {
+  width: calc(100% - 0.25em);
 }
 
 /* ----- Collapsible blocks (added by monolith-theme.js) ------------------ */
