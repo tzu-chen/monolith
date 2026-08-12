@@ -7,9 +7,10 @@ import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl'
 import { downloadBlob } from '../../lib/download';
 import * as api from '../../lib/api';
 import { THEME_VAR_NAMES } from '../../colorSchemes';
+import { formatChord } from '../../lib/keybindings';
 import PreviewModeToggle from './PreviewModeToggle';
 import { useElementWidth } from '../../hooks/useElementWidth';
-import { useFreshness } from '../../hooks/useFreshness';
+import { formatClock } from '../../lib/time';
 import { toolbarLayout } from './toolbarLayout';
 import { parseLineNumber } from '../../lib/diagnostics';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
@@ -51,13 +52,13 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
+  const keybindings = useEditorStore((s) => s.keybindings);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showLog, setShowLog] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
   const layout = toolbarLayout(toolbarWidth);
-  const freshness = useFreshness(htmlRenderedAt);
 
   const handleDownload = useCallback(async () => {
     if (downloading) return;
@@ -133,7 +134,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
     if (htmlRenderStatus === 'unavailable') return 'latexml not installed';
     if (htmlRenderStatus === 'error') return 'latexml · render failed';
     if (htmlNonce === 0) return 'latexml · not run';
-    return `latexml · MathML · ${freshness}`;
+    return `latexml · MathML · rendered ${formatClock(htmlRenderedAt)}`;
   })();
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -251,7 +252,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
             accent
             onClick={onRenderHtml}
             disabled={rendering}
-            title={rendering ? 'Rendering HTML…' : 'Render HTML'}
+            title={rendering ? 'Rendering HTML…' : `Render HTML (${formatChord(keybindings.renderHtml)})`}
             icon={rendering ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
             {layout.showButtonLabels && (rendering ? 'Rendering' : 'Render')}
@@ -387,7 +388,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
               : rendering
                 ? 'rendering'
                 : htmlNonce > 0
-                  ? `rendered ${freshness}`
+                  ? `rendered ${formatClock(htmlRenderedAt)}`
                   : 'ready'}
         </span>
       </div>

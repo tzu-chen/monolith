@@ -9,6 +9,13 @@ import {
 } from '../colorSchemes';
 import { parseDiagnostics, type Diagnostic } from '../lib/diagnostics';
 import type { ScopeGraph } from '../lib/scope-api';
+import {
+  DEFAULT_KEYBINDINGS,
+  SHORTCUT_ACTIONS,
+  coerceKeybindings,
+  type KeybindingsConfig,
+  type ShortcutAction,
+} from '../lib/keybindings';
 
 export interface AutoSwitchSettings {
   enabled: boolean;
@@ -182,6 +189,9 @@ interface EditorState {
   // Vim mode
   vimMode: boolean;
 
+  /** Chord bound to each global shortcut — see `lib/keybindings.ts`. */
+  keybindings: KeybindingsConfig;
+
   // Auto recompile/render on edit (off = compile/render only on explicit action)
   autoRecompile: boolean;
 
@@ -284,6 +294,11 @@ interface EditorState {
   // Vim mode
   toggleVimMode: () => void;
 
+  // Shortcuts
+  /** Bind `chord` to `action`, taking it from whichever action held it. */
+  setKeybinding: (action: ShortcutAction, chord: string) => void;
+  resetKeybindings: () => void;
+
   // Auto recompile
   toggleAutoRecompile: () => void;
 
@@ -362,6 +377,20 @@ function readFlag(key: string, fallback: boolean): boolean {
 function writeFlag(key: string, value: boolean): void {
   try {
     localStorage.setItem(key, String(value));
+  } catch {}
+}
+
+function getInitialKeybindings(): KeybindingsConfig {
+  try {
+    const raw = localStorage.getItem('monolith-keybindings');
+    if (raw) return coerceKeybindings(JSON.parse(raw));
+  } catch {}
+  return { ...DEFAULT_KEYBINDINGS };
+}
+
+function writeKeybindings(config: KeybindingsConfig): void {
+  try {
+    localStorage.setItem('monolith-keybindings', JSON.stringify(config));
   } catch {}
 }
 
@@ -463,6 +492,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   autoSwitch: getInitialAutoSwitch(),
   invertPdfInDark: readFlag('monolith-invert-pdf-dark', false),
   vimMode: readFlag('monolith-vim', false),
+  keybindings: getInitialKeybindings(),
   autoRecompile: readFlag('monolith-auto-recompile', false),
   viewMode: 'both' as ViewMode,
   fontSize: getInitialFontSize(),
@@ -733,6 +763,30 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const next = !get().vimMode;
     writeFlag('monolith-vim', next);
     set({ vimMode: next });
+  },
+
+  /**
+   * One chord drives one action: binding a chord that is already spoken for
+   * unbinds it there rather than leaving two rows claiming the same keys. The
+   * settings list shows both rows at once, so the row it was taken from shows
+   * "Not set" the moment it happens.
+   */
+  setKeybinding: (action, chord) => {
+    const next = { ...get().keybindings };
+    if (chord) {
+      for (const other of SHORTCUT_ACTIONS) {
+        if (other !== action && next[other] === chord) next[other] = '';
+      }
+    }
+    next[action] = chord;
+    writeKeybindings(next);
+    set({ keybindings: next });
+  },
+
+  resetKeybindings: () => {
+    const next = { ...DEFAULT_KEYBINDINGS };
+    writeKeybindings(next);
+    set({ keybindings: next });
   },
 
   toggleAutoRecompile: () => {

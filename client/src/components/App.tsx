@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import Shell from './shell/Shell';
 import { useEditorStore } from '../stores/editorStore';
 import { getSchemeById, applyColorScheme } from '../colorSchemes';
@@ -7,6 +7,7 @@ import { useHtmlRender } from '../hooks/useHtmlRender';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
 import { useScope } from '../hooks/useScope';
+import { useShortcuts, type ShortcutHandlers } from '../hooks/useShortcuts';
 import * as api from '../lib/api';
 import { extractMacroDefinitions } from './editor/math-preview';
 
@@ -73,46 +74,57 @@ export default function App() {
   }, []);
 
   // Global shortcuts. Everything here also has a visible control somewhere in
-  // the shell — these are accelerators, never the only way in.
+  // the shell — these are accelerators, never the only way in. The chords live
+  // in the registry (`lib/keybindings.ts`) and are rebindable in Settings; this
+  // is only the map from action to what it does.
+  const shortcutHandlers = useMemo<ShortcutHandlers>(() => {
+    const store = () => useEditorStore.getState();
+    return {
+      panelFiles: () => store().toggleActivePanel('files'),
+      panelOutline: () => store().toggleActivePanel('outline'),
+      panelScope: () => store().toggleActivePanel('scope'),
+      panelReferences: () => store().toggleActivePanel('references'),
+      panelPlots: () => store().toggleActivePanel('plots'),
+      panelProjects: () => store().toggleActivePanel('projects'),
+      drawerSymbols: () => store().toggleDrawer('symbols'),
+      drawerSnippets: () => store().toggleDrawer('snippets'),
+      compile: doCompile,
+      renderHtml: doRender,
+      save: handleSave,
+      findFile: () => store().setFinder('files'),
+      findProject: () => store().setFinder('projects'),
+      openSettings: () => store().setShowSettings(true),
+    };
+  }, [doCompile, doRender, handleSave]);
+
+  useShortcuts(shortcutHandlers);
+
+  // Escape unwinds whatever is on top. It is deliberately not in the registry:
+  // it closes things rather than doing anything, and nothing else may hold it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
       const store = useEditorStore.getState();
-      const mod = e.metaKey || e.ctrlKey;
-
-      if (e.key === 'Escape') {
-        if (store.finder) {
-          store.setFinder(null);
-          e.preventDefault();
-        } else if (store.showSettings) {
-          store.setShowSettings(false);
-          e.preventDefault();
-        } else if (store.activeDrawer) {
-          store.setActiveDrawer(null);
-          e.preventDefault();
-        }
-        return;
-      }
-
-      if (!mod) return;
-
-      if (e.key === 'p' || e.key === 'P') {
+      if (store.finder) {
+        store.setFinder(null);
         e.preventDefault();
-        store.setFinder(e.shiftKey ? 'projects' : 'files');
-      } else if (e.key === 'Enter') {
+      } else if (store.showSettings) {
+        store.setShowSettings(false);
         e.preventDefault();
-        handleSave();
+      } else if (store.activeDrawer) {
+        store.setActiveDrawer(null);
+        e.preventDefault();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSave]);
+  }, []);
 
   useFileWatcher();
   useScope();
 
   return (
     <Shell
-      onSave={handleSave}
       onManualSave={saveNow}
       onCompile={doCompile}
       onRenderHtml={doRender}

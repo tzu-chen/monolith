@@ -5,7 +5,7 @@ import Drawer from '../editor/Drawer';
 import EditorStatusBar from '../editor/EditorStatusBar';
 import { useEditorStore } from '../../stores/editorStore';
 import { fs, metrics } from '../../theme/tokens';
-import { mod } from '../../lib/shortcuts';
+import { formatChord } from '../../lib/keybindings';
 import { OutlinedButton } from '../shared/ui';
 
 /**
@@ -14,16 +14,16 @@ import { OutlinedButton } from '../shared/ui';
  */
 
 interface EditorPanelProps {
-  onSave: () => void;
   onManualSave: () => void;
   onCompile: () => void;
 }
 
-export default function EditorPanel({ onSave, onManualSave, onCompile }: EditorPanelProps) {
+export default function EditorPanel({ onManualSave, onCompile }: EditorPanelProps) {
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const currentProject = useEditorStore((s) => s.currentProject);
   const setActivePanel = useEditorStore((s) => s.setActivePanel);
   const setFinder = useEditorStore((s) => s.setFinder);
+  const keybindings = useEditorStore((s) => s.keybindings);
 
   return (
     <div
@@ -41,7 +41,7 @@ export default function EditorPanel({ onSave, onManualSave, onCompile }: EditorP
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         {activeTabPath ? (
-          <EditorPane onSave={onSave} />
+          <EditorPane />
         ) : (
           <div
             style={{
@@ -62,13 +62,13 @@ export default function EditorPanel({ onSave, onManualSave, onCompile }: EditorP
               {currentProject ? (
                 <>
                   <OutlinedButton accent onClick={() => setFinder('files')}>
-                    Find a file {mod('P')}
+                    Find a file {formatChord(keybindings.findFile)}
                   </OutlinedButton>
                   <OutlinedButton onClick={() => setActivePanel('files')}>Browse files</OutlinedButton>
                 </>
               ) : (
                 <OutlinedButton accent onClick={() => setActivePanel('projects')}>
-                  Open a project {mod('P', { shift: true })}
+                  Open a project {formatChord(keybindings.findProject)}
                 </OutlinedButton>
               )}
             </div>

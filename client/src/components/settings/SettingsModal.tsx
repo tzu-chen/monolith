@@ -3,6 +3,15 @@ import { useEditorStore } from '../../stores/editorStore';
 import { COLOR_SCHEMES, getSchemeById, applyColorScheme, type ColorScheme } from '../../colorSchemes';
 import { MinusIcon, PlusIcon, CloseIcon } from '../shared/Icons';
 import { OutlinedButton, IconButton, SectionLabel } from '../shared/ui';
+import {
+  SHORTCUT_GROUPS,
+  SHORTCUT_META,
+  chordFromEvent,
+  formatChord,
+  isBindableChord,
+  type ShortcutAction,
+} from '../../lib/keybindings';
+import { suspendShortcuts } from '../../hooks/useShortcuts';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 
 interface SettingsModalProps {
@@ -127,6 +136,55 @@ function Row({ title, hint, children }: { title: string; hint?: string; children
   );
 }
 
+/**
+ * One shortcut, with its chord as the click target: press the button, then
+ * press the keys. The chord reads in the platform's own notation, and an
+ * unbound action says so rather than showing an empty box.
+ */
+function ShortcutRow({
+  label,
+  hint,
+  chord,
+  recording,
+  onRecord,
+}: {
+  label: string;
+  hint?: string;
+  chord: string;
+  recording: boolean;
+  onRecord: () => void;
+}) {
+  const unbound = !chord;
+  return (
+    <Row title={label} hint={hint}>
+      <button
+        onClick={onRecord}
+        title={recording ? 'Press the keys to bind' : 'Click, then press the keys to bind'}
+        style={{
+          minWidth: 128,
+          padding: '5px 10px',
+          fontFamily: font.mono,
+          fontSize: fs.control,
+          border: `1px solid ${recording ? 'var(--accent)' : 'var(--line)'}`,
+          borderRadius: radius.chip,
+          background: recording ? 'var(--accent-wash)' : 'transparent',
+          color: recording ? 'var(--accent)' : unbound ? 'var(--text-faint)' : 'var(--text)',
+          cursor: 'pointer',
+          transition: `border-color ${motion.color}, color ${motion.color}, background ${motion.color}`,
+        }}
+        onMouseEnter={(e) => {
+          if (!recording) e.currentTarget.style.borderColor = 'var(--line-strong)';
+        }}
+        onMouseLeave={(e) => {
+          if (!recording) e.currentTarget.style.borderColor = 'var(--line)';
+        }}
+      >
+        {recording ? 'Press keys…' : formatChord(chord)}
+      </button>
+    </Row>
+  );
+}
+
 const FONT_OPTIONS = [
   { value: "'Source Code Pro', monospace", label: 'Source Code Pro' },
   { value: "'JetBrains Mono', monospace", label: 'JetBrains Mono' },
@@ -156,6 +214,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const toggleAutoRecompile = useEditorStore((s) => s.toggleAutoRecompile);
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
   const toggleInvertPdfInDark = useEditorStore((s) => s.toggleInvertPdfInDark);
+  const keybindings = useEditorStore((s) => s.keybindings);
+  const setKeybinding = useEditorStore((s) => s.setKeybinding);
+  const resetKeybindings = useEditorStore((s) => s.resetKeybindings);
 
   // Snapshot to revert on cancel
   const initialSchemeRef = useRef(colorScheme);
@@ -199,11 +260,61 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     onClose();
   };
 
+  // Recording a shortcut: the row waiting for keys, and why the last press was
+  // turned down. Only one row records at a time.
+  const [recording, setRecording] = useState<ShortcutAction | null>(null);
+  const [rejected, setRejected] = useState<string | null>(null);
+  const recordingRef = useRef<ShortcutAction | null>(null);
+  recordingRef.current = recording;
+
+  /**
+   * While recording, this listener takes the whole keyboard: it stops the press
+   * before it reaches the shortcut dispatcher, so binding Mod+Shift+F does not
+   * also open the Files panel behind the modal.
+   */
+  useEffect(() => {
+    if (!recording) return;
+    suspendShortcuts(true);
+    const handleKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        setRecording(null);
+        setRejected(null);
+        return;
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        setKeybinding(recording, '');
+        setRecording(null);
+        setRejected(null);
+        return;
+      }
+
+      const chord = chordFromEvent(e);
+      if (!chord) return; // a modifier on its own — keep waiting for the key
+      if (!isBindableChord(chord)) {
+        setRejected('Needs Ctrl or Alt — a bare key is something you type.');
+        return;
+      }
+      setKeybinding(recording, chord);
+      setRecording(null);
+      setRejected(null);
+    };
+    window.addEventListener('keydown', handleKey, true);
+    return () => {
+      suspendShortcuts(false);
+      window.removeEventListener('keydown', handleKey, true);
+    };
+  }, [recording, setKeybinding]);
+
   // Escape closes; bound in capture so it wins over the app-level handler that
-  // would otherwise also fire on the same key.
+  // would otherwise also fire on the same key. While a row is recording, Escape
+  // belongs to the recorder — it cancels the binding, not the dialog.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (recordingRef.current) return;
       e.stopPropagation();
       handleCancel();
     };
@@ -349,6 +460,53 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             >
               <Toggle on={autoRecompile} onClick={toggleAutoRecompile} ariaLabel="Auto recompile on edit" />
             </Row>
+          </section>
+
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <SectionLabel>Shortcuts</SectionLabel>
+              <span style={{ marginLeft: 'auto' }}>
+                <OutlinedButton
+                  onClick={() => {
+                    setRecording(null);
+                    setRejected(null);
+                    resetKeybindings();
+                  }}
+                  title="Put every shortcut back to its default chord"
+                >
+                  Reset
+                </OutlinedButton>
+              </span>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: fs.meta,
+                color: rejected ? 'var(--warn)' : 'var(--text-faint)',
+                lineHeight: 1.5,
+              }}
+            >
+              {rejected ??
+                'Click a chord, then press the keys. Backspace unbinds it, Escape cancels. Taking a chord that is already in use frees it from the other action.'}
+            </p>
+            {SHORTCUT_GROUPS.map((group) => (
+              <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: fs.meta, color: 'var(--text-faint)', paddingLeft: 2 }}>{group}</span>
+                {SHORTCUT_META.filter((m) => m.group === group).map((m) => (
+                  <ShortcutRow
+                    key={m.action}
+                    label={m.label}
+                    hint={m.hint}
+                    chord={keybindings[m.action]}
+                    recording={recording === m.action}
+                    onRecord={() => {
+                      setRejected(null);
+                      setRecording((current) => (current === m.action ? null : m.action));
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
           </section>
         </div>
 

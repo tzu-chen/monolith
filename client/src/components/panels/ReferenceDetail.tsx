@@ -11,7 +11,7 @@ import {
   EmptyState,
 } from '../shared/ui';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
-import { ENTER } from '../../lib/shortcuts';
+import { ENTER } from '../../lib/keybindings';
 import {
   fetchLibrary,
   updateLibraryEntry,

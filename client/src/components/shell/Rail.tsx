@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEditorStore, type SidePanel, type Drawer } from '../../stores/editorStore';
+import { formatChord, type ShortcutAction } from '../../lib/keybindings';
 import { fs, font, metrics, motion, radius } from '../../theme/tokens';
 import {
   FilesIcon,
@@ -24,17 +25,17 @@ import {
  * glyph. Nothing here ever gains a fill.
  */
 
-const TOOLS: { panel: SidePanel; icon: ReactNode; title: string }[] = [
-  { panel: 'files', icon: <FilesIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Files' },
-  { panel: 'outline', icon: <OutlineIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Outline' },
-  { panel: 'scope', icon: <ScopeIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'In scope' },
-  { panel: 'references', icon: <BookIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'References' },
-  { panel: 'plots', icon: <ChartIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Plots' },
+const TOOLS: { panel: SidePanel; icon: ReactNode; title: string; action: ShortcutAction }[] = [
+  { panel: 'files', icon: <FilesIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Files', action: 'panelFiles' },
+  { panel: 'outline', icon: <OutlineIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Outline', action: 'panelOutline' },
+  { panel: 'scope', icon: <ScopeIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'In scope', action: 'panelScope' },
+  { panel: 'references', icon: <BookIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'References', action: 'panelReferences' },
+  { panel: 'plots', icon: <ChartIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Plots', action: 'panelPlots' },
 ];
 
-const DRAWERS: { drawer: Drawer; icon: ReactNode; title: string }[] = [
-  { drawer: 'symbols', icon: <OmegaIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Symbols' },
-  { drawer: 'snippets', icon: <SnippetIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Snippets' },
+const DRAWERS: { drawer: Drawer; icon: ReactNode; title: string; action: ShortcutAction }[] = [
+  { drawer: 'symbols', icon: <OmegaIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Symbols', action: 'drawerSymbols' },
+  { drawer: 'snippets', icon: <SnippetIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Snippets', action: 'drawerSnippets' },
 ];
 
 /** Two letters from the project name: `hofstadter-2026` → `HF`. */
@@ -51,18 +52,21 @@ function RailButton({
   active,
   onClick,
   title,
+  chord,
   style,
 }: {
   icon: ReactNode;
   active: boolean;
   onClick: () => void;
   title: string;
+  /** Bound chord, already formatted — appended to the tooltip when there is one. */
+  chord?: string;
   style?: React.CSSProperties;
 }) {
   return (
     <button
       onClick={onClick}
-      title={title}
+      title={chord ? `${title} (${chord})` : title}
       aria-label={title}
       aria-pressed={active}
       style={{
@@ -99,8 +103,12 @@ export default function Rail() {
   const toggleActivePanel = useEditorStore((s) => s.toggleActivePanel);
   const toggleDrawer = useEditorStore((s) => s.toggleDrawer);
   const setShowSettings = useEditorStore((s) => s.setShowSettings);
+  const keybindings = useEditorStore((s) => s.keybindings);
 
   const projectsOpen = activePanel === 'projects';
+  /** `formatChord` says "Not set" for an unbound action — no tooltip suffix then. */
+  const chordFor = (action: ShortcutAction) =>
+    keybindings[action] ? formatChord(keybindings[action]) : undefined;
 
   return (
     <nav
@@ -119,7 +127,9 @@ export default function Rail() {
     >
       <button
         onClick={() => toggleActivePanel('projects')}
-        title={`${currentProject ?? 'No project'} — switch project`}
+        title={`${currentProject ?? 'No project'} — switch project${
+          keybindings.panelProjects ? ` (${formatChord(keybindings.panelProjects)})` : ''
+        }`}
         aria-label="Switch project"
         style={{
           width: metrics.railBtn,
@@ -150,6 +160,7 @@ export default function Rail() {
           key={t.panel}
           icon={t.icon}
           title={t.title}
+          chord={chordFor(t.action)}
           active={activePanel === t.panel}
           onClick={() => toggleActivePanel(t.panel)}
         />
@@ -160,6 +171,7 @@ export default function Rail() {
           key={d.drawer}
           icon={d.icon}
           title={d.title}
+          chord={chordFor(d.action)}
           active={activeDrawer === d.drawer}
           onClick={() => toggleDrawer(d.drawer)}
         />
@@ -168,6 +180,7 @@ export default function Rail() {
       <RailButton
         icon={<SettingsIcon size={metrics.railGlyph} strokeWidth={1.6} />}
         title="Settings"
+        chord={chordFor('openSettings')}
         active={false}
         onClick={() => setShowSettings(true)}
         style={{ marginTop: 'auto' }}

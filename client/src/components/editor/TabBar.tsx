@@ -3,7 +3,7 @@ import { CloseIcon, PlayIcon, SpinnerIcon, OmegaIcon, SnippetIcon } from '../sha
 import { OutlinedButton, IconButton, BarDivider } from '../shared/ui';
 import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl';
 import { fs, font, metrics, motion } from '../../theme/tokens';
-import { mod } from '../../lib/shortcuts';
+import { formatChord } from '../../lib/keybindings';
 import { useElementWidth } from '../../hooks/useElementWidth';
 
 /**
@@ -33,6 +33,7 @@ export default function TabBar({ onCompile, onManualSave }: TabBarProps) {
   const activeDrawer = useEditorStore((s) => s.activeDrawer);
   const toggleDrawer = useEditorStore((s) => s.toggleDrawer);
   const viewMode = useEditorStore((s) => s.viewMode);
+  const keybindings = useEditorStore((s) => s.keybindings);
 
   const [barRef, barWidth] = useElementWidth<HTMLDivElement>();
   const w = barWidth || Infinity;
@@ -125,7 +126,7 @@ export default function TabBar({ onCompile, onManualSave }: TabBarProps) {
             accent
             onClick={onCompile}
             disabled={compiling}
-            title={compiling ? 'Compiling…' : `Compile (${mod('S')})`}
+            title={compiling ? 'Compiling…' : `Compile (${formatChord(keybindings.compile)})`}
             icon={compiling ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
             {showLabels && (compiling ? 'Compiling' : 'Compile')}
@@ -133,7 +134,7 @@ export default function TabBar({ onCompile, onManualSave }: TabBarProps) {
         )}
 
         {dirty && activeTabPath && (
-          <OutlinedButton onClick={onManualSave} title={`Save file (${mod('S')})`}>
+          <OutlinedButton onClick={onManualSave} title={`Save file (${formatChord(keybindings.save)})`}>
             {showLabels ? 'Save' : '●'}
           </OutlinedButton>
         )}

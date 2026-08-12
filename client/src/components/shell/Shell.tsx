@@ -24,19 +24,18 @@ import { motion } from '../../theme/tokens';
  */
 
 interface ShellProps {
-  onSave: () => void;
   onManualSave: () => void;
   onCompile: () => void;
   onRenderHtml: () => void;
 }
 
-export default function Shell({ onSave, onManualSave, onCompile, onRenderHtml }: ShellProps) {
+export default function Shell({ onManualSave, onCompile, onRenderHtml }: ShellProps) {
   const viewMode = useEditorStore((s) => s.viewMode);
   const activePanel = useEditorStore((s) => s.activePanel);
   const showSettings = useEditorStore((s) => s.showSettings);
   const setShowSettings = useEditorStore((s) => s.setShowSettings);
 
-  const editor = <EditorPanel onSave={onSave} onManualSave={onManualSave} onCompile={onCompile} />;
+  const editor = <EditorPanel onManualSave={onManualSave} onCompile={onCompile} />;
   const preview = <PreviewPane onCompile={onCompile} onRenderHtml={onRenderHtml} />;
 
   return (

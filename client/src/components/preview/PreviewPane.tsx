@@ -5,12 +5,12 @@ import * as api from '../../lib/api';
 import { PlayIcon, SpinnerIcon, DownloadIcon, MinusIcon, PlusIcon } from '../shared/Icons';
 import { OutlinedButton, IconButton, Dot, BarDivider } from '../shared/ui';
 import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl';
-import { mod } from '../../lib/shortcuts';
+import { formatChord } from '../../lib/keybindings';
 import { base64ToBlob, downloadBlob } from '../../lib/download';
 import PreviewModeToggle from './PreviewModeToggle';
 import HtmlPreview from './HtmlPreview';
 import { useElementWidth } from '../../hooks/useElementWidth';
-import { useFreshness } from '../../hooks/useFreshness';
+import { formatClock } from '../../lib/time';
 import { toolbarLayout } from './toolbarLayout';
 import { parseLineNumber } from '../../lib/diagnostics';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
@@ -60,6 +60,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const currentProject = useEditorStore((s) => s.currentProject);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const setSyncTexHighlight = useEditorStore((s) => s.setSyncTexHighlight);
+  const keybindings = useEditorStore((s) => s.keybindings);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [showLog, setShowLog] = useState(false);
@@ -73,7 +74,6 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const hasRenderedRef = useRef(false);
   const [toolbarRef, toolbarWidth] = useElementWidth<HTMLDivElement>();
   const layout = toolbarLayout(toolbarWidth);
-  const freshness = useFreshness(lastCompileAt);
 
   const invert = theme === 'dark' && invertPdfInDark;
 
@@ -272,10 +272,11 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const engineLabel = useMemo(() => {
     if (compilationStatus === 'compiling') return 'tectonic · compiling…';
     if (compilationStatus === 'idle' || lastCompileAt === null) return 'tectonic · not run';
-    if (compilationStatus === 'error') return `tectonic · failed ${freshness}`;
+    const at = formatClock(lastCompileAt);
+    if (compilationStatus === 'error') return `tectonic · failed ${at}`;
     const elapsed = lastCompileTime != null ? ` in ${(lastCompileTime / 1000).toFixed(1)}s` : '';
-    return `tectonic${elapsed} · ${freshness}`;
-  }, [compilationStatus, lastCompileAt, lastCompileTime, freshness]);
+    return `tectonic · compiled ${at}${elapsed}`;
+  }, [compilationStatus, lastCompileAt, lastCompileTime]);
 
   const zoomPercent = zoom === 'fit' ? Math.round(renderedScale * 100) : zoom;
   const compiling = compilationStatus === 'compiling';
@@ -411,7 +412,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
             accent
             onClick={onCompile}
             disabled={compiling}
-            title={compiling ? 'Compiling…' : `Compile (${mod('S')})`}
+            title={compiling ? 'Compiling…' : `Compile (${formatChord(keybindings.compile)})`}
             icon={compiling ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
             {layout.showButtonLabels && (compiling ? 'Compiling' : 'Compile')}
@@ -443,7 +444,8 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         >
           {!pdfData && compilationStatus === 'idle' && (
             <div style={{ color: 'var(--text-faint)', fontSize: fs.title, marginTop: 60, textAlign: 'center' }}>
-              Press <strong>Compile</strong> or <code style={{ fontFamily: font.mono }}>Ctrl+S</code> to build a preview
+              Press <strong>Compile</strong> or{' '}
+              <code style={{ fontFamily: font.mono }}>{formatChord(keybindings.compile)}</code> to build a preview
             </div>
           )}
           {!pdfData && compiling && (

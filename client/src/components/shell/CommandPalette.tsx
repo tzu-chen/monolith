@@ -3,7 +3,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
 import { FilterInput, SectionLabel, rowStyle } from '../shared/ui';
 import { fs, font, radius, metrics } from '../../theme/tokens';
-import { mod } from '../../lib/shortcuts';
+import { formatChord } from '../../lib/keybindings';
 
 /**
  * File finder and project switcher, on the platform's Mod+P / Mod+Shift+P.
@@ -45,6 +45,7 @@ export default function CommandPalette() {
   const fileTree = useEditorStore((s) => s.fileTree);
   const projects = useEditorStore((s) => s.projects);
   const currentProject = useEditorStore((s) => s.currentProject);
+  const keybindings = useEditorStore((s) => s.keybindings);
   const openFile = useEditorStore((s) => s.openFile);
 
   const [query, setQuery] = useState('');
@@ -180,7 +181,7 @@ export default function CommandPalette() {
               setSelected(0);
             }}
             placeholder={finder === 'projects' ? 'Switch to project…' : 'Find file…'}
-            hint={finder === 'projects' ? mod('P', { shift: true }) : mod('P')}
+            hint={formatChord(finder === 'projects' ? keybindings.findProject : keybindings.findFile)}
           />
         </div>
 

@@ -4,7 +4,7 @@ import FileTree, { type FileTreeHandle } from '../sidebar/FileTree';
 import { PanelHeader, FilterRow, IconButton } from '../shared/ui';
 import { SearchIcon, NewFileIcon, NewFolderIcon, UploadIcon } from '../shared/Icons';
 import { fs, font, metrics, radius } from '../../theme/tokens';
-import { mod } from '../../lib/shortcuts';
+import { formatChord } from '../../lib/keybindings';
 
 /**
  * Files panel (238px in the handoff, scaled here).
@@ -16,6 +16,7 @@ import { mod } from '../../lib/shortcuts';
 export default function FilesPanel() {
   const projectRoot = useEditorStore((s) => s.projectRoot);
   const setFinder = useEditorStore((s) => s.setFinder);
+  const keybindings = useEditorStore((s) => s.keybindings);
   const treeRef = useRef<FileTreeHandle>(null);
 
   return (
@@ -62,7 +63,7 @@ export default function FilesPanel() {
         >
           <SearchIcon size={14} />
           <span style={{ flex: 1 }}>Find file…</span>
-          <span style={{ fontFamily: font.mono, fontSize: fs.meta, color: 'var(--text-disabled)' }}>{mod('P')}</span>
+          <span style={{ fontFamily: font.mono, fontSize: fs.meta, color: 'var(--text-disabled)' }}>{formatChord(keybindings.findFile)}</span>
         </button>
       </FilterRow>
 

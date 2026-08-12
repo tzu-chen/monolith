@@ -3,8 +3,8 @@ import { useEditorStore, type ManagerDetail } from '../../stores/editorStore';
 import { CloseIcon, ExternalIcon, PlusIcon, MinusIcon } from '../shared/Icons';
 import { Bar, SectionLabel, OutlinedButton, IconButton, Pill, Dot } from '../shared/ui';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
-import { ENTER } from '../../lib/shortcuts';
-import { formatIsoAge } from '../../hooks/useFreshness';
+import { ENTER } from '../../lib/keybindings';
+import { formatIsoAge } from '../../lib/time';
 import * as api from '../../lib/api';
 import type { PlotMeta, PyramidLink } from '../../lib/api';
 

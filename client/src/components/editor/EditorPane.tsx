@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, ViewUpdate } from '@codemirror/view';
+import { EditorView, ViewUpdate } from '@codemirror/view';
 import {
   createExtensions,
   getThemeReconfiguration,
@@ -19,9 +19,6 @@ import { diagnosticsForFile } from '../../lib/diagnostics';
 import { claimMacroClick } from './scope-decorations';
 import * as api from '../../lib/api';
 
-interface EditorPaneProps {
-  onSave: () => void;
-}
 
 // Cache EditorState per file so undo history and editing location (cursor +
 // scroll) survive both tab switches and EditorPane unmounts — e.g. toggling the
@@ -35,7 +32,7 @@ function cacheKeyFor(path: string): string {
   return `${project}\n${path}`;
 }
 
-export default function EditorPane({ onSave }: EditorPaneProps) {
+export default function EditorPane() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
@@ -55,10 +52,6 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
   const compiledFile = useEditorStore((s) => s.compiledFile);
   const compileSnapshot = useEditorStore((s) => s.compileSnapshot);
   const fileTree = useEditorStore((s) => s.fileTree);
-
-  // Stable ref for onSave so we don't recreate the editor on every render
-  const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
 
   /** Open a file (if needed) and put the cursor on `line`. */
   const goToDefinition = useCallback(async (file: string, line: number) => {
@@ -97,18 +90,14 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
     };
   }, [goToDefinition]);
 
-  /** Listeners and handlers that are identical for a fresh and a restored view. */
+  /**
+   * Listeners and handlers that are identical for a fresh and a restored view.
+   *
+   * Save is not among them: it is a global shortcut like the rest (registry in
+   * `lib/keybindings.ts`), so it stays rebindable and keeps working when the
+   * focus is anywhere else in the shell.
+   */
   const sharedExtensions = useCallback(() => {
-    const saveKeymap = keymap.of([
-      {
-        key: 'Mod-s',
-        run: () => {
-          onSaveRef.current();
-          return true;
-        },
-      },
-    ]);
-
     const updateListener = EditorView.updateListener.of((update: ViewUpdate) => {
       if (update.docChanged) {
         useEditorStore.getState().updateContent(update.state.doc.toString());
@@ -144,7 +133,7 @@ export default function EditorPane({ onSave }: EditorPaneProps) {
       },
     });
 
-    return [saveKeymap, updateListener, syncTexHandler];
+    return [updateListener, syncTexHandler];
   }, []);
 
   // Create/swap EditorView when the active tab changes.

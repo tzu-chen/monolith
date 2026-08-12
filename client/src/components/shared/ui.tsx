@@ -302,7 +302,7 @@ export function FilterInput({
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
-  /** Right-aligned shortcut hint, e.g. `Ctrl+P`. Format it with `mod()`. */
+  /** Right-aligned shortcut hint, e.g. `Ctrl+P`. Format it with `formatChord()`. */
   hint?: string;
   autoFocus?: boolean;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;

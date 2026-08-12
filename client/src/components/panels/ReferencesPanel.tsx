@@ -18,7 +18,7 @@ import {
   EmptyState,
 } from '../shared/ui';
 import { fs, font, metrics, radius } from '../../theme/tokens';
-import { ENTER } from '../../lib/shortcuts';
+import { ENTER } from '../../lib/keybindings';
 import {
   fetchPapers,
   fetchAttachments,

@@ -12,7 +12,7 @@
  * panes independently. 0 means "not measured yet" — show everything.
  */
 export interface ToolbarLayout {
-  /** "compiled 1.2s ago" — the coloured dot carries the state without it. */
+  /** "compiled 14:32:07 in 1.2s" — the coloured dot carries the state without it. */
   showStatusText: boolean;
   /** Text beside the button icons; each button keeps a title tooltip. */
   showButtonLabels: boolean;

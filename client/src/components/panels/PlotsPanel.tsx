@@ -18,7 +18,7 @@ import {
   leaveRow,
 } from '../shared/ui';
 import { fs, font, metrics, radius } from '../../theme/tokens';
-import { formatIsoAge } from '../../hooks/useFreshness';
+import { formatIsoAge } from '../../lib/time';
 import * as api from '../../lib/api';
 import type { PyramidSession, PyramidPlot, PyramidLink } from '../../lib/api';
 
