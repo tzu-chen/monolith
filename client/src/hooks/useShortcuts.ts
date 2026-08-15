@@ -32,6 +32,20 @@ export function suspendShortcuts(on: boolean): void {
   suspended = on;
 }
 
+/**
+ * The live dispatcher, published so a keypress that never reached this window
+ * can still be run. The HTML preview is a sandboxed iframe: once the reader
+ * clicks inside it, its keydowns belong to that document and this listener
+ * never fires, so the iframe forwards the chord by postMessage instead. There
+ * is exactly one `useShortcuts` — in `App` — so one slot is enough.
+ */
+let dispatch: ((chord: string) => boolean) | null = null;
+
+/** Run whatever `chord` is bound to. Returns whether anything fired. */
+export function runChord(chord: string): boolean {
+  return dispatch ? dispatch(chord) : false;
+}
+
 export function useShortcuts(handlers: ShortcutHandlers) {
   const keybindings = useEditorStore((s) => s.keybindings);
   const handlersRef = useRef(handlers);
@@ -41,19 +55,33 @@ export function useShortcuts(handlers: ShortcutHandlers) {
   }, [handlers]);
 
   useEffect(() => {
+    /** `claim` runs first, and only for a chord that is really about to fire. */
+    const fire = (chord: string, claim?: () => void): boolean => {
+      if (suspended) return false;
+      const action = actionForChord(keybindings, chord);
+      if (!action) return false;
+      const handler = handlersRef.current[action];
+      if (!handler) return false;
+      claim?.();
+      handler();
+      return true;
+    };
+
     const onKey = (e: KeyboardEvent) => {
-      if (suspended || e.defaultPrevented) return;
+      if (e.defaultPrevented) return;
       const chord = chordFromEvent(e);
       if (!chord) return;
-      const action = actionForChord(keybindings, chord);
-      if (!action) return;
-      const handler = handlersRef.current[action];
-      if (!handler) return;
-      e.preventDefault();
-      e.stopPropagation();
-      handler();
+      fire(chord, () => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
     };
+
+    dispatch = fire;
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (dispatch === fire) dispatch = null;
+    };
   }, [keybindings]);
 }

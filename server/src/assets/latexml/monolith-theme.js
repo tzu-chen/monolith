@@ -11,6 +11,7 @@
  *   3. Collapsibles — make theorem/proof blocks expand/collapse (state saved).
  *   4. Copy-LaTeX   — a button on each display equation copies its TeX source.
  *   5. Knowls       — turn citations into inline-expandable references.
+ *   6. Shortcuts    — forward the app's own key chords back up to it.
  */
 (function () {
   'use strict';
@@ -30,14 +31,77 @@
     }
   }
 
+  /* ---- 6. Host shortcuts ------------------------------------------------ */
+
+  /*
+   * This document is a sandboxed iframe with its own event loop: the moment the
+   * reader clicks in here, every keydown belongs to this window and the app's
+   * listener never sees it, so Compile, Save and the layout chords go dead
+   * without anything looking broken. The app posts down the chords it has
+   * bound; we claim exactly those (so ⌘S doesn't reach the browser's save
+   * dialog) and post the chord back up for it to run. Every other key — ⌘F,
+   * ⌘C, arrows — is the reader's, and stays here untouched.
+   *
+   * The spelling of a chord must match `chordFromEvent` in
+   * `client/src/lib/keybindings.ts`; the two are a wire format and change
+   * together.
+   */
+
+  var boundChords = {};
+
+  var MODIFIER_KEYS = { Control: 1, Shift: 1, Alt: 1, Meta: 1 };
+
+  function chordFromEvent(e) {
+    if (MODIFIER_KEYS[e.key]) return null;
+    var key;
+    if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
+    else if (/^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
+    else if (e.key === ' ') key = 'Space';
+    else if (e.key.length === 1) key = e.key.toUpperCase();
+    else key = e.key;
+
+    var parts = [];
+    if (e.metaKey || e.ctrlKey) parts.push('Mod');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    parts.push(key);
+    return parts.join('+');
+  }
+
+  function setKeymap(chords) {
+    boundChords = {};
+    if (!chords || !chords.length) return;
+    for (var i = 0; i < chords.length; i++) {
+      if (typeof chords[i] === 'string' && chords[i]) boundChords[chords[i]] = true;
+    }
+  }
+
+  window.addEventListener(
+    'keydown',
+    function (e) {
+      if (e.defaultPrevented) return;
+      var chord = chordFromEvent(e);
+      if (!chord || !boundChords[chord]) return;
+      e.preventDefault();
+      try {
+        window.parent.postMessage({ type: 'monolith-key', chord: chord }, '*');
+      } catch (err) {
+        /* no parent to tell — the page is open in its own tab */
+      }
+    },
+    true
+  );
+
   window.addEventListener('message', function (e) {
     var data = e.data;
-    if (data && data.type === 'monolith-theme') applyTheme(data);
+    if (!data) return;
+    if (data.type === 'monolith-theme') applyTheme(data);
+    if (data.type === 'monolith-keymap') setKeymap(data.chords);
   });
 
   function announceReady() {
-    // Ask the parent for the current theme (covers the case where the parent's
-    // initial post landed before this listener was attached).
+    // Ask the parent for the current theme and keymap (covers the case where
+    // the parent's initial post landed before this listener was attached).
     if (window.parent && window.parent !== window) {
       try {
         window.parent.postMessage({ type: 'monolith-ready' }, '*');

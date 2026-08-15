@@ -20,6 +20,11 @@
  * LaTeX editor's compile key is, and insert-blank-line loses the argument.
  * Where one collides with the browser's own chrome, the answer is to rebind it
  * in Settings — that is what the registry is for.
+ *
+ * The three layout modes take 1/2/3 in the order the segmented control shows
+ * them (editor, split, preview), so the chord reads off the control. They carry
+ * Shift like everything else, and that also keeps them clear of Mod+1..9, which
+ * the browser reserves for its own tabs and will not hand to a page.
  */
 
 export type ShortcutAction =
@@ -31,6 +36,9 @@ export type ShortcutAction =
   | 'panelProjects'
   | 'drawerSymbols'
   | 'drawerSnippets'
+  | 'viewEditor'
+  | 'viewSplit'
+  | 'viewPreview'
   | 'compile'
   | 'renderHtml'
   | 'save'
@@ -39,7 +47,7 @@ export type ShortcutAction =
   | 'openSettings';
 
 /** Section headings in the Settings list, in the order they appear there. */
-export type ShortcutGroup = 'Panels' | 'Drawers' | 'Document' | 'App';
+export type ShortcutGroup = 'Panels' | 'Drawers' | 'View' | 'Document' | 'App';
 
 export interface ShortcutMeta {
   action: ShortcutAction;
@@ -60,6 +68,28 @@ export const SHORTCUT_META: ShortcutMeta[] = [
 
   { action: 'drawerSymbols', label: 'Symbols', group: 'Drawers', defaultKey: 'Mod+Shift+M' },
   { action: 'drawerSnippets', label: 'Snippets', group: 'Drawers', defaultKey: 'Mod+Shift+S' },
+
+  {
+    action: 'viewEditor',
+    label: 'Editor only',
+    group: 'View',
+    defaultKey: 'Mod+Shift+1',
+    hint: 'Hide the preview',
+  },
+  {
+    action: 'viewSplit',
+    label: 'Editor and preview',
+    group: 'View',
+    defaultKey: 'Mod+Shift+2',
+    hint: 'Split the workspace',
+  },
+  {
+    action: 'viewPreview',
+    label: 'Preview only',
+    group: 'View',
+    defaultKey: 'Mod+Shift+3',
+    hint: 'Hide the editor',
+  },
 
   {
     action: 'compile',
@@ -88,7 +118,7 @@ export const SHORTCUT_META: ShortcutMeta[] = [
   { action: 'openSettings', label: 'Settings', group: 'App', defaultKey: 'Mod+,' },
 ];
 
-export const SHORTCUT_GROUPS: ShortcutGroup[] = ['Panels', 'Drawers', 'Document', 'App'];
+export const SHORTCUT_GROUPS: ShortcutGroup[] = ['Panels', 'Drawers', 'View', 'Document', 'App'];
 
 export type KeybindingsConfig = Record<ShortcutAction, string>;
 

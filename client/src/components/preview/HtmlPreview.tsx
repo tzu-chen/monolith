@@ -8,6 +8,7 @@ import { downloadBlob } from '../../lib/download';
 import * as api from '../../lib/api';
 import { THEME_VAR_NAMES } from '../../colorSchemes';
 import { formatChord } from '../../lib/keybindings';
+import { runChord } from '../../hooks/useShortcuts';
 import PreviewModeToggle from './PreviewModeToggle';
 import { useElementWidth } from '../../hooks/useElementWidth';
 import { formatClock } from '../../lib/time';
@@ -20,7 +21,9 @@ import { fs, font, metrics, radius, motion } from '../../theme/tokens';
  *
  * Unlike the PDF page, this one follows the theme: it is a themed document
  * view, not a sheet of paper. The rendered document runs in a sandboxed iframe
- * and receives the active colour scheme by postMessage.
+ * and receives the active colour scheme by postMessage — and, because a focused
+ * iframe swallows every keypress, the bound shortcut chords too, which it posts
+ * back when one is pressed.
  */
 
 const SPLIT_OPTIONS: { value: HtmlSplitLevel; label: string }[] = [
@@ -89,11 +92,30 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
     iframe.contentWindow.postMessage({ type: 'monolith-theme', theme, vars }, '*');
   }, [theme]);
 
-  useEffect(() => {
-    postTheme();
-  }, [theme, colorScheme, htmlNonce, postTheme]);
+  /*
+   * A focused iframe keeps its own keydowns — the app's listener is in another
+   * window and never sees them, so every shortcut would die the moment the
+   * reader clicked into the rendered document. Send the bound chords down; the
+   * document claims those and posts them back (see `monolith-theme.js`).
+   */
+  const postKeymap = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !iframe.contentWindow) return;
+    const chords = Object.values(keybindings).filter(Boolean);
+    iframe.contentWindow.postMessage({ type: 'monolith-keymap', chords }, '*');
+  }, [keybindings]);
 
-  // Respond to the iframe announcing it's ready (covers load-order races).
+  const postState = useCallback(() => {
+    postTheme();
+    postKeymap();
+  }, [postTheme, postKeymap]);
+
+  useEffect(() => {
+    postState();
+  }, [theme, colorScheme, htmlNonce, postState]);
+
+  // Respond to the iframe announcing it's ready (covers load-order races), and
+  // run the chords it forwards back.
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       // Only honour messages from our own iframe window. It's sandboxed without
@@ -101,11 +123,15 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
       // app's own origin in case sandboxing is ever relaxed.
       if (e.source !== iframeRef.current?.contentWindow) return;
       if (e.origin !== 'null' && e.origin !== window.location.origin) return;
-      if (e.data && e.data.type === 'monolith-ready') postTheme();
+      if (!e.data) return;
+      if (e.data.type === 'monolith-ready') postState();
+      if (e.data.type === 'monolith-key' && typeof e.data.chord === 'string') {
+        runChord(e.data.chord);
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [postTheme]);
+  }, [postState]);
 
   // Kick an initial render the first time the user opens the HTML preview for a
   // project that hasn't been rendered yet. Skipped when auto-recompile is off —
@@ -274,7 +300,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
               ref={iframeRef}
               key={iframeSrc}
               src={iframeSrc}
-              onLoad={postTheme}
+              onLoad={postState}
               title="HTML preview"
               // allow-scripts (for the theme JS) but NOT allow-same-origin, so the
               // rendered document runs in an opaque origin and cannot reach the
