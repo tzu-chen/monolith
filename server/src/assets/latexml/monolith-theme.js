@@ -867,6 +867,111 @@
     schedule();
   }
 
+  /* ---- Dark-mode figure inversion --------------------------------------- */
+
+  /*
+   * Plots exported from matplotlib (and most other tools) are dark ink on a
+   * blank ground — transparent, or white. On the graphite page the coloured
+   * curves may survive but the axes, ticks and labels sink into it. The
+   * stylesheet flips vector art unconditionally, but a raster <img> could just
+   * as easily be a photograph, and an inverted photograph looks broken.
+   * Nothing in the markup distinguishes them, so we ask the pixels: sample the
+   * image into a small canvas and call it line art when most of it is blank
+   * ground. Matches get .monolith-lineart and the stylesheet flips them the
+   * same way it flips SVG. The verdict doesn't depend on the active scheme, so
+   * it survives a light/dark switch without re-running.
+   *
+   * Reading those pixels needs CORS: this iframe is sandboxed without
+   * allow-same-origin, so its origin is opaque and even a figure served off our
+   * own host taints the canvas. The server's blanket cors() covers it (there is
+   * a note there pointing back here). We sample through a separate
+   * anonymous-CORS Image so nothing here can disturb the one on the page, and
+   * any failure — a tainted canvas, an undecodable file — just leaves the
+   * figure alone.
+   */
+
+  var LINEART_SAMPLE = 96; // longest edge of the sampled thumbnail, px
+  var LINEART_BLANK = 0.6; // share of pixels that must be blank ground
+  var LINEART_LIGHT = 224; // per-channel floor for "blank"; loose enough for
+  // off-white plot backgrounds like matplotlib's ggplot grey. Measured against
+  // real figures and photographs the two populations sit far apart: plots run
+  // 0.79–0.94 blank, photographs top out around 0.15.
+
+  function mostlyBlankGround(img) {
+    var w = img.naturalWidth;
+    var h = img.naturalHeight;
+    if (!w || !h) return false;
+
+    var scale = Math.min(1, LINEART_SAMPLE / Math.max(w, h));
+    var sw = Math.max(1, Math.round(w * scale));
+    var sh = Math.max(1, Math.round(h * scale));
+
+    var canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, sw, sh);
+
+    var px = ctx.getImageData(0, 0, sw, sh).data; // throws if tainted
+    var blank = 0;
+    for (var i = 0; i < px.length; i += 4) {
+      if (
+        px[i + 3] < 32 ||
+        (px[i] >= LINEART_LIGHT &&
+          px[i + 1] >= LINEART_LIGHT &&
+          px[i + 2] >= LINEART_LIGHT)
+      ) {
+        blank++;
+      }
+    }
+    return blank / (sw * sh) >= LINEART_BLANK;
+  }
+
+  function setupFigureInversion() {
+    var root = document.documentElement;
+    var targets = [];
+
+    document.querySelectorAll('img').forEach(function (img) {
+      // The LaTeXML footer logo is chrome, not document content, and an <img>
+      // of an .svg is already covered by the stylesheet.
+      if (img.closest('.ltx_page_footer, .ltx_page_logo')) return;
+      if (/\.svg(\?|#|$)/i.test(img.currentSrc || img.src || '')) return;
+      targets.push(img);
+    });
+    if (!targets.length) return;
+
+    var pending = targets.length;
+    root.classList.add('monolith-scanning-figures');
+    function settle() {
+      if (--pending === 0) root.classList.remove('monolith-scanning-figures');
+    }
+    // Insurance: never strand the transition off if a probe never fires.
+    setTimeout(function () {
+      root.classList.remove('monolith-scanning-figures');
+    }, 4000);
+
+    targets.forEach(function (img) {
+      var src = img.currentSrc || img.src;
+      if (!src) {
+        settle();
+        return;
+      }
+      var probe = new Image();
+      probe.crossOrigin = 'anonymous';
+      probe.onload = function () {
+        try {
+          if (mostlyBlankGround(probe)) img.classList.add('monolith-lineart');
+        } catch (e) {
+          /* tainted canvas or an unreadable decode — leave the figure be */
+        }
+        settle();
+      };
+      probe.onerror = settle;
+      probe.src = src;
+    });
+  }
+
   /* ---- boot ------------------------------------------------------------ */
 
   function init() {
@@ -880,6 +985,7 @@
     try { setupDropCaps(); } catch (e) {}
     try { setupRefPreviews(); } catch (e) {}
     try { setupSidenotes(); } catch (e) {}
+    try { setupFigureInversion(); } catch (e) {}
     announceReady();
   }
 

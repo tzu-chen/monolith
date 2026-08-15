@@ -562,20 +562,35 @@ object.ltx_graphics {
   align-items: center;
 }
 
-/* Dark-mode vector figures. SVG plots / TikZ / \includegraphics of .svg are
-   typically dark line art on a white (or transparent) ground, which disappears
-   on a dark page. Flip their luminance while keeping hues roughly intact so
-   they read as light-on-dark, the way a plot styled for a dark theme would.
-   External SVGs come in via <object>, so their internals are out of reach of
-   this stylesheet — a filter on the host element is the only lever. Scoped to
-   vector art: raster photos are left untouched, since inverting a photograph
-   looks wrong. The app theme drives this via data-theme (not the iframe's OS
-   prefers-color-scheme, which wouldn't match the editor's chosen scheme). */
+/* Dark-mode figures. Line art — SVG plots, TikZ, and the PNGs matplotlib & co.
+   export — is dark ink on a blank ground, so on a dark page its axes, ticks
+   and labels sink into the background even when the coloured data survives.
+   Flip its luminance while keeping hues roughly intact so it reads as
+   light-on-dark, the way a plot styled for a dark theme would.
+
+   Vector art is safe to flip on sight: an <svg> or an <object> here is line art
+   by definition, and an external SVG arrives via <object> whose internals are
+   out of reach of this stylesheet, so a filter on the host element is the only
+   lever anyway. A raster <img> is ambiguous — inverting a photograph looks
+   wrong — and nothing in the markup says which it is, so monolith-theme.js
+   samples the pixels and tags the ones that read as line art with
+   .monolith-lineart. The app theme drives all of this via data-theme (not the
+   iframe's OS prefers-color-scheme, which wouldn't match the editor's chosen
+   scheme). */
 :root[data-theme="dark"] object[type="image/svg+xml"],
 :root[data-theme="dark"] img.ltx_graphics[src$=".svg" i],
 :root[data-theme="dark"] .ltx_picture svg,
-:root[data-theme="dark"] svg.ltx_picture {
+:root[data-theme="dark"] svg.ltx_picture,
+:root[data-theme="dark"] img.monolith-lineart {
   filter: invert(1) hue-rotate(180deg);
+}
+
+/* The tag above lands a beat after the image decodes. The filter transition is
+   there so a light/dark switch animates; on that first classification it would
+   instead read as the figure spontaneously changing, so hold it until the scan
+   is done. */
+:root.monolith-scanning-figures img {
+  transition: none;
 }
 
 .ltx_caption {

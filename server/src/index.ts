@@ -46,6 +46,13 @@ const defaultProject = projectDirs[0] || null;
 
 initProjectContext(PROJECTS_ROOT, defaultProject);
 
+// Note: the HTML preview iframe is sandboxed without allow-same-origin, so its
+// document has an opaque origin and even a figure served off this host counts
+// as cross-origin to it. The theme script relies on these permissive CORS
+// headers to sample figure pixels through a <canvas> (see the figure-inversion
+// section of server/src/assets/latexml/monolith-theme.js) — tightening this to
+// specific origins would need `null` allowed, or that feature degrades to
+// leaving every raster figure un-inverted in dark mode.
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
