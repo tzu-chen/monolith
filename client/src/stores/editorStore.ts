@@ -208,6 +208,14 @@ interface EditorState {
   // Show line numbers in the editor gutter
   showLineNumbers: boolean;
 
+  /**
+   * Hide everything but `.tex` in the Files panel. Folders with no `.tex`
+   * anywhere below them go with them, so the filter does not leave empty
+   * branches behind. Only the tree is filtered — the file finder still
+   * searches the whole project.
+   */
+  hideNonTexFiles: boolean;
+
   // Cursor position
   cursorLine: number;
   cursorCol: number;
@@ -307,6 +315,9 @@ interface EditorState {
 
   // Line numbers
   toggleShowLineNumbers: () => void;
+
+  // Files panel filter
+  toggleHideNonTexFiles: () => void;
 
   // View mode
   setViewMode: (mode: ViewMode) => void;
@@ -499,6 +510,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fontFamily: getInitialFontFamily(),
   lineWrap: readFlag('monolith-line-wrap', false),
   showLineNumbers: readFlag('monolith-line-numbers', true),
+  hideNonTexFiles: readFlag('monolith-tex-only-tree', false),
   cursorLine: 1,
   cursorCol: 1,
   syncTexHighlight: null,
@@ -805,6 +817,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const next = !get().showLineNumbers;
     writeFlag('monolith-line-numbers', next);
     set({ showLineNumbers: next });
+  },
+
+  toggleHideNonTexFiles: () => {
+    const next = !get().hideNonTexFiles;
+    writeFlag('monolith-tex-only-tree', next);
+    set({ hideNonTexFiles: next });
   },
 
   setViewMode: (viewMode) => set({ viewMode }),

@@ -214,6 +214,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const toggleAutoRecompile = useEditorStore((s) => s.toggleAutoRecompile);
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
   const toggleInvertPdfInDark = useEditorStore((s) => s.toggleInvertPdfInDark);
+  const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
+  const toggleHideNonTexFiles = useEditorStore((s) => s.toggleHideNonTexFiles);
   const keybindings = useEditorStore((s) => s.keybindings);
   const setKeybinding = useEditorStore((s) => s.setKeybinding);
   const resetKeybindings = useEditorStore((s) => s.resetKeybindings);
@@ -449,6 +451,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             </Row>
             <Row title="Vim mode" hint="Modal editing keybindings">
               <Toggle on={vimMode} onClick={toggleVimMode} ariaLabel="Vim mode" />
+            </Row>
+          </section>
+
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <SectionLabel>Files</SectionLabel>
+            <Row
+              title="Show only .tex files"
+              hint="Hides everything else in the Files panel, and the folders holding it. The file finder still sees the whole project."
+            >
+              <Toggle on={hideNonTexFiles} onClick={toggleHideNonTexFiles} ariaLabel="Show only .tex files" />
             </Row>
           </section>
 

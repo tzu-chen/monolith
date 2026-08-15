@@ -56,6 +56,24 @@ function buildTree(files: string[]): TreeNode[] {
   return root;
 }
 
+/**
+ * Keep only `.tex`, and only the folders that lead to one. Pruning empty
+ * branches is the point: filtering the leaves alone would leave a tree of
+ * folders that open onto nothing.
+ */
+function pruneToTex(nodes: TreeNode[]): TreeNode[] {
+  const kept: TreeNode[] = [];
+  for (const node of nodes) {
+    if (!node.isDir) {
+      if (node.name.toLowerCase().endsWith('.tex')) kept.push(node);
+      continue;
+    }
+    const children = pruneToTex(node.children);
+    if (children.length > 0) kept.push({ ...node, children });
+  }
+  return kept;
+}
+
 function findNode(tree: TreeNode[], path: string): TreeNode | null {
   for (const node of tree) {
     if (node.path === path) return node;
@@ -375,6 +393,7 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
   const fileTree = useEditorStore((s) => s.fileTree);
   const projects = useEditorStore((s) => s.projects);
   const currentProject = useEditorStore((s) => s.currentProject);
+  const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
   const [currentDir, setCurrentDir] = useState('');
   const [creatingFile, setCreatingFile] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -389,7 +408,10 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
   }));
 
   const tree = buildTree(fileTree);
-  const visibleNodes = currentDir ? findNode(tree, currentDir)?.children ?? tree : tree;
+  // Scope first, filter second: the folder the tree is scoped to has to be
+  // findable even when the filter would have pruned it away.
+  const scopedNodes = currentDir ? findNode(tree, currentDir)?.children ?? tree : tree;
+  const visibleNodes = hideNonTexFiles ? pruneToTex(scopedNodes) : scopedNodes;
 
   const handleNavigateUp = useCallback(() => {
     setCurrentDir((dir) => {
@@ -620,7 +642,11 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
 
       {visibleNodes.length === 0 && (
         <div style={{ padding: '20px 14px', textAlign: 'center', color: 'var(--text-faint)', fontSize: fs.control }}>
-          {currentProject ? 'No files here yet' : 'No project loaded'}
+          {!currentProject
+            ? 'No project loaded'
+            : scopedNodes.length > 0
+              ? 'No .tex files here — Settings shows the rest'
+              : 'No files here yet'}
         </div>
       )}
 
