@@ -111,6 +111,12 @@ export interface ScopeGraph {
   packages: ScopePackage[];
   macros: ScopeMacro[];
   environments: ScopeEnvironment[];
+  /**
+   * Names declared by \newtheorem / \declaretheorem, sorted. LaTeXML renders
+   * these as `ltx_theorem_<name>`, so they are what the HTML preview's
+   * per-type collapse setting offers.
+   */
+  theoremEnvs: string[];
   /** Labels in scope, in document order. */
   labels: ScopeLabel[];
   /** Ref keys used somewhere in the project that no \label defines. */

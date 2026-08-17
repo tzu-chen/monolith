@@ -107,6 +107,12 @@ export interface ScopeGraph {
   packages: ScopePackage[];
   macros: ScopeMacro[];
   environments: ScopeEnvironment[];
+  /**
+   * Names declared by \newtheorem / \declaretheorem, sorted. These are the
+   * amsthm-like blocks LaTeXML renders as `ltx_theorem_<name>`, so the HTML
+   * preview's per-type collapse setting is built from this list.
+   */
+  theoremEnvs: string[];
   labels: ScopeLabel[];
   danglingRefs: DanglingRef[];
   bibKeys: string[];
@@ -742,6 +748,7 @@ export async function resolveScope(projectRoot: string, file: string): Promise<S
     packages: [...packageByName.values()],
     macros: macros.sort((a, b) => a.name.localeCompare(b.name)),
     environments: environments.sort((a, b) => a.name.localeCompare(b.name)),
+    theoremEnvs: [...theoremEnvs].sort((a, b) => a.localeCompare(b)),
     // Left in document order — the order they were walked in, which is the one
     // order the client cannot reconstruct from the names alone.
     labels,

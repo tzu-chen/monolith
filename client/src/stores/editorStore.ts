@@ -146,6 +146,8 @@ interface EditorState {
   // HTML render (LaTeXML) state — runs beside the PDF path, same .tex source
   previewMode: PreviewMode;
   htmlSplitAt: HtmlSplitLevel;
+  /** Environment names whose blocks start collapsed in the HTML preview. */
+  htmlCollapsedEnvs: string[];
   htmlRenderStatus: HtmlRenderStatus;
   htmlLog: string;
   htmlErrors: string[];
@@ -259,6 +261,7 @@ interface EditorState {
   // HTML render actions
   setPreviewMode: (mode: PreviewMode) => void;
   setHtmlSplitAt: (level: HtmlSplitLevel) => void;
+  toggleHtmlCollapsedEnv: (env: string) => void;
   setHtmlRenderStatus: (status: HtmlRenderStatus) => void;
   setHtmlResult: (result: {
     ok: boolean;
@@ -444,6 +447,22 @@ function getInitialHtmlSplit(): HtmlSplitLevel {
   return 'none';
 }
 
+/**
+ * Theorem-like environment names whose blocks start collapsed in the HTML
+ * preview — `proof`, or any \newtheorem name (LaTeXML's `ltx_theorem_<name>`).
+ * A block can override this from the source with \mlCollapsed / \mlExpanded.
+ */
+function getInitialHtmlCollapsedEnvs(): string[] {
+  try {
+    const stored = localStorage.getItem('monolith-html-collapsed-envs');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed.filter((e): e is string => typeof e === 'string');
+    }
+  } catch {}
+  return [];
+}
+
 const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'projects'];
 
 function getInitialPanel(): SidePanel | null {
@@ -480,6 +499,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   compileSnapshot: {},
   previewMode: getInitialPreviewMode(),
   htmlSplitAt: getInitialHtmlSplit(),
+  htmlCollapsedEnvs: getInitialHtmlCollapsedEnvs(),
   htmlRenderStatus: 'idle',
   htmlLog: '',
   htmlErrors: [],
@@ -672,6 +692,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     try { localStorage.setItem('monolith-html-split', htmlSplitAt); } catch {}
     set({ htmlSplitAt });
   },
+
+  toggleHtmlCollapsedEnv: (env) =>
+    set((state) => {
+      const htmlCollapsedEnvs = state.htmlCollapsedEnvs.includes(env)
+        ? state.htmlCollapsedEnvs.filter((e) => e !== env)
+        : [...state.htmlCollapsedEnvs, env].sort((a, b) => a.localeCompare(b));
+      try {
+        localStorage.setItem('monolith-html-collapsed-envs', JSON.stringify(htmlCollapsedEnvs));
+      } catch {}
+      return { htmlCollapsedEnvs };
+    }),
 
   setHtmlRenderStatus: (htmlRenderStatus) => set({ htmlRenderStatus }),
 

@@ -97,6 +97,9 @@
     if (!data) return;
     if (data.type === 'monolith-theme') applyTheme(data);
     if (data.type === 'monolith-keymap') setKeymap(data.chords);
+    if (data.type === 'monolith-collapse') {
+      try { setCollapsedTypes(data.envs); } catch (e) {}
+    }
   });
 
   function announceReady() {
@@ -182,11 +185,105 @@
 
   /* ---- 3. Collapsible theorem / proof blocks --------------------------- */
 
+  /*
+   * Which blocks start collapsed is decided per environment type by the app
+   * (Settings > HTML preview), and can be overridden for one block from the
+   * source with \mlCollapsed / \mlExpanded — see monolith-html.sty.ltxml,
+   * which turns those into the ml-collapsed / ml-expanded classes below.
+   *
+   * Keyed by the environment name LaTeXML puts in `ltx_theorem_<name>`, plus
+   * the literal 'proof'. Empty until the app's first settings message, so a
+   * document opened outside the app (or before the message lands) reads with
+   * everything expanded rather than everything hidden.
+   */
+  var collapsedTypes = Object.create(null);
+
   function storageKey(id) {
     return 'ml-collapse:' + location.pathname + ':' + id;
   }
 
-  function makeCollapsible(block, defaultOpen) {
+  function storedState(id) {
+    try {
+      return localStorage.getItem(storageKey(id));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /*
+   * LaTeXML strips every non-alphanumeric character from an environment name
+   * before putting it in a class: \newtheorem{side-note} renders as
+   * `ltx_theorem_sidenote`. Case is kept. The app sends the names as written in
+   * the source, so both sides go through this before being compared — without
+   * it a hyphenated environment would silently never match its own setting.
+   */
+  function normType(name) {
+    return String(name).replace(/[^A-Za-z0-9]/g, '');
+  }
+
+  /** The environment name LaTeXML encoded in the block's classes. */
+  function blockType(block) {
+    if (block.classList.contains('ltx_proof')) return 'proof';
+    var m = /\bltx_theorem_([A-Za-z0-9]+)/.exec(block.className || '');
+    return m ? m[1] : null;
+  }
+
+  /*
+   * Should this block start collapsed? Strongest signal first:
+   *   1. a state the reader toggled by hand, remembered across renders
+   *   2. \mlCollapsed / \mlExpanded on this specific block
+   *   3. the per-type default from the app's settings
+   *   4. open
+   */
+  function initialCollapsed(block, id) {
+    var stored = storedState(id);
+    if (stored !== null) return stored === 'closed';
+    if (block.classList.contains('ml-collapsed')) return true;
+    if (block.classList.contains('ml-expanded')) return false;
+    var type = blockType(block);
+    return !!(type && collapsedTypes[type]);
+  }
+
+  /*
+   * Adopt a new set of per-type defaults. Blocks the reader has toggled by hand
+   * keep the state they were left in — changing a setting is not a reason to
+   * undo someone's explicit click — so only untouched blocks are re-evaluated.
+   */
+  function setCollapsedTypes(list) {
+    collapsedTypes = Object.create(null);
+    if (list && list.length) {
+      for (var i = 0; i < list.length; i++) collapsedTypes[normType(list[i])] = true;
+    }
+    var blocks = document.querySelectorAll('[data-ml-collapse]');
+    for (var j = 0; j < blocks.length; j++) {
+      var block = blocks[j];
+      if (storedState(block.id) !== null) continue;
+      block.classList.toggle('monolith-collapsed', initialCollapsed(block, block.id));
+    }
+    window.dispatchEvent(new Event('monolith:layout'));
+  }
+
+  /*
+   * Reveal a target sitting inside one or more collapsed blocks, so following a
+   * cross-reference into one doesn't scroll to a `display: none` element.
+   * Deliberately not persisted: this is a transient reveal to make a jump land,
+   * not the reader choosing to keep that block open.
+   */
+  function expandAncestors(el) {
+    var node = el;
+    var opened = false;
+    while (node && node !== document.body) {
+      if (node.classList && node.classList.contains('monolith-collapsed')) {
+        node.classList.remove('monolith-collapsed');
+        opened = true;
+      }
+      node = node.parentNode;
+    }
+    if (opened) window.dispatchEvent(new Event('monolith:layout'));
+    return opened;
+  }
+
+  function makeCollapsible(block) {
     if (block.dataset.mlCollapse) return;
 
     var titleEl = block.querySelector(':scope > .ltx_title');
@@ -216,10 +313,7 @@
     block.appendChild(head);
     block.appendChild(body);
 
-    var stored = null;
-    try { stored = localStorage.getItem(storageKey(id)); } catch (e) {}
-    var open = stored === null ? defaultOpen !== false : stored === 'open';
-    block.classList.toggle('monolith-collapsed', !open);
+    block.classList.toggle('monolith-collapsed', initialCollapsed(block, id));
 
     head.addEventListener('click', function () {
       var nowCollapsed = block.classList.toggle('monolith-collapsed');
@@ -232,14 +326,46 @@
     });
   }
 
-  function setupCollapsibles() {
-    document.querySelectorAll('.ltx_theorem').forEach(function (b) {
-      makeCollapsible(b, true);
-    });
-    document.querySelectorAll('.ltx_proof').forEach(function (b) {
-      makeCollapsible(b, true);
-    });
+  // '#S1.Thmtheorem1' -> the element it names. Percent-decoding a hand-written
+  // href can throw, and this runs on every click, so a bad one yields null
+  // rather than taking the listener down with it.
+  function targetOfHash(hash) {
+    if (!hash || hash.charAt(0) !== '#') return null;
+    var id = hash.slice(1);
+    if (!id) return null;
+    try {
+      id = decodeURIComponent(id);
+    } catch (e) {
+      /* not percent-encoded — use it as written */
+    }
+    return document.getElementById(id);
   }
+
+  function setupCollapsibles() {
+    document.querySelectorAll('.ltx_theorem, .ltx_proof').forEach(makeCollapsible);
+
+    /*
+     * A cross-reference can point into a block that starts collapsed. Native
+     * anchor navigation would scroll to a hidden element and land nowhere, so
+     * open the way first — click runs before the browser acts on the href.
+     */
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+      if (link) expandAncestors(targetOfHash(link.getAttribute('href')));
+    });
+
+    // The same for a hash arrived at directly — on load, or via back/forward.
+    function revealHash() {
+      var target = targetOfHash(location.hash);
+      // Re-scroll: the browser already tried, while the block was still shut.
+      if (expandAncestors(target)) target.scrollIntoView();
+    }
+    window.addEventListener('hashchange', revealHash);
+    revealHash();
+  }
+
+  // Let knowl.js open the way before it jumps to a target (see gotoTarget).
+  window.MonolithCollapse = { expand: expandAncestors };
 
   /* ---- 4. Copy-LaTeX on display equations ------------------------------ */
 
@@ -744,6 +870,9 @@
       var clone = src.cloneNode(true);
       clone.querySelectorAll('.monolith-anchor, .monolith-copy-tex')
         .forEach(function (n) { n.remove(); });
+      // The whole point of the popover is to show the content, so a target that
+      // happens to be collapsed in the document must not be collapsed in here.
+      clone.classList.remove('monolith-collapsed');
       // Drop any title="" attrs so the browser's native tooltip can't pop over
       // the preview from inside it.
       if (clone.removeAttribute) clone.removeAttribute('title');

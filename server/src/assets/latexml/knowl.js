@@ -66,6 +66,13 @@
   // the URL hash, and flash it so the eye lands on the right place.
   function gotoTarget(target) {
     if (!target) return;
+    // The target may sit inside a block that starts collapsed; open the way so
+    // the jump lands on something visible (monolith-theme.js owns the state).
+    try {
+      if (window.MonolithCollapse) window.MonolithCollapse.expand(target);
+    } catch (e) {
+      /* theme script absent — nothing to open */
+    }
     try {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
@@ -135,6 +142,9 @@
     var clone = src.cloneNode(true);
     // Drop the id so the clone doesn't duplicate the live element's id.
     if (clone.removeAttribute) clone.removeAttribute('id');
+    // A knowl exists to show the content inline, so a target that starts
+    // collapsed in the document is still shown open in the panel.
+    if (clone.classList) clone.classList.remove('monolith-collapsed');
     // Remove injected chrome that's meaningless or duplicated inside the clone…
     var chrome = clone.querySelectorAll(
       '.monolith-anchor, .monolith-copy-tex, .knowl-close, .knowl-footer, .knowl-output'

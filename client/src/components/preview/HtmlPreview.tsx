@@ -56,6 +56,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const keybindings = useEditorStore((s) => s.keybindings);
+  const htmlCollapsedEnvs = useEditorStore((s) => s.htmlCollapsedEnvs);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showLog, setShowLog] = useState(false);
@@ -105,10 +106,25 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
     iframe.contentWindow.postMessage({ type: 'monolith-keymap', chords }, '*');
   }, [keybindings]);
 
+  /*
+   * Which theorem-like environments start collapsed. Sent rather than baked in
+   * at render time so flipping the setting re-folds the document in place — no
+   * latexmlc round trip. Blocks the reader has toggled by hand keep their state.
+   */
+  const postCollapse = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !iframe.contentWindow) return;
+    iframe.contentWindow.postMessage(
+      { type: 'monolith-collapse', envs: htmlCollapsedEnvs },
+      '*'
+    );
+  }, [htmlCollapsedEnvs]);
+
   const postState = useCallback(() => {
     postTheme();
     postKeymap();
-  }, [postTheme, postKeymap]);
+    postCollapse();
+  }, [postTheme, postKeymap, postCollapse]);
 
   useEffect(() => {
     postState();

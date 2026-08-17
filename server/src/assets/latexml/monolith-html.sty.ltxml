@@ -1,0 +1,68 @@
+# -*- mode: Perl -*-
+# /=====================================================================\
+# | monolith-html.sty.ltxml                                             |
+# | LaTeXML binding preloaded by Monolith's HTML render (latexml.ts).   |
+# | Source-level hints that only mean something in the HTML preview.    |
+# \=====================================================================/
+package LaTeXML::Package::Pool;
+use strict;
+use warnings;
+use LaTeXML::Package;
+
+#======================================================================
+# Collapse hints
+#
+# `monolith-theme.js` makes every theorem-like block and proof collapsible.
+# Which ones *start* collapsed is normally a per-environment-type setting in
+# the app (Settings > HTML preview). These two macros override that setting
+# for one specific block, from the source:
+#
+#   \begin{exercise}\mlCollapsed
+#     Hidden until clicked, whatever the setting for `exercise` says.
+#   \end{exercise}
+#
+#   \begin{exercise}\mlExpanded
+#     Open on load, even when `exercise` is set to start collapsed.
+#   \end{exercise}
+#
+# They emit nothing — no text, no box, no whitespace — they only tag the
+# enclosing element with a class the theme script reads. The PDF is therefore
+# byte-identical whether or not they are present, PROVIDED the document also
+# defines them as no-ops for the TeX engine, which LaTeXML never sees:
+#
+#   \providecommand{\mlCollapsed}{}
+#   \providecommand{\mlExpanded}{}
+#
+# (Deliberately not named \collapsed/\expanded: `\expanded` is a primitive in
+# XeTeX/LuaTeX/pdfTeX, so a \providecommand for it would silently not take and
+# the source would then run the primitive.)
+#
+# Placement: put the macro immediately after \begin{...}, before any text.
+# The class has to land on the theorem element itself, and LaTeXML opens a
+# paragraph as soon as content starts — so we walk up from the current
+# insertion point to the nearest enclosing theorem/proof and tag that. The
+# walk is what makes the macro forgiving about a stray newline or a \label
+# preceding it; without it the class would land on the paragraph instead.
+#======================================================================
+
+# Tag the innermost theorem/proof ancestor of the insertion point, falling back
+# to the current element when the macro is used outside such a block.
+sub monolithTagBlock {
+  my ($class) = @_;
+  return sub {
+    my ($document) = @_;
+    my $node = $document->getElement;
+    # One reverse-axis step matching either element type, so the *nearest*
+    # enclosing block wins. Testing theorem before proof in two steps would
+    # tag the outer theorem for a proof nested inside one.
+    my $block = $document->findnode(
+      'ancestor-or-self::*[self::ltx:theorem or self::ltx:proof][1]', $node)
+      || $node;
+    $document->addClass($block, $class);
+    return; }; }
+
+DefConstructor('\mlCollapsed', monolithTagBlock('ml-collapsed'));
+DefConstructor('\mlExpanded',  monolithTagBlock('ml-expanded'));
+
+#======================================================================
+1;

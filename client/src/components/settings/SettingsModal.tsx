@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { COLOR_SCHEMES, getSchemeById, applyColorScheme, type ColorScheme } from '../../colorSchemes';
 import { MinusIcon, PlusIcon, CloseIcon } from '../shared/Icons';
-import { OutlinedButton, IconButton, SectionLabel } from '../shared/ui';
+import { OutlinedButton, IconButton, SectionLabel, Pill } from '../shared/ui';
 import {
   SHORTCUT_GROUPS,
   SHORTCUT_META,
@@ -219,6 +219,23 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const keybindings = useEditorStore((s) => s.keybindings);
   const setKeybinding = useEditorStore((s) => s.setKeybinding);
   const resetKeybindings = useEditorStore((s) => s.resetKeybindings);
+  const htmlCollapsedEnvs = useEditorStore((s) => s.htmlCollapsedEnvs);
+  const toggleHtmlCollapsedEnv = useEditorStore((s) => s.toggleHtmlCollapsedEnv);
+  const scope = useEditorStore((s) => s.scope);
+
+  /*
+   * What can be folded: `proof` (always available — amsthm gives it to every
+   * document) and the \newtheorem names in scope for the open file. Anything
+   * already switched on is kept in the list even when the current file doesn't
+   * define it, so a setting made in another project stays visible and can be
+   * switched back off rather than becoming stuck.
+   */
+  const collapsibleEnvs = useMemo(() => {
+    const names = new Set<string>(['proof']);
+    for (const env of scope?.theoremEnvs ?? []) names.add(env);
+    for (const env of htmlCollapsedEnvs) names.add(env);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [scope, htmlCollapsedEnvs]);
 
   // Snapshot to revert on cancel
   const initialSchemeRef = useRef(colorScheme);
@@ -472,6 +489,49 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             >
               <Toggle on={autoRecompile} onClick={toggleAutoRecompile} ariaLabel="Auto recompile on edit" />
             </Row>
+          </section>
+
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <SectionLabel>HTML preview</SectionLabel>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                padding: '10px 12px',
+                border: '1px solid var(--line)',
+                borderRadius: radius.control,
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: fs.control, fontWeight: 500, color: 'var(--text)' }}>
+                  Start collapsed
+                </span>
+                <span style={{ fontSize: fs.meta, color: 'var(--text-faint)' }}>
+                  {collapsibleEnvs.length > 0
+                    ? 'These blocks render folded to their title — click to open. Override one block from the source with \\mlCollapsed or \\mlExpanded.'
+                    : 'Theorem environments defined in the open file appear here. The PDF is never affected.'}
+                </span>
+              </div>
+              {collapsibleEnvs.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {collapsibleEnvs.map((env) => (
+                    <Pill
+                      key={env}
+                      active={htmlCollapsedEnvs.includes(env)}
+                      onClick={() => toggleHtmlCollapsedEnv(env)}
+                      title={
+                        htmlCollapsedEnvs.includes(env)
+                          ? `${env} blocks start collapsed — click to expand by default`
+                          : `${env} blocks start expanded — click to collapse by default`
+                      }
+                    >
+                      {env}
+                    </Pill>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

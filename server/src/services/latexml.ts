@@ -79,6 +79,8 @@ export async function renderHtml(
     // Preloads are recorded in the intermediate XML, so this binding also
     // reaches the recursive pass that converts the .bib file.
     '--preload=monolith-bib.sty',
+    // Source-level HTML-only hints (\mlCollapsed / \mlExpanded).
+    '--preload=monolith-html.sty',
     // Layer our theme on top of LaTeXML's default ltx_* resources.
     `--css=${path.join(themeDir, 'monolith-latexml.css')}`,
     `--javascript=${path.join(themeDir, 'knowl.js')}`,
