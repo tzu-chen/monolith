@@ -87,6 +87,7 @@ export default function App() {
       panelScope: () => store().toggleActivePanel('scope'),
       panelReferences: () => store().toggleActivePanel('references'),
       panelPlots: () => store().toggleActivePanel('plots'),
+      panelHistory: () => store().toggleActivePanel('history'),
       panelProjects: () => store().toggleActivePanel('projects'),
       drawerSymbols: () => store().toggleDrawer('symbols'),
       drawerSnippets: () => store().toggleDrawer('snippets'),

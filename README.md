@@ -9,6 +9,7 @@ A local LaTeX editor with live PDF preview, built as a full-stack web applicatio
 - **HTML render mode** (LaTeXML) beside the PDF — semantic, themable web output with native MathML, a floating TOC, collapsible theorems/proofs, and copy-LaTeX on equations
 - **SyncTeX** forward/inverse search between source and PDF
 - **Multi-file projects** with tabbed editing and a file tree sidebar
+- **Version history** per project — save named snapshots, see what changed since the last one, diff any file between versions, restore a file or a whole version, download a version as a zip. Stored as plain files inside the project; no git required
 - **Symbol palette and snippet library** for quick LaTeX input
 - **Math preview** floating display while editing
 - **Vim mode** via @replit/codemirror-vim
@@ -106,6 +107,14 @@ npm start       # Build client + start server (serves from client/dist)
 | GET | `/html/:project/*` | Serve generated HTML preview assets |
 | POST | `/api/synctex/forward` | Source → PDF position |
 | POST | `/api/synctex/inverse` | PDF position → source |
+| GET | `/api/versions` | List the project's versions |
+| GET | `/api/versions/status` | Changes since the last version |
+| POST | `/api/versions` | Save a version `{ message, paths? }` |
+| GET | `/api/versions/diff?path&from&to` | Diff one file between revisions |
+| GET/PUT | `/api/versions/:id` | Read a version's files / edit its message |
+| GET | `/api/versions/:id/file?path` | A file's content at that version |
+| GET | `/api/versions/:id/download` | The version as a `.zip` |
+| POST | `/api/versions/:id/restore` | Write the version (or `paths`) back |
 | GET | `/api/health` | Server health check |
 | WS | `/ws` | Real-time file change notifications |
 

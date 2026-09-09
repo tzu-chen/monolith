@@ -14,6 +14,10 @@ interface ProjectSwitchedMessage {
   project: string;
 }
 
+interface VersionsChangedMessage {
+  type: 'versions_changed';
+}
+
 export function useFileWatcher() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,7 +38,7 @@ export function useFileWatcher() {
 
       ws.onmessage = async (event) => {
         try {
-          const msg: FileChangeMessage | ProjectSwitchedMessage = JSON.parse(event.data);
+          const msg: FileChangeMessage | ProjectSwitchedMessage | VersionsChangedMessage = JSON.parse(event.data);
 
           // Handle project switch (from another client/tab)
           if (msg.type === 'project_switched') {
@@ -69,11 +73,20 @@ export function useFileWatcher() {
             return;
           }
 
+          // A version saved, relabelled or restored — here or in another tab.
+          if (msg.type === 'versions_changed') {
+            useEditorStore.getState().invalidateVersions();
+            return;
+          }
+
           if (msg.type !== 'file_changed') return;
 
           // Refresh file tree on any file system change
           const files = await api.listFiles();
           useEditorStore.getState().setFileTree(files);
+
+          // What is uncommitted is a function of what is on disk.
+          useEditorStore.getState().invalidateVersions();
 
           // A change anywhere in the include chain invalidates the scope graph:
           // a new \usepackage in preamble.tex changes what main.tex has.

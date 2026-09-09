@@ -8,6 +8,7 @@ import {
   ScopeIcon,
   BookIcon,
   ChartIcon,
+  HistoryIcon,
   OmegaIcon,
   SnippetIcon,
   SettingsIcon,
@@ -31,6 +32,7 @@ const TOOLS: { panel: SidePanel; icon: ReactNode; title: string; action: Shortcu
   { panel: 'scope', icon: <ScopeIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'In scope', action: 'panelScope' },
   { panel: 'references', icon: <BookIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'References', action: 'panelReferences' },
   { panel: 'plots', icon: <ChartIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Plots', action: 'panelPlots' },
+  { panel: 'history', icon: <HistoryIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'History', action: 'panelHistory' },
 ];
 
 const DRAWERS: { drawer: Drawer; icon: ReactNode; title: string; action: ShortcutAction }[] = [

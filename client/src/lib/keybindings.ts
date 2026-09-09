@@ -33,6 +33,7 @@ export type ShortcutAction =
   | 'panelScope'
   | 'panelReferences'
   | 'panelPlots'
+  | 'panelHistory'
   | 'panelProjects'
   | 'drawerSymbols'
   | 'drawerSnippets'
@@ -64,6 +65,7 @@ export const SHORTCUT_META: ShortcutMeta[] = [
   { action: 'panelScope', label: 'In scope', group: 'Panels', defaultKey: 'Mod+Shift+D' },
   { action: 'panelReferences', label: 'References', group: 'Panels', defaultKey: 'Mod+Shift+B' },
   { action: 'panelPlots', label: 'Plots', group: 'Panels', defaultKey: 'Mod+Shift+G' },
+  { action: 'panelHistory', label: 'History', group: 'Panels', defaultKey: 'Mod+Shift+H' },
   { action: 'panelProjects', label: 'Projects', group: 'Panels', defaultKey: 'Mod+Shift+J' },
 
   { action: 'drawerSymbols', label: 'Symbols', group: 'Drawers', defaultKey: 'Mod+Shift+M' },

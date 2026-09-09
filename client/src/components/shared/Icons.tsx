@@ -264,6 +264,17 @@ export function ChartIcon(props: IconProps) {
   return svg(props, <><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 4-5" /></>);
 }
 
+/** A clock with an anticlockwise arrow — the version history. */
+export function HistoryIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+      <path d="M3.5 3.5V8H8" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ));
+}
+
 export function OmegaIcon(props: IconProps) {
   return svg(props, (
     <path d="M3 20h5.5M15.5 20H21M6.5 20c.6-2 1-4 1-6a5.5 5.5 0 1 1 9 0c0 2 .4 4 1 6" />

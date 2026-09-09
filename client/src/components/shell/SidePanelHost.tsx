@@ -5,6 +5,7 @@ import OutlinePanel from '../panels/OutlinePanel';
 import ScopePanel from '../panels/ScopePanel';
 import ReferencesPanel from '../panels/ReferencesPanel';
 import PlotsPanel from '../panels/PlotsPanel';
+import HistoryPanel from '../panels/HistoryPanel';
 import ProjectsPanel from '../panels/ProjectsPanel';
 
 /**
@@ -18,6 +19,7 @@ const WIDTHS: Record<SidePanel, number> = {
   scope: metrics.panelScope,
   references: metrics.panelReferences,
   plots: metrics.panelPlots,
+  history: metrics.panelHistory,
   projects: metrics.panelProjects,
 };
 
@@ -43,6 +45,7 @@ export default function SidePanelHost() {
       {activePanel === 'scope' && <ScopePanel />}
       {activePanel === 'references' && <ReferencesPanel />}
       {activePanel === 'plots' && <PlotsPanel />}
+      {activePanel === 'history' && <HistoryPanel />}
       {activePanel === 'projects' && <ProjectsPanel />}
     </aside>
   );

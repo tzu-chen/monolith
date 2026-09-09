@@ -32,6 +32,33 @@ function cacheKeyFor(path: string): string {
   return `${project}\n${path}`;
 }
 
+/**
+ * Put content that arrived from disk — a restored version — into an open tab.
+ *
+ * The live view gets it as one change, so it lands in the undo history and a
+ * restore is a keystroke away from being taken back. A tab that is not on
+ * screen has its cached state dropped instead, so it reopens from the store,
+ * which is updated here too. The tab ends clean: what it shows is what is on
+ * disk.
+ */
+export function replaceTabContent(path: string, content: string): void {
+  const store = useEditorStore.getState();
+  if (!store.openTabs.some((t) => t.path === path)) return;
+  const view = store.editorView;
+  if (store.activeTabPath === path && view && view.dom.dataset.cacheKey === cacheKeyFor(path)) {
+    if (view.state.doc.toString() !== content) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } });
+    }
+  } else {
+    stateCache.delete(cacheKeyFor(path));
+  }
+  useEditorStore.setState((s) => ({
+    openTabs: s.openTabs.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)),
+    content: s.activeTabPath === path ? content : s.content,
+    dirty: s.activeTabPath === path ? false : s.dirty,
+  }));
+}
+
 export default function EditorPane() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

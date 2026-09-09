@@ -74,10 +74,14 @@ export const metrics = {
   panelPlots: 290,
   /** 1c's .bib list */
   panelReferences: 470,
+  /** version history: changes since the last version, then the versions */
+  panelHistory: 300,
 
   /** Detail columns beside a manager list — 1c's entry editor, 1f's preview. */
   detailReference: 460,
   detailPlot: 560,
+  /** a version's file list beside a unified diff — the diff needs the room */
+  detailVersion: 720,
 
   /** bottom symbol/snippet drawer */
   drawer: 288,

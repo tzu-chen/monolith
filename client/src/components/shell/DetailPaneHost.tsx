@@ -2,6 +2,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { metrics, motion } from '../../theme/tokens';
 import ReferenceDetail from '../panels/ReferenceDetail';
 import PlotDetail from '../panels/PlotDetail';
+import VersionDetail from '../panels/VersionDetail';
 
 /**
  * The detail column of a manager screen.
@@ -9,13 +10,16 @@ import PlotDetail from '../panels/PlotDetail';
  * The handoff's reference (1c) and plot (1f) managers read left to right —
  * rail, list, then the thing you selected — so the detail pane is its own
  * column between the panel and the workspace rather than a section stacked
- * under the list. It exists only while something is selected; closing it
- * returns the width to the editor and preview.
+ * under the list. The version history follows the same shape: the list of
+ * versions in the panel, the version you picked (its files and their diffs)
+ * beside it. It exists only while something is selected; closing it returns
+ * the width to the editor and preview.
  */
 
 const WIDTHS = {
   reference: metrics.detailReference,
   plot: metrics.detailPlot,
+  version: metrics.detailVersion,
 } as const;
 
 export default function DetailPaneHost() {
@@ -38,6 +42,7 @@ export default function DetailPaneHost() {
     >
       {detail.kind === 'reference' && <ReferenceDetail entryKey={detail.key} />}
       {detail.kind === 'plot' && <PlotDetail detail={detail} />}
+      {detail.kind === 'version' && <VersionDetail detail={detail} />}
     </section>
   );
 }

@@ -54,6 +54,7 @@ export type SidePanel =
   | 'scope'
   | 'references'
   | 'plots'
+  | 'history'
   | 'projects';
 
 /** Rail tools that open the drawer docked at the bottom of the editor pane. */
@@ -76,12 +77,20 @@ export type ManagerDetail =
       fileId: string;
       filename: string;
       updatedAt?: string | null;
+    }
+  | {
+      kind: 'version';
+      /** A version id, or `working` for the changes since the last version. */
+      id: string;
+      /** The file whose diff is open, or null for the version's file list. */
+      path: string | null;
     };
 
 /** The panel each detail kind belongs to — closing that panel closes the pane. */
 export const DETAIL_OWNER: Record<ManagerDetail['kind'], SidePanel> = {
   reference: 'references',
   plot: 'plots',
+  version: 'history',
 };
 
 /** Overlay finders: Mod+P files, Mod+Shift+P projects. */
@@ -169,6 +178,11 @@ interface EditorState {
   managerDetail: ManagerDetail | null;
   /** Bumped when a `.bib` or `.tex` changes — the reference library re-reads. */
   libraryNonce: number;
+  /**
+   * Bumped when the project's files or its version history change, so the
+   * History panel re-reads what is uncommitted and what has been saved.
+   */
+  versionsNonce: number;
 
   editorView: EditorView | null;
 
@@ -282,6 +296,7 @@ interface EditorState {
   toggleActivePanel: (panel: SidePanel) => void;
   setManagerDetail: (detail: ManagerDetail | null) => void;
   invalidateLibrary: () => void;
+  invalidateVersions: () => void;
   setActiveDrawer: (drawer: Drawer | null) => void;
   toggleDrawer: (drawer: Drawer) => void;
   setFinder: (finder: Finder | null) => void;
@@ -469,7 +484,7 @@ function getInitialHtmlCollapsedEnvs(): string[] {
   return [];
 }
 
-const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'projects'];
+const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'history', 'projects'];
 
 function getInitialPanel(): SidePanel | null {
   try {
@@ -519,6 +534,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   showSettings: false,
   managerDetail: null,
   libraryNonce: 0,
+  versionsNonce: 0,
   editorView: null,
   scope: null,
   scopeStatus: 'idle',
@@ -739,6 +755,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setManagerDetail: (managerDetail) => set({ managerDetail }),
   invalidateLibrary: () => set((state) => ({ libraryNonce: state.libraryNonce + 1 })),
+  invalidateVersions: () => set((state) => ({ versionsNonce: state.versionsNonce + 1 })),
 
   setActiveDrawer: (activeDrawer) => set({ activeDrawer }),
   toggleDrawer: (drawer) =>

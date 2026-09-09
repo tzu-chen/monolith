@@ -19,16 +19,28 @@ export function resolveCompileTarget(): string | null {
  */
 export async function flushDirtyTabs(except: string | null): Promise<void> {
   const state = useEditorStore.getState();
-  const pending = state.openTabs.filter((t) => t.dirty && t.path !== except && t.path.endsWith('.tex'));
+  await writeTabs(state.openTabs.filter((t) => t.dirty && t.path !== except && t.path.endsWith('.tex')));
+}
+
+/**
+ * Write every dirty open tab to disk, whatever its type. Saving a version
+ * snapshots what is on disk, so the editor's unsaved edits — including a `.bib`
+ * or a `.sty`, which autosave leaves alone — must land first.
+ */
+export async function flushAllDirtyTabs(): Promise<void> {
+  await writeTabs(useEditorStore.getState().openTabs.filter((t) => t.dirty));
+}
+
+async function writeTabs(tabs: { path: string; content: string }[]): Promise<void> {
   await Promise.all(
-    pending.map(async (tab) => {
+    tabs.map(async (tab) => {
       try {
         await api.writeFile(tab.path, tab.content);
         const now = useEditorStore.getState();
         const fresh = now.openTabs.find((t) => t.path === tab.path);
         if (fresh && fresh.content === tab.content) now.markSaved(tab.path);
       } catch (err) {
-        console.error(`Failed to save ${tab.path} before compile:`, err);
+        console.error(`Failed to save ${tab.path}:`, err);
       }
     })
   );
