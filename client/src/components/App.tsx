@@ -50,15 +50,17 @@ export default function App() {
         store.setProjects(projects);
         store.setCurrentProject(currentInfo.project ?? '');
         store.setProjectRoot(currentInfo.projectRoot);
+        store.setMainFile(currentInfo.mainFile);
 
         if (!currentInfo.project) return;
 
         store.setFileTree(await api.listFiles());
 
+        const entry = currentInfo.mainFile ?? 'main.tex';
         try {
-          store.openFile('main.tex', await api.readFile('main.tex'));
+          store.openFile(entry, await api.readFile(entry));
         } catch {
-          // main.tex doesn't exist — no file opened by default
+          // No main file to open — the editor starts empty.
         }
 
         try {

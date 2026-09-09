@@ -12,6 +12,7 @@ import {
   type ShortcutAction,
 } from '../../lib/keybindings';
 import { suspendShortcuts } from '../../hooks/useShortcuts';
+import * as api from '../../lib/api';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
 
 interface SettingsModalProps {
@@ -212,6 +213,28 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const toggleShowLineNumbers = useEditorStore((s) => s.toggleShowLineNumbers);
   const autoRecompile = useEditorStore((s) => s.autoRecompile);
   const toggleAutoRecompile = useEditorStore((s) => s.toggleAutoRecompile);
+  const mainFile = useEditorStore((s) => s.mainFile);
+  const setMainFileInStore = useEditorStore((s) => s.setMainFile);
+  const fileTree = useEditorStore((s) => s.fileTree);
+  const currentProject = useEditorStore((s) => s.currentProject);
+  const [mainFileError, setMainFileError] = useState('');
+
+  // Every .tex in the project, plus the stored main file even if it has gone
+  // missing from the tree, so a stale setting stays visible and clearable.
+  const texFiles = useMemo(() => {
+    const names = new Set(fileTree.filter((f) => f.toLowerCase().endsWith('.tex')));
+    if (mainFile) names.add(mainFile);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [fileTree, mainFile]);
+
+  const handleMainFileChange = async (value: string) => {
+    setMainFileError('');
+    try {
+      setMainFileInStore(await api.setMainFile(value || null));
+    } catch (err: any) {
+      setMainFileError(err.message ?? String(err));
+    }
+  };
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
   const toggleInvertPdfInDark = useEditorStore((s) => s.toggleInvertPdfInDark);
   const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
@@ -483,6 +506,38 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <SectionLabel>Compilation</SectionLabel>
+            <Row
+              title="Main file"
+              hint={
+                mainFileError ||
+                (currentProject
+                  ? 'Compile and Render always run on this file, whichever tab is active. Also set from a .tex file’s right-click menu in Files.'
+                  : 'Open a project to choose its main file.')
+              }
+            >
+              <select
+                value={mainFile ?? ''}
+                onChange={(e) => handleMainFileChange(e.target.value)}
+                disabled={!currentProject}
+                aria-label="Main file"
+                style={{
+                  fontSize: fs.control,
+                  padding: '5px 8px',
+                  borderRadius: radius.chip,
+                  border: '1px solid var(--line)',
+                  background: 'transparent',
+                  color: mainFile ? 'var(--text)' : 'var(--text-muted)',
+                  fontFamily: font.mono,
+                  cursor: currentProject ? 'pointer' : 'default',
+                  maxWidth: 220,
+                }}
+              >
+                <option value="">Active file</option>
+                {texFiles.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </Row>
             <Row
               title="Auto recompile"
               hint="Compile and render as you type. Off — use the Compile/Render button."

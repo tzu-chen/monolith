@@ -49,13 +49,14 @@ export function useFileWatcher() {
             ]);
             store.setProjects(projects);
             store.setProjectRoot(currentInfo.projectRoot);
+            store.setMainFile(currentInfo.mainFile);
             store.setFileTree(files);
 
+            const entry = currentInfo.mainFile ?? 'main.tex';
             try {
-              const content = await api.readFile('main.tex');
-              store.openFile('main.tex', content);
+              store.openFile(entry, await api.readFile(entry));
             } catch {
-              // No main.tex in this project
+              // No main file in this project
             }
 
             // Load preamble macros for math preview

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { forwardSync, inverseSync, detectMainFile } from '../services/synctex.js';
+import { getMainFile } from '../projectContext.js';
 
 export function createSyncTeXRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
@@ -18,7 +19,7 @@ export function createSyncTeXRouter(getProjectRoot: () => string | null): Router
     }
 
     try {
-      const mainFile = await detectMainFile(projectRoot);
+      const mainFile = getMainFile(projectRoot) ?? (await detectMainFile(projectRoot));
       const result = await forwardSync(projectRoot, mainFile, file, line, col);
       if (result) {
         res.json(result);
@@ -44,7 +45,7 @@ export function createSyncTeXRouter(getProjectRoot: () => string | null): Router
     }
 
     try {
-      const mainFile = await detectMainFile(projectRoot);
+      const mainFile = getMainFile(projectRoot) ?? (await detectMainFile(projectRoot));
       const result = await inverseSync(projectRoot, mainFile, page, x, y);
       if (result) {
         res.json(result);

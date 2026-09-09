@@ -131,13 +131,38 @@ export async function projectsMeta(): Promise<ProjectMeta[]> {
   return data.projects;
 }
 
-export async function getCurrentProject(): Promise<{ project: string | null; projectRoot: string | null }> {
+export interface CurrentProjectInfo {
+  project: string | null;
+  projectRoot: string | null;
+  /** The project's configured main .tex file, or null to compile the open file. */
+  mainFile: string | null;
+}
+
+export async function getCurrentProject(): Promise<CurrentProjectInfo> {
   const res = await fetch('/api/projects/current');
   if (!res.ok) {
     throw new Error(`Failed to get current project: ${res.statusText}`);
   }
   const data = await res.json();
-  return { project: data.project, projectRoot: data.projectRoot };
+  return { project: data.project, projectRoot: data.projectRoot, mainFile: data.mainFile ?? null };
+}
+
+/**
+ * Set (or clear, with null) the current project's main .tex file — the file
+ * Compile and Render always run on. Resolves to the stored path.
+ */
+export async function setMainFile(mainFile: string | null): Promise<string | null> {
+  const res = await fetch('/api/projects/current/main-file', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mainFile }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to set main file: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.mainFile ?? null;
 }
 
 export async function createProject(name: string, template?: string): Promise<void> {
@@ -200,7 +225,7 @@ export async function setProjectArchived(name: string, archived: boolean): Promi
   }
 }
 
-export async function switchProject(name: string): Promise<{ projectRoot: string }> {
+export async function switchProject(name: string): Promise<{ projectRoot: string; mainFile: string | null }> {
   const res = await fetch('/api/projects/current', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -210,7 +235,7 @@ export async function switchProject(name: string): Promise<{ projectRoot: string
     throw new Error(`Failed to switch project: ${res.statusText}`);
   }
   const data = await res.json();
-  return { projectRoot: data.projectRoot };
+  return { projectRoot: data.projectRoot, mainFile: data.mainFile ?? null };
 }
 
 export interface CompileResponse {

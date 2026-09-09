@@ -15,6 +15,11 @@ type SwitchListener = (ctx: ProjectContext) => void;
 // excluded from the copy), so an archived project's copy starts out active.
 const ARCHIVE_MARKER = path.join('.monolith', 'archived');
 
+// The project's main .tex file — the one Compile / Render always run on,
+// regardless of which file is open in the editor. Stored beside the archive
+// marker for the same reasons; absent means "compile whatever is open".
+const MAIN_FILE_MARKER = path.join('.monolith', 'main-file');
+
 let projectsRoot: string;
 let current: ProjectContext;
 const listeners: SwitchListener[] = [];
@@ -89,6 +94,57 @@ export async function setArchived(name: string, archived: boolean): Promise<void
   } else {
     await fsPromises.rm(markerPath, { force: true });
   }
+}
+
+/**
+ * Validate a project-relative main-file path: relative, no parent traversal,
+ * a `.tex` file, and inside the project directory. Returns the normalised
+ * (forward-slash) path or throws with a user-facing message.
+ */
+export function normalizeMainFile(projectRoot: string, mainFile: string): string {
+  const cleaned = mainFile.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  if (
+    !cleaned ||
+    path.isAbsolute(cleaned) ||
+    cleaned.split('/').includes('..') ||
+    !cleaned.toLowerCase().endsWith('.tex')
+  ) {
+    throw new Error('Main file must be a .tex file inside the project');
+  }
+  const resolved = path.resolve(projectRoot, cleaned);
+  const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+  if (!resolved.startsWith(rootWithSep)) {
+    throw new Error('Main file must be a .tex file inside the project');
+  }
+  return cleaned;
+}
+
+/** The project's configured main .tex file, or null when none is set. */
+export function getMainFile(projectRoot: string | null): string | null {
+  if (!projectRoot) return null;
+  try {
+    const raw = fs.readFileSync(path.join(projectRoot, MAIN_FILE_MARKER), 'utf-8').trim();
+    return raw ? normalizeMainFile(projectRoot, raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Set (or, with null, clear) the project's main .tex file. */
+export async function setMainFile(projectRoot: string, mainFile: string | null): Promise<string | null> {
+  const markerPath = path.join(projectRoot, MAIN_FILE_MARKER);
+  if (mainFile === null) {
+    await fsPromises.rm(markerPath, { force: true });
+    return null;
+  }
+  const cleaned = normalizeMainFile(projectRoot, mainFile);
+  const st = await fsPromises.stat(path.join(projectRoot, cleaned)).catch(() => null);
+  if (!st || !st.isFile()) {
+    throw new Error(`"${cleaned}" does not exist in the project`);
+  }
+  await fsPromises.mkdir(path.dirname(markerPath), { recursive: true });
+  await fsPromises.writeFile(markerPath, cleaned + '\n', 'utf-8');
+  return cleaned;
 }
 
 export async function renameProject(oldName: string, newName: string): Promise<ProjectContext> {

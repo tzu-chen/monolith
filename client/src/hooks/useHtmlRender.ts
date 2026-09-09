@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 import * as api from '../lib/api';
+import { resolveCompileTarget, flushDirtyTabs } from '../lib/compileTarget';
 
 /**
  * Drives the LaTeXML HTML render path — the web-render counterpart to
@@ -23,9 +24,9 @@ export function useHtmlRender() {
   const doRender = useCallback(async () => {
     if (isRenderingRef.current) return;
 
-    const state = useEditorStore.getState();
-    const activeFile = state.activeTabPath;
-    if (!activeFile || !activeFile.endsWith('.tex')) {
+    // Render the project's main file if one is set, else the active .tex tab.
+    const targetFile = resolveCompileTarget();
+    if (!targetFile) {
       setHtmlResult({
         ok: false,
         available: true,
@@ -39,9 +40,11 @@ export function useHtmlRender() {
     isRenderingRef.current = true;
     setHtmlRenderStatus('rendering');
     try {
-      const activeTab = state.openTabs.find((t) => t.path === activeFile);
-      const renderContent = activeTab ? activeTab.content : state.content;
-      const result = await api.renderHtml(activeFile, renderContent, state.htmlSplitAt);
+      await flushDirtyTabs(targetFile);
+      const state = useEditorStore.getState();
+      const targetTab = state.openTabs.find((t) => t.path === targetFile);
+      const renderContent = targetTab ? targetTab.content : undefined;
+      const result = await api.renderHtml(targetFile, renderContent, state.htmlSplitAt);
       setHtmlResult(result);
     } catch (err) {
       setHtmlResult({

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { getMainFile } from '../projectContext.js';
 import { compileTex } from '../services/tectonic.js';
 
 export function createCompileRouter(getProjectRoot: () => string | null): Router {
@@ -12,7 +13,7 @@ export function createCompileRouter(getProjectRoot: () => string | null): Router
       res.status(400).json({ success: false, log: '', errors: ['No project selected'], warnings: [] });
       return;
     }
-    const { mainFile = 'main.tex', content } = req.body;
+    const { mainFile = getMainFile(projectRoot) ?? 'main.tex', content } = req.body;
 
     // Validate mainFile unconditionally — it's passed to tectonic as the file to
     // compile, so a crafted path is a risk even without `content`. Reject

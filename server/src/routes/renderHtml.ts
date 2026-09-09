@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { getMainFile } from '../projectContext.js';
 import { ZipArchive } from 'archiver';
 import { renderHtml, htmlOutputDir, type SplitLevel } from '../services/latexml.js';
 
@@ -72,7 +73,7 @@ export function createRenderHtmlRouter(
       return;
     }
 
-    const { mainFile = 'main.tex', content, splitAt } = req.body ?? {};
+    const { mainFile = getMainFile(projectRoot) ?? 'main.tex', content, splitAt } = req.body ?? {};
     const split: SplitLevel = VALID_SPLITS.includes(splitAt) ? splitAt : 'none';
 
     // Validate mainFile unconditionally — it's passed to latexmlc as the file to

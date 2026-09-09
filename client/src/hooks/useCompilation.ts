@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 import * as api from '../lib/api';
+import { resolveCompileTarget, flushDirtyTabs } from '../lib/compileTarget';
 
 export function useCompilation() {
   const content = useEditorStore((s) => s.content);
@@ -20,10 +21,9 @@ export function useCompilation() {
     setCompilationStatus('compiling');
 
     try {
-      // Compile the currently active .tex file
-      const state = useEditorStore.getState();
-      const activeFile = state.activeTabPath;
-      if (!activeFile || !activeFile.endsWith('.tex')) {
+      // Compile the project's main file if one is set, else the active .tex tab.
+      const targetFile = resolveCompileTarget();
+      if (!targetFile) {
         setCompileResult({
           success: false,
           log: '',
@@ -34,13 +34,17 @@ export function useCompilation() {
         });
         return;
       }
-      const activeTab = state.openTabs.find((t) => t.path === activeFile);
-      const compileContent = activeTab ? activeTab.content : state.content;
+      // Edits in other open files (chapters included by the main file) must be
+      // on disk before Tectonic reads them.
+      await flushDirtyTabs(targetFile);
+      const state = useEditorStore.getState();
+      const targetTab = state.openTabs.find((t) => t.path === targetFile);
+      const compileContent = targetTab ? targetTab.content : undefined;
 
       const startTime = Date.now();
-      const result = await api.compile(activeFile, compileContent);
+      const result = await api.compile(targetFile, compileContent);
       const elapsed = Date.now() - startTime;
-      setCompileResult({ ...result, elapsed, file: activeFile });
+      setCompileResult({ ...result, elapsed, file: targetFile });
     } catch (err) {
       setCompileResult({
         success: false,
@@ -48,7 +52,7 @@ export function useCompilation() {
         errors: [String(err)],
         warnings: [],
         elapsed: 0,
-        file: useEditorStore.getState().activeTabPath,
+        file: resolveCompileTarget(),
       });
     } finally {
       isCompilingRef.current = false;

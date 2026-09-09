@@ -78,16 +78,18 @@ export default function CommandPalette() {
       if (finder === 'projects') {
         if (item === currentProject) return;
         try {
-          const { projectRoot } = await api.switchProject(item);
+          const { projectRoot, mainFile } = await api.switchProject(item);
           const store = useEditorStore.getState();
           store.resetEditorState();
           store.setCurrentProject(item);
           store.setProjectRoot(projectRoot);
+          store.setMainFile(mainFile);
           store.setFileTree(await api.listFiles());
+          const entry = mainFile ?? 'main.tex';
           try {
-            store.openFile('main.tex', await api.readFile('main.tex'));
+            store.openFile(entry, await api.readFile(entry));
           } catch {
-            // No main.tex in this project — leave the editor empty.
+            // No main file in this project — leave the editor empty.
           }
         } catch (err) {
           console.error('Failed to switch project:', err);

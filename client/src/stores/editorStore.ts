@@ -113,6 +113,11 @@ interface EditorState {
   currentProject: string | null;
   projectRoot: string | null;
   projects: string[];
+  /**
+   * The project's main `.tex` file. When set, Compile and Render always run on
+   * it rather than the active tab. Persisted server-side per project.
+   */
+  mainFile: string | null;
 
   // Multi-file tab state
   openTabs: FileTab[];
@@ -231,6 +236,7 @@ interface EditorState {
   // Project actions
   setCurrentProject: (name: string | null) => void;
   setProjectRoot: (path: string | null) => void;
+  setMainFile: (path: string | null) => void;
   setProjects: (projects: string[]) => void;
   resetEditorState: () => void;
 
@@ -484,6 +490,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   currentProject: null,
   projectRoot: null,
   projects: [],
+  mainFile: null,
   openTabs: [],
   activeTabPath: null,
   fileTree: [],
@@ -543,6 +550,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setCurrentProject: (name) => set({ currentProject: name }),
   setProjectRoot: (path) => set({ projectRoot: path }),
+  setMainFile: (path) => set({ mainFile: path }),
   setProjects: (projects) => set({ projects }),
   resetEditorState: () =>
     set({
@@ -570,6 +578,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       scrollToLine: null,
       projectRoot: null,
+      mainFile: null,
       syncTexHighlight: null,
       preambleMacros: '',
       // The open reference/plot belonged to the project being left.

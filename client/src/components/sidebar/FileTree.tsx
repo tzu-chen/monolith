@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as api from '../../lib/api';
 import { ChevronDown, ChevronRight, ArrowUp, ArrowRight } from '../shared/Icons';
-import { rowStyle, hoverRow, leaveRow } from '../shared/ui';
+import { rowStyle, hoverRow, leaveRow, Badge } from '../shared/ui';
 import { fs, font, metrics, radius } from '../../theme/tokens';
 
 /**
@@ -97,6 +97,7 @@ function ContextMenu({
   menu,
   projects,
   currentProject,
+  mainFile,
   onClose,
   onAction,
   onTransfer,
@@ -104,6 +105,7 @@ function ContextMenu({
   menu: ContextMenuState;
   projects: string[];
   currentProject: string | null;
+  mainFile: string | null;
   onClose: () => void;
   onAction: (action: string) => void;
   onTransfer: (toProject: string, mode: 'copy' | 'move') => void;
@@ -179,6 +181,14 @@ function ContextMenu({
   if (!menu.node || menu.node.isDir) {
     items.push(item('New file', () => onAction('newFile')));
     items.push(item('New folder', () => onAction('newFolder')));
+  }
+  if (menu.node && !menu.node.isDir && menu.node.name.toLowerCase().endsWith('.tex')) {
+    // The main file is what Compile / Render run on regardless of the active tab.
+    items.push(
+      menu.node.path === mainFile
+        ? item('Clear main file', () => onAction('clearMain'))
+        : item('Set as main file', () => onAction('setMain'))
+    );
   }
   if (menu.node) {
     items.push(item('Rename', () => onAction('rename')));
@@ -262,6 +272,12 @@ async function refreshFileTree() {
   useEditorStore.getState().setFileTree(await api.listFiles());
 }
 
+/** Persist the project's main file server-side and mirror it into the store. */
+async function setMainFile(path: string | null) {
+  const stored = await api.setMainFile(path);
+  useEditorStore.getState().setMainFile(stored);
+}
+
 function closeTabsUnderPath(path: string) {
   const state = useEditorStore.getState();
   for (const tab of state.openTabs) {
@@ -295,6 +311,7 @@ function TreeItem({
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const dirtyPaths = useEditorStore((s) => s.openTabs);
   const openFile = useEditorStore((s) => s.openFile);
+  const isMain = useEditorStore((s) => s.mainFile === node.path);
   const isActive = node.path === activeTabPath;
   const isDirty = dirtyPaths.some((t) => t.path === node.path && t.dirty);
 
@@ -356,6 +373,11 @@ function TreeItem({
             style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }}
           />
         )}
+        {isMain && (
+          <span title="Main file — Compile and Render always run on this file" style={{ marginLeft: 'auto', display: 'flex' }}>
+            <Badge tone="accent">main</Badge>
+          </span>
+        )}
         {node.isDir && hovered && (
           <span
             onClick={(e) => {
@@ -394,6 +416,7 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
   const projects = useEditorStore((s) => s.projects);
   const currentProject = useEditorStore((s) => s.currentProject);
   const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
+  const mainFile = useEditorStore((s) => s.mainFile);
   const [currentDir, setCurrentDir] = useState('');
   const [creatingFile, setCreatingFile] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -440,6 +463,11 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
     try {
       await api.deleteFile(node.path);
       closeTabsUnderPath(node.path);
+      // A deleted main file can't be compiled; drop the setting with it.
+      const state = useEditorStore.getState();
+      if (state.mainFile && (state.mainFile === node.path || state.mainFile.startsWith(node.path + '/'))) {
+        await setMainFile(null);
+      }
       await refreshFileTree();
     } catch (err) {
       console.error('Failed to delete:', err);
@@ -452,6 +480,11 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
     try {
       await api.renameFile(oldPath, newPath);
       const state = useEditorStore.getState();
+      // Keep the main-file setting pointing at the same file under its new name.
+      if (state.mainFile && (state.mainFile === oldPath || state.mainFile.startsWith(oldPath + '/'))) {
+        const moved = newPath + state.mainFile.substring(oldPath.length);
+        await setMainFile(moved.toLowerCase().endsWith('.tex') ? moved : null);
+      }
       for (const tab of state.openTabs) {
         if (tab.path === oldPath || tab.path.startsWith(oldPath + '/')) {
           const updatedPath = newPath + tab.path.substring(oldPath.length);
@@ -544,6 +577,10 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
 
     if (action === 'delete' && node) {
       handleDelete(node);
+    } else if (action === 'setMain' && node) {
+      setMainFile(node.path).catch((err) => window.alert(`Failed to set main file: ${err.message ?? err}`));
+    } else if (action === 'clearMain') {
+      setMainFile(null).catch((err) => console.error('Failed to clear main file:', err));
     } else if (action === 'rename' && node) {
       setRenamingPath(node.path);
     } else if (action === 'newFile' || action === 'newFolder') {
@@ -655,6 +692,7 @@ const FileTree = forwardRef<FileTreeHandle>(function FileTree(_props, ref) {
           menu={contextMenu}
           projects={projects}
           currentProject={currentProject}
+          mainFile={mainFile}
           onClose={() => setContextMenu(null)}
           onAction={handleContextAction}
           onTransfer={handleTransfer}

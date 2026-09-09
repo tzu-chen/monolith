@@ -51,6 +51,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const warnings = useEditorStore((s) => s.warnings);
   const log = useEditorStore((s) => s.log);
   const lastCompileAt = useEditorStore((s) => s.lastCompileAt);
+  const mainFile = useEditorStore((s) => s.mainFile);
   const lastCompileTime = useEditorStore((s) => s.lastCompileTime);
   const syncTexHighlight = useEditorStore((s) => s.syncTexHighlight);
   const theme = useEditorStore((s) => s.theme);
@@ -412,7 +413,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
             accent
             onClick={onCompile}
             disabled={compiling}
-            title={compiling ? 'Compiling…' : `Compile (${formatChord(keybindings.compile)})`}
+            title={compiling ? 'Compiling…' : `Compile${mainFile ? ` ${mainFile}` : ''} (${formatChord(keybindings.compile)})`}
             icon={compiling ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
             {layout.showButtonLabels && (compiling ? 'Compiling' : 'Compile')}

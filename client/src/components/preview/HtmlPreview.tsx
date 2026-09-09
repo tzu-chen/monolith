@@ -56,6 +56,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
   const keybindings = useEditorStore((s) => s.keybindings);
+  const mainFile = useEditorStore((s) => s.mainFile);
   const htmlCollapsedEnvs = useEditorStore((s) => s.htmlCollapsedEnvs);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -294,7 +295,7 @@ export default function HtmlPreview({ onRenderHtml }: HtmlPreviewProps) {
             accent
             onClick={onRenderHtml}
             disabled={rendering}
-            title={rendering ? 'Rendering HTML…' : `Render HTML (${formatChord(keybindings.renderHtml)})`}
+            title={rendering ? 'Rendering HTML…' : `Render HTML${mainFile ? ` from ${mainFile}` : ''} (${formatChord(keybindings.renderHtml)})`}
             icon={rendering ? <SpinnerIcon size={12} /> : <PlayIcon size={12} />}
           >
             {layout.showButtonLabels && (rendering ? 'Rendering' : 'Render')}

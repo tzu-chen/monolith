@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { getProjectsRoot, getCurrent, switchProject, renameProject, deleteProject, isArchived, setArchived } from '../projectContext.js';
+import { getProjectsRoot, getCurrent, switchProject, renameProject, deleteProject, isArchived, setArchived, getMainFile, setMainFile } from '../projectContext.js';
 
 // Allowed characters in a project name. Spaces are permitted, but path
 // separators and dots are not, so a name can never traverse or escape the
@@ -120,7 +120,29 @@ export function createProjectsRouter(): Router {
   // Get current project
   router.get('/current', (_req: Request, res: Response) => {
     const { projectName, projectRoot } = getCurrent();
-    res.json({ project: projectName, projectRoot });
+    res.json({ project: projectName, projectRoot, mainFile: getMainFile(projectRoot) });
+  });
+
+  // Set or clear the current project's main .tex file (null clears it). The
+  // main file is what Compile / Render run on whatever tab is active.
+  router.put('/current/main-file', async (req: Request, res: Response) => {
+    const { projectRoot } = getCurrent();
+    if (!projectRoot) {
+      res.status(400).json({ error: 'No project selected' });
+      return;
+    }
+    const { mainFile } = req.body ?? {};
+    if (mainFile !== null && typeof mainFile !== 'string') {
+      res.status(400).json({ error: 'Body must include "mainFile" string or null' });
+      return;
+    }
+    try {
+      const stored = await setMainFile(projectRoot, mainFile);
+      res.json({ mainFile: stored });
+    } catch (err: any) {
+      const status = err.message.includes('does not exist') ? 404 : 400;
+      res.status(status).json({ error: err.message });
+    }
   });
 
   // Create a new project (optionally from a template)
@@ -252,7 +274,7 @@ export function createProjectsRouter(): Router {
         return;
       }
       const ctx = switchProject(name);
-      res.json({ project: ctx.projectName, projectRoot: ctx.projectRoot });
+      res.json({ project: ctx.projectName, projectRoot: ctx.projectRoot, mainFile: getMainFile(ctx.projectRoot) });
     } catch (err: any) {
       res.status(404).json({ error: err.message });
     }

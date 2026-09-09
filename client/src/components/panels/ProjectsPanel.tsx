@@ -119,15 +119,17 @@ export default function ProjectsPanel() {
       return;
     }
     try {
-      const { projectRoot } = await api.switchProject(name);
+      const { projectRoot, mainFile } = await api.switchProject(name);
       store.resetEditorState();
       store.setCurrentProject(name);
       store.setProjectRoot(projectRoot);
+      store.setMainFile(mainFile);
       store.setFileTree(await api.listFiles());
+      const entry = mainFile ?? 'main.tex';
       try {
-        store.openFile('main.tex', await api.readFile('main.tex'));
+        store.openFile(entry, await api.readFile(entry));
       } catch {
-        // No main.tex in this project.
+        // No main file in this project.
       }
       setActivePanel('files');
     } catch (err: any) {
