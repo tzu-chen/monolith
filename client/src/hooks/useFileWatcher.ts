@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 import * as api from '../lib/api';
 import { extractMacroDefinitions } from '../components/editor/math-preview';
+import { replaceTabContent } from '../components/editor/EditorPane';
 
 interface FileChangeMessage {
   type: 'file_changed';
@@ -110,23 +111,16 @@ export function useFileWatcher() {
             useEditorStore.getState().setPreambleMacros('');
           }
 
-          // If a currently open file was changed externally, reload its content
+          // If a currently open file was changed on disk, reload its content
+          // in place. This must not activate the tab: a compile writes the
+          // main file to disk, and the chapter being edited has to stay in
+          // front when that event comes back round.
           if (msg.event === 'change') {
             const state = useEditorStore.getState();
             const openTab = state.openTabs.find((t) => t.path === msg.path);
             if (openTab && !openTab.dirty) {
               try {
-                const content = await api.readFile(msg.path);
-                // Re-open file to update content (will switch to existing tab)
-                state.openFile(msg.path, content);
-                // Since openFile doesn't update content of existing tabs,
-                // we need to update it directly
-                useEditorStore.setState((s) => ({
-                  openTabs: s.openTabs.map((t) =>
-                    t.path === msg.path ? { ...t, content } : t
-                  ),
-                  content: s.activeTabPath === msg.path ? content : s.content,
-                }));
+                replaceTabContent(msg.path, await api.readFile(msg.path));
               } catch {
                 // File might have been deleted — ignore
               }
