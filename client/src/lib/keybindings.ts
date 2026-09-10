@@ -46,6 +46,8 @@ export type ShortcutAction =
   | 'renderHtml'
   | 'save'
   | 'addComment'
+  | 'jumpToPdf'
+  | 'jumpToSource'
   | 'findFile'
   | 'findProject'
   | 'openSettings';
@@ -127,6 +129,22 @@ export const SHORTCUT_META: ShortcutMeta[] = [
     group: 'Document',
     defaultKey: 'Mod+Alt+C',
     hint: 'Open the comment card on the cursor line',
+  },
+  // SyncTeX both ways on two neighbouring keys: J is the "jump" LaTeX Workshop
+  // users know, K is the key beside it for the way back.
+  {
+    action: 'jumpToPdf',
+    label: 'Jump to PDF',
+    group: 'Document',
+    defaultKey: 'Mod+Alt+J',
+    hint: 'Show where the cursor line landed in the PDF',
+  },
+  {
+    action: 'jumpToSource',
+    label: 'Jump to source',
+    group: 'Document',
+    defaultKey: 'Mod+Alt+K',
+    hint: 'Open the source of what the preview is showing',
   },
 
   { action: 'findFile', label: 'Find a file', group: 'App', defaultKey: 'Mod+P' },

@@ -26,16 +26,33 @@ export function hasCrop(crop: CropBox): boolean {
   return crop.top > 0 || crop.right > 0 || crop.bottom > 0 || crop.left > 0;
 }
 
-/** One box per page parity — twoside documents alternate their gutter. */
+/**
+ * One box per page parity — twoside documents alternate their gutter — plus
+ * each measured page's own box, keyed by page number, for its top and bottom.
+ */
 export interface DocumentCrop {
   odd: CropBox;
   even: CropBox;
+  pages: Record<number, CropBox>;
 }
 
-export const NO_DOCUMENT_CROP: DocumentCrop = { odd: NO_CROP, even: NO_CROP };
+export const NO_DOCUMENT_CROP: DocumentCrop = { odd: NO_CROP, even: NO_CROP, pages: {} };
 
-/** Long-edge resolution pages are sampled at. Enough for ~0.3% crop precision. */
-const SAMPLE_WIDTH = 320;
+/**
+ * The box one page is shown through: the parity's uniform left/right (so pages
+ * line up while scrolling) with the page's own top/bottom where it was
+ * measured. Heights may differ page to page without anything shifting
+ * horizontally, and this is what takes the extra paper off a title page and
+ * the empty tail of a short last page.
+ */
+export function pageCropBox(crop: DocumentCrop, pageNumber: number): CropBox {
+  const parity = pageNumber % 2 === 1 ? crop.odd : crop.even;
+  const own = crop.pages[pageNumber];
+  return own ? { ...parity, top: own.top, bottom: own.bottom } : parity;
+}
+
+/** Width pages are sampled at. A block is then well under a screen pixel at any fitted width. */
+const SAMPLE_WIDTH = 640;
 
 /** Pages measured to derive one document-wide box, spread through the document. */
 const UNIFORM_SAMPLES = 24;
@@ -43,7 +60,7 @@ const UNIFORM_SAMPLES = 24;
 export interface AutoTrimOptions {
   /** Luminance distance (0-255) from the page background that counts as ink. */
   threshold?: number;
-  /** Margin kept around the detected content, as a fraction of the page size. */
+  /** Margin kept around the detected content, as a fraction of the page size. Negative shaves into it. */
   padding?: number;
   /** Hard cap on what may be trimmed from any single side. */
   maxCrop?: number;
@@ -51,7 +68,9 @@ export interface AutoTrimOptions {
 
 const DEFAULT_OPTIONS: Required<AutoTrimOptions> = {
   threshold: 26,
-  padding: 0.008,
+  // A sliver of paper around the content so the text does not touch the
+  // sheet's edge: ~7pt on a letter page, about the gap between two words.
+  padding: 0.012,
   maxCrop: 0.45,
 };
 
@@ -165,8 +184,12 @@ export function detectContentCrop(
     }
   }
 
-  const rowGate = Math.max(2, Math.round(w * 0.004));
-  const colGate = Math.max(2, Math.round(h * 0.004));
+  // A row or column counts once two connected blocks of ink sit in it. That is
+  // a lone page number or a one-word running head; single specks were already
+  // eroded above. The gate must not scale with the sampling width, or a page
+  // number thinner than the gate is trimmed off with the margin.
+  const rowGate = 2;
+  const colGate = 2;
 
   let top = -1;
   let bottom = -1;
@@ -191,17 +214,15 @@ export function detectContentCrop(
   const contentH = (bottom - top + 1) / h;
   if (contentW < MIN_CONTENT_FRACTION || contentH < MIN_CONTENT_FRACTION) return null;
 
-  // Pad outwards by the requested margin plus one sample block, so sub-block
-  // rounding can never shave a glyph.
-  const padX = padding + 1 / w;
-  const padY = padding + 1 / h;
+  // The crop stops at the outer face of the outermost ink block, then backs
+  // off by the padding, so no glyph is ever shaved.
   const clamp = (v: number) => Math.max(0, Math.min(maxCrop, Math.round(v * 1e4) / 1e4));
 
   return {
-    top: clamp(top / h - padY),
-    bottom: clamp((h - 1 - bottom) / h - padY),
-    left: clamp(left / w - padX),
-    right: clamp((w - 1 - right) / w - padX),
+    top: clamp(top / h - padding),
+    bottom: clamp((h - 1 - bottom) / h - padding),
+    left: clamp(left / w - padding),
+    right: clamp((w - 1 - right) / w - padding),
   };
 }
 
@@ -292,7 +313,7 @@ export function unifyCrops(odd: CropBox[], even: CropBox[]): DocumentCrop {
     return out;
   };
 
-  return { odd: widen(o), even: widen(e) };
+  return { odd: widen(o), even: widen(e), pages: {} };
 }
 
 /** `count` page numbers spread evenly across the document. */
@@ -312,9 +333,11 @@ export function croppedWidthFactor(crop: DocumentCrop): number {
 }
 
 /**
- * Measure a document once and return its uniform per-parity crop. Short
- * documents (the common case for a paper) are measured in full; longer ones
- * from an evenly spread sample. Untrustworthy pages are skipped.
+ * Measure a document once and return its uniform per-parity crop, along with
+ * each measured page's own box (see `pageCropBox`). Short documents (the
+ * common case for a paper) are measured in full; longer ones from an evenly
+ * spread sample, and the pages in between use the parity box alone.
+ * Untrustworthy pages are skipped.
  */
 export async function measureDocumentCrop(
   pdfDoc: PDFDocumentProxy,
@@ -323,6 +346,7 @@ export async function measureDocumentCrop(
   const canvas = document.createElement('canvas');
   const odd: CropBox[] = [];
   const even: CropBox[] = [];
+  const pages: Record<number, CropBox> = {};
   for (const page of spreadSample(pdfDoc.numPages, UNIFORM_SAMPLES)) {
     let box: CropBox | null = null;
     try {
@@ -330,9 +354,11 @@ export async function measureDocumentCrop(
     } catch (err) {
       console.error(`Auto-trim failed to measure page ${page}:`, err);
     }
-    if (box) (page % 2 === 1 ? odd : even).push(box);
+    if (!box) continue;
+    (page % 2 === 1 ? odd : even).push(box);
+    pages[page] = box;
   }
   canvas.width = 0;
   canvas.height = 0;
-  return unifyCrops(odd, even);
+  return { ...unifyCrops(odd, even), pages };
 }

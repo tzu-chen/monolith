@@ -155,6 +155,16 @@ export function DownloadIcon(props: IconProps) {
   return svg(props, <path d="M12 3v12M8 11l4 4 4-4M4 20h16" />);
 }
 
+/** Jump to the PDF — in the split layout the preview is to the right. */
+export function ArrowRightIcon(props: IconProps) {
+  return svg(props, <path d="M4 12h15M13 6l6 6-6 6" />);
+}
+
+/** Jump back to the source — the editor is to the left. */
+export function ArrowLeftIcon(props: IconProps) {
+  return svg(props, <path d="M20 12H5M11 6l-6 6 6 6" />);
+}
+
 export function UploadIcon(props: IconProps) {
   return svg(props, <path d="M12 16V4M8 8l4-4 4 4M4 20h16" />);
 }

@@ -90,7 +90,7 @@ export const metrics = {
   /** bottom symbol/snippet drawer */
   drawer: 288,
 
-  /** padding: 12 panel / 14 pane / 18 page */
+  /** padding: 12 panel / 14 pane / 18 gap between PDF pages (the page area itself has no padding) */
   padPanel: 12,
   padPane: 14,
   padPage: 18,

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import * as pdfjsLib from 'pdfjs-dist';
-import * as api from '../../lib/api';
 import { PlayIcon, SpinnerIcon, DownloadIcon, MinusIcon, PlusIcon } from '../shared/Icons';
 import { OutlinedButton, IconButton, Dot, BarDivider } from '../shared/ui';
 import ViewModeControl, { ownsViewModeControl } from '../shared/ViewModeControl';
@@ -14,7 +13,8 @@ import { formatClock } from '../../lib/time';
 import { toolbarLayout } from './toolbarLayout';
 import { parseLineNumber } from '../../lib/diagnostics';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
-import { measureDocumentCrop, croppedWidthFactor, hasCrop, NO_DOCUMENT_CROP, type DocumentCrop } from '../../lib/autoTrim';
+import { measureDocumentCrop, croppedWidthFactor, hasCrop, pageCropBox, NO_DOCUMENT_CROP, type DocumentCrop } from '../../lib/autoTrim';
+import { inverseSync, registerPreviewPoint } from '../../lib/syncJump';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -37,15 +37,19 @@ const ZOOM_STEPS = [50, 75, 90, 100, 116, 125, 150, 200, 300];
 /**
  * `containerWidth` is the scroll container's clientWidth, which already
  * excludes the scrollbar (its gutter is reserved with `scrollbar-gutter:
- * stable`, so it does not change once pages appear) and includes the
- * handoff's 18px page padding on each side. `pageWidth` is the width the
- * page is shown at — after trimming, if margins are trimmed — to which the
- * sheet adds its 1px border on each side.
+ * stable`, so it does not change once pages appear). The container has no
+ * padding and the sheet's edge line is drawn inside it, so in fit mode the
+ * sheet spans the full width. `pageWidth` is the width the page is shown at —
+ * after trimming, if margins are trimmed.
  */
 function zoomToScale(zoom: Zoom, containerWidth: number, pageWidth: number): number {
-  if (zoom === 'fit') return Math.max(0.1, (containerWidth - metrics.padPage * 2 - 2) / pageWidth);
+  if (zoom === 'fit') return Math.max(0.1, containerWidth / pageWidth);
   return zoom / 100;
 }
+
+const INVERT_FILTER = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
+/** What INVERT_FILTER makes of white paper. */
+const INVERTED_PAPER = '#1d1d1d';
 
 /** Trailing debounce for splitter drags: re-fitting on every resize event would re-render the PDF dozens of times. */
 const REFIT_DEBOUNCE_MS = 120;
@@ -90,6 +94,9 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const [containerWidth, setContainerWidth] = useState(0);
   // Bumped by the Fit button so pressing it re-fits even when already in fit mode.
   const [fitNonce, setFitNonce] = useState(0);
+  // Bumped when a render finishes, so a highlight that arrived while the pages
+  // were still being laid out (a jump that opened the preview) is placed then.
+  const [renderNonce, setRenderNonce] = useState(0);
   // Measured margins per document — measuring costs ~24 small renders, so it
   // happens once per compile, not once per zoom step.
   const cropCacheRef = useRef(new WeakMap<pdfjsLib.PDFDocumentProxy, Promise<DocumentCrop>>());
@@ -101,31 +108,40 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
 
   const invert = theme === 'dark' && invertPdfInDark;
 
-  const handleInverseSync = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleInverseSync = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const canvas = (e.target as HTMLElement).closest('canvas');
     if (!canvas) return;
     const pageInfo = pageGeometryRef.current.find((p) => p.canvas === canvas);
     if (!pageInfo) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / pageInfo.scale;
-    const y = (e.clientY - rect.top) / pageInfo.scale;
+    void inverseSync(pageInfo.page, (e.clientX - rect.left) / pageInfo.scale, (e.clientY - rect.top) / pageInfo.scale);
+  }, []);
 
-    try {
-      const result = await api.syncTexInverse(pageInfo.page, x, y);
-      if (!result || result.line <= 0) return;
-      const store = useEditorStore.getState();
-      if (result.file && result.file !== store.activeTabPath) {
-        try {
-          store.openFile(result.file, await api.readFile(result.file));
-        } catch {
-          // Fall through and jump within whatever file is open.
+  // The "to source" button and its shortcut sync from the point in the middle
+  // of the viewport: the page under the midline, at the pane's horizontal centre.
+  useEffect(() => {
+    registerPreviewPoint(() => {
+      const container = containerRef.current;
+      if (!container || pageGeometryRef.current.length === 0) return null;
+      const box = container.getBoundingClientRect();
+      const midX = box.left + box.width / 2;
+      const midY = box.top + box.height / 2;
+      let best = pageGeometryRef.current[0];
+      let bestDistance = Infinity;
+      for (const info of pageGeometryRef.current) {
+        const r = info.canvas.getBoundingClientRect();
+        const distance = midY < r.top ? r.top - midY : midY > r.bottom ? midY - r.bottom : 0;
+        if (distance < bestDistance) {
+          best = info;
+          bestDistance = distance;
         }
       }
-      store.requestScrollToLine(result.line);
-    } catch {
-      // No SyncTeX data for this point.
-    }
+      const r = best.canvas.getBoundingClientRect();
+      const clampedY = Math.min(Math.max(midY, r.top), r.bottom);
+      return { page: best.page, x: (midX - r.left) / best.scale, y: (clampedY - r.top) / best.scale };
+    });
+    return () => registerPreviewPoint(null);
   }, []);
 
   const handleDownloadPdf = useCallback(() => {
@@ -235,25 +251,24 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         // Inside it the full page sits at a negative offset, so everything in
         // page coordinates (the SyncTeX overlay, the inverse-sync hit test on
         // the canvas rect) keeps working untouched.
-        const box = i % 2 === 1 ? crop.odd : crop.even;
+        const box = pageCropBox(crop, i);
         const trimmed = hasCrop(box);
-        const shownW = trimmed ? Math.floor(viewport.width * (1 - box.left - box.right)) : viewport.width;
-        const shownH = trimmed ? Math.floor(viewport.height * (1 - box.top - box.bottom)) : viewport.height;
+        const shownW = trimmed ? Math.round(viewport.width * (1 - box.left - box.right)) : viewport.width;
+        const shownH = trimmed ? Math.round(viewport.height * (1 - box.top - box.bottom)) : viewport.height;
 
         const wrapper = document.createElement('div');
         wrapper.style.position = 'relative';
-        wrapper.style.margin = '0 auto 20px';
         wrapper.style.width = `${shownW}px`;
         wrapper.style.height = `${shownH}px`;
-        wrapper.style.overflow = 'hidden';
+        // `clip`, not `hidden`: a hidden overflow can still be scrolled by
+        // script, and scrollIntoView on the highlight used to scroll this
+        // window across the page, leaving the sheet shifted inside its frame.
+        wrapper.style.overflow = 'clip';
         wrapper.style.flexShrink = '0';
-        wrapper.style.background = 'var(--paper-sheet)';
-        wrapper.style.border = '1px solid var(--line)';
+        // Under the inverted canvas the paper is near-black; a rounding sliver
+        // of it must not show light.
+        wrapper.style.background = invert ? INVERTED_PAPER : 'var(--paper-sheet)';
         wrapper.style.boxShadow = 'var(--shadow-paper)';
-        if (invert) {
-          wrapper.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
-          wrapper.style.background = 'white';
-        }
         wrapper.dataset.page = String(i);
 
         const sheet = document.createElement('div');
@@ -261,9 +276,17 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         sheet.style.width = `${viewport.width}px`;
         sheet.style.height = `${viewport.height}px`;
         if (trimmed) {
-          sheet.style.marginLeft = `${-Math.floor(box.left * viewport.width)}px`;
-          sheet.style.marginTop = `${-Math.floor(box.top * viewport.height)}px`;
+          sheet.style.marginLeft = `${-Math.round(box.left * viewport.width)}px`;
+          sheet.style.marginTop = `${-Math.round(box.top * viewport.height)}px`;
         }
+
+        // The sheet's 1px edge, drawn over its outermost pixel rather than
+        // around it, so the sheet is exactly as wide as the fit computed.
+        const edge = document.createElement('div');
+        edge.style.position = 'absolute';
+        edge.style.inset = '0';
+        edge.style.border = '1px solid var(--line)';
+        edge.style.pointerEvents = 'none';
 
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width * outputScale);
@@ -271,9 +294,13 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         canvas.style.display = 'block';
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
+        // Invert the rendered page only. On the wrapper the filter also
+        // inverted the sheet's edge line and its shadow into a bright rim.
+        if (invert) canvas.style.filter = INVERT_FILTER;
 
         sheet.appendChild(canvas);
         wrapper.appendChild(sheet);
+        wrapper.appendChild(edge);
         container.appendChild(wrapper);
         pageGeometryRef.current.push({ canvas, page: i, scale });
 
@@ -289,6 +316,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         savedScrollRatioRef.current = null;
       }
       hasRenderedRef.current = true;
+      setRenderNonce((n) => n + 1);
     };
 
     renderPdf().catch(console.error);
@@ -337,7 +365,14 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     overlay.style.pointerEvents = 'none';
     overlay.style.transition = 'opacity 0.3s';
     wrapper.appendChild(overlay);
-    overlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Scroll the pane, never the sheet's clipped window, and only vertically:
+    // the highlight's minimum width can reach past the trimmed edge.
+    const container = containerRef.current;
+    const overlayRect = overlay.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const top =
+      container.scrollTop + (overlayRect.top - containerRect.top) - container.clientHeight / 2 + overlayRect.height / 2;
+    container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 
     const timer = setTimeout(() => {
       overlay.style.opacity = '0';
@@ -351,7 +386,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
       clearTimeout(timer);
       overlay.remove();
     };
-  }, [syncTexHighlight, showLog, setSyncTexHighlight]);
+  }, [syncTexHighlight, showLog, renderNonce, setSyncTexHighlight]);
 
   const engineLabel = useMemo(() => {
     if (compilationStatus === 'compiling') return 'tectonic · compiling…';
@@ -535,10 +570,13 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
             minHeight: 0,
             overflow: 'auto',
             scrollbarGutter: 'stable',
-            padding: `${metrics.padPage}px ${metrics.padPage}px 0`,
+            // No padding around the pages: in fit mode the sheet spans the
+            // pane edge to edge, so the only blank space is the gap between pages.
+            padding: 0,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            rowGap: metrics.padPage,
           }}
         >
           {!pdfData && compilationStatus === 'idle' && (

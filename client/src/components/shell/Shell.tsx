@@ -4,6 +4,7 @@ import DetailPaneHost from './DetailPaneHost';
 import EditorPanel from './EditorPanel';
 import PreviewPane from '../preview/PreviewPane';
 import SplitPane from '../shared/SplitPane';
+import SyncJumpHandle from './SyncJumpHandle';
 import CommandPalette from './CommandPalette';
 import SettingsModal from '../settings/SettingsModal';
 import { useEditorStore } from '../../stores/editorStore';
@@ -82,7 +83,7 @@ export default function Shell({ onManualSave, onCompile, onRenderHtml }: ShellPr
           transition: `opacity ${motion.panel}`,
         }}
       >
-        {viewMode === 'both' && <SplitPane left={editor} right={preview} defaultSplit={0.5} />}
+        {viewMode === 'both' && <SplitPane left={editor} right={preview} defaultSplit={0.5} handle={<SyncJumpHandle />} />}
         {viewMode === 'editor' && editor}
         {viewMode === 'pdf' && preview}
       </main>

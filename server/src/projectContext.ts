@@ -20,9 +20,67 @@ const ARCHIVE_MARKER = path.join('.monolith', 'archived');
 // marker for the same reasons; absent means "compile whatever is open".
 const MAIN_FILE_MARKER = path.join('.monolith', 'main-file');
 
+// The project the app opens on: the one last switched to, recorded under the
+// projects root. Dot-prefixed so the listings skip it. Falls back (first run,
+// or the project is gone) to the active project most recently worked on.
+const LAST_PROJECT_FILE = '.last-project';
+
 let projectsRoot: string;
 let current: ProjectContext;
 const listeners: SwitchListener[] = [];
+
+function rememberCurrent(): void {
+  if (!current.projectName) return;
+  fsPromises.writeFile(path.join(projectsRoot, LAST_PROJECT_FILE), current.projectName).catch(() => {
+    // Best effort: the next start just falls back to the freshest project.
+  });
+}
+
+/** Newest mtime of a directory or anything directly inside it. */
+function lastTouched(dir: string): number {
+  let newest = 0;
+  try {
+    newest = fs.statSync(dir).mtimeMs;
+    for (const entry of fs.readdirSync(dir)) {
+      try {
+        newest = Math.max(newest, fs.statSync(path.join(dir, entry)).mtimeMs);
+      } catch {
+        // Vanished mid-scan.
+      }
+    }
+  } catch {
+    // Unreadable: sorts last.
+  }
+  return newest;
+}
+
+/**
+ * The project to open at startup: the last one opened if it still exists,
+ * else the active (unarchived) project touched most recently, else the first
+ * of any, else null when the root is empty.
+ */
+export function pickStartupProject(root: string): string | null {
+  const dirs = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+    .map((e) => e.name)
+    .sort();
+  if (dirs.length === 0) return null;
+
+  try {
+    const last = fs.readFileSync(path.join(root, LAST_PROJECT_FILE), 'utf8').trim();
+    if (dirs.includes(last)) return last;
+  } catch {
+    // No record yet.
+  }
+
+  const isArchivedIn = (name: string) => fs.existsSync(path.join(root, name, ARCHIVE_MARKER));
+  const active = dirs.filter((name) => !isArchivedIn(name));
+  const candidates = active.length > 0 ? active : dirs;
+  return candidates
+    .map((name) => ({ name, touched: lastTouched(path.join(root, name)) }))
+    .sort((a, b) => b.touched - a.touched)[0].name;
+}
 
 export function initProjectContext(root: string, defaultProject: string | null): void {
   projectsRoot = root;
@@ -66,6 +124,7 @@ export function switchProject(name: string): ProjectContext {
     throw new Error(`Project "${name}" does not exist`);
   }
   current = { projectName: name, projectRoot };
+  rememberCurrent();
   for (const listener of listeners) {
     listener(current);
   }
@@ -160,6 +219,7 @@ export async function renameProject(oldName: string, newName: string): Promise<P
   // If the renamed project is the current one, update context
   if (current.projectName === oldName) {
     current = { projectName: newName, projectRoot: newPath };
+    rememberCurrent();
     for (const listener of listeners) {
       listener(current);
     }

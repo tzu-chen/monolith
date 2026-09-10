@@ -9,6 +9,7 @@ import { useFileWatcher } from '../hooks/useFileWatcher';
 import { useScope } from '../hooks/useScope';
 import { useComments } from '../hooks/useComments';
 import { useShortcuts, type ShortcutHandlers } from '../hooks/useShortcuts';
+import { jumpToPdfFromCursor, jumpToSourceFromPreview } from '../lib/syncJump';
 import * as api from '../lib/api';
 import { extractMacroDefinitions } from './editor/math-preview';
 import { openCommentPopover } from './editor/comment-popover';
@@ -108,6 +109,8 @@ export default function App() {
         if (s.editorView) openCommentPopover(s.editorView, s.cursorLine);
         else s.startCommentDraft(s.cursorLine);
       },
+      jumpToPdf: jumpToPdfFromCursor,
+      jumpToSource: jumpToSourceFromPreview,
       findFile: () => store().setFinder('files'),
       findProject: () => store().setFinder('projects'),
       openSettings: () => store().setShowSettings(true),

@@ -13,7 +13,7 @@ import { createScopeRouter } from './routes/scope.js';
 import { createVersionsRouter } from './routes/versions.js';
 import { createCommentsRouter } from './routes/comments.js';
 import { createTodosRouter } from './routes/todos.js';
-import { initProjectContext, getCurrent } from './projectContext.js';
+import { initProjectContext, getCurrent, pickStartupProject } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
 const app = express();
@@ -39,13 +39,9 @@ if (!fs.existsSync(PROJECTS_ROOT)) {
   fs.mkdirSync(PROJECTS_ROOT, { recursive: true });
 }
 
-// Pick default project: first directory in PROJECTS_ROOT (or null if none)
-const projectDirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
-  .map((e) => e.name)
-  .sort();
-
-const defaultProject = projectDirs[0] || null;
+// Open on the project last switched to (see pickStartupProject) — not the
+// alphabetically first directory, which may well be an archived one.
+const defaultProject = pickStartupProject(PROJECTS_ROOT);
 
 initProjectContext(PROJECTS_ROOT, defaultProject);
 

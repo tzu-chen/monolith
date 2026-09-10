@@ -4,9 +4,11 @@ interface SplitPaneProps {
   left: ReactNode;
   right: ReactNode;
   defaultSplit?: number; // 0-1, default 0.5
+  /** Controls shown on the divider, overhanging it; they do not start a drag. */
+  handle?: ReactNode;
 }
 
-export default function SplitPane({ left, right, defaultSplit = 0.5 }: SplitPaneProps) {
+export default function SplitPane({ left, right, defaultSplit = 0.5, handle }: SplitPaneProps) {
   const [splitRatio, setSplitRatio] = useState(defaultSplit);
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -48,6 +50,7 @@ export default function SplitPane({ left, right, defaultSplit = 0.5 }: SplitPane
       <div
         onMouseDown={onMouseDown}
         style={{
+          position: 'relative',
           width: 5,
           background: 'var(--bg-panel)',
           borderLeft: '1px solid var(--border)',
@@ -59,6 +62,21 @@ export default function SplitPane({ left, right, defaultSplit = 0.5 }: SplitPane
           justifyContent: 'center',
         }}
       >
+        {handle && (
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              cursor: 'default',
+              zIndex: 1,
+            }}
+          >
+            {handle}
+          </div>
+        )}
         <div
           style={{
             width: 3,
