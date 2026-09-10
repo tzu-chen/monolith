@@ -8,7 +8,11 @@ export type ServerMessage =
   | FileChangeMessage
   | { type: 'project_switched'; project: string }
   /** The project's version history changed (a version saved, relabelled, or restored). */
-  | { type: 'versions_changed' };
+  | { type: 'versions_changed' }
+  /** A comment was added, edited, resolved or deleted. */
+  | { type: 'comments_changed' }
+  /** The to-do list or its tags changed. */
+  | { type: 'todos_changed' };
 
 let wss: WebSocketServer | null = null;
 

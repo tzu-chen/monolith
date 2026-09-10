@@ -7,9 +7,11 @@ import { useHtmlRender } from '../hooks/useHtmlRender';
 import { useAutosave } from '../hooks/useAutosave';
 import { useFileWatcher } from '../hooks/useFileWatcher';
 import { useScope } from '../hooks/useScope';
+import { useComments } from '../hooks/useComments';
 import { useShortcuts, type ShortcutHandlers } from '../hooks/useShortcuts';
 import * as api from '../lib/api';
 import { extractMacroDefinitions } from './editor/math-preview';
+import { openCommentPopover } from './editor/comment-popover';
 
 export default function App() {
   const { doCompile } = useCompilation();
@@ -88,6 +90,8 @@ export default function App() {
       panelReferences: () => store().toggleActivePanel('references'),
       panelPlots: () => store().toggleActivePanel('plots'),
       panelHistory: () => store().toggleActivePanel('history'),
+      panelComments: () => store().toggleActivePanel('comments'),
+      panelTodo: () => store().toggleActivePanel('todo'),
       panelProjects: () => store().toggleActivePanel('projects'),
       drawerSymbols: () => store().toggleDrawer('symbols'),
       drawerSnippets: () => store().toggleDrawer('snippets'),
@@ -97,6 +101,13 @@ export default function App() {
       compile: doCompile,
       renderHtml: doRender,
       save: handleSave,
+      // In place when the editor is on screen; otherwise the panel's composer.
+      addComment: () => {
+        const s = store();
+        if (!s.activeTabPath) return;
+        if (s.editorView) openCommentPopover(s.editorView, s.cursorLine);
+        else s.startCommentDraft(s.cursorLine);
+      },
       findFile: () => store().setFinder('files'),
       findProject: () => store().setFinder('projects'),
       openSettings: () => store().setShowSettings(true),
@@ -128,6 +139,7 @@ export default function App() {
 
   useFileWatcher();
   useScope();
+  useComments();
 
   return (
     <Shell

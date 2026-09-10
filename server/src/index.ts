@@ -11,6 +11,8 @@ import { createReferencesRouter } from './routes/references.js';
 import { createPyramidRouter } from './routes/pyramid.js';
 import { createScopeRouter } from './routes/scope.js';
 import { createVersionsRouter } from './routes/versions.js';
+import { createCommentsRouter } from './routes/comments.js';
+import { createTodosRouter } from './routes/todos.js';
 import { initProjectContext, getCurrent } from './projectContext.js';
 import { setupWebSocket } from './ws.js';
 
@@ -67,6 +69,8 @@ app.use('/api/references', createReferencesRouter(() => getCurrent().projectRoot
 app.use('/api/pyramid', createPyramidRouter(() => getCurrent(), PYRAMID_URL));
 app.use('/api/scope', createScopeRouter(() => getCurrent().projectRoot));
 app.use('/api/versions', createVersionsRouter(() => getCurrent().projectRoot));
+app.use('/api/comments', createCommentsRouter(() => getCurrent().projectRoot));
+app.use('/api/todos', createTodosRouter(() => getCurrent().projectRoot));
 
 app.get('/api/health', (_req, res) => {
   const { projectName, projectRoot } = getCurrent();

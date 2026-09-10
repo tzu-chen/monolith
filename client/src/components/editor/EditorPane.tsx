@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, ViewUpdate } from '@codemirror/view';
 import {
@@ -12,12 +12,22 @@ import {
   getDiagnosticsReconfiguration,
   getBaselineReconfiguration,
   getFileTreeReconfiguration,
+  getCommentsReconfiguration,
+  getActiveCommentReconfiguration,
   type EditorConfig,
 } from './extensions';
 import { useEditorStore } from '../../stores/editorStore';
 import { diagnosticsForFile } from '../../lib/diagnostics';
 import { claimMacroClick } from './scope-decorations';
 import * as api from '../../lib/api';
+import { queueMoves, type Comment } from '../../lib/comments-api';
+import type { CommentMoveReport } from './comments-gutter';
+
+/** The line comments belonging to `path`, in a stable order for the facet. */
+function lineCommentsFor(comments: Comment[], path: string | null): Comment[] {
+  if (!path) return [];
+  return comments.filter((c) => c.file === path && c.line !== null);
+}
 
 
 // Cache EditorState per file so undo history and editing location (cursor +
@@ -79,6 +89,9 @@ export default function EditorPane() {
   const compiledFile = useEditorStore((s) => s.compiledFile);
   const compileSnapshot = useEditorStore((s) => s.compileSnapshot);
   const fileTree = useEditorStore((s) => s.fileTree);
+  const comments = useEditorStore((s) => s.comments);
+  const activeCommentId = useEditorStore((s) => s.activeCommentId);
+  const fileComments = useMemo(() => lineCommentsFor(comments, activeTabPath), [comments, activeTabPath]);
 
   /** Open a file (if needed) and put the cursor on `line`. */
   const goToDefinition = useCallback(async (file: string, line: number) => {
@@ -98,6 +111,20 @@ export default function EditorPane() {
     store.requestScrollToLine(line);
   }, []);
 
+  /** The editor moved some comments: update the store now, the server after a pause. */
+  const onCommentsMoved = useCallback((moves: CommentMoveReport[]) => {
+    useEditorStore.getState().moveComments(moves);
+    queueMoves(moves);
+  }, []);
+
+  /** A click on the gutter bubble selects the comment; the gutter opens the card itself. */
+  const onCommentClick = useCallback((ids: string[]) => {
+    const store = useEditorStore.getState();
+    const current = ids.indexOf(store.activeCommentId ?? '');
+    // Several comments on one line: each click steps to the next.
+    store.setActiveComment(ids[(current + 1) % ids.length]);
+  }, []);
+
   /** Everything the editor needs, read fresh from the store. */
   const currentConfig = useCallback((): EditorConfig => {
     const s = useEditorStore.getState();
@@ -114,8 +141,12 @@ export default function EditorPane() {
       baseline: path ? s.compileSnapshot[path] ?? null : null,
       fileTree: s.fileTree,
       onGoToDefinition: goToDefinition,
+      comments: lineCommentsFor(s.comments, path),
+      activeCommentId: s.activeCommentId,
+      onCommentsMoved,
+      onCommentClick,
     };
-  }, [goToDefinition]);
+  }, [goToDefinition, onCommentsMoved, onCommentClick]);
 
   /**
    * Listeners and handlers that are identical for a fresh and a restored view.
@@ -253,6 +284,14 @@ export default function EditorPane() {
   useEffect(() => {
     viewRef.current?.dispatch({ effects: getFileTreeReconfiguration(fileTree) });
   }, [fileTree]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: getCommentsReconfiguration(fileComments) });
+  }, [fileComments]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: getActiveCommentReconfiguration(activeCommentId) });
+  }, [activeCommentId]);
 
   // Handle scroll-to-line requests from the outline, panels and status bar.
   useEffect(() => {

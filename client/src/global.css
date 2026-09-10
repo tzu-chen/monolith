@@ -36,6 +36,15 @@
   --syn-number: #b07830;
   --syn-macro: #8b5e3c;
 
+  --tag-red: #b04a4a;
+  --tag-orange: #c2743a;
+  --tag-yellow: #b3951f;
+  --tag-green: #4a8c5e;
+  --tag-teal: #3d8080;
+  --tag-blue: #3d6b8e;
+  --tag-purple: #7a5a99;
+  --tag-pink: #b05a8a;
+
   --shadow-popover: 0 8px 24px rgba(45, 40, 30, 0.13);
   --shadow-paper: 0 2px 10px rgba(45, 40, 30, 0.07);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);

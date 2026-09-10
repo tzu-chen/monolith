@@ -34,6 +34,8 @@ export type ShortcutAction =
   | 'panelReferences'
   | 'panelPlots'
   | 'panelHistory'
+  | 'panelComments'
+  | 'panelTodo'
   | 'panelProjects'
   | 'drawerSymbols'
   | 'drawerSnippets'
@@ -43,6 +45,7 @@ export type ShortcutAction =
   | 'compile'
   | 'renderHtml'
   | 'save'
+  | 'addComment'
   | 'findFile'
   | 'findProject'
   | 'openSettings';
@@ -66,6 +69,9 @@ export const SHORTCUT_META: ShortcutMeta[] = [
   { action: 'panelReferences', label: 'References', group: 'Panels', defaultKey: 'Mod+Shift+B' },
   { action: 'panelPlots', label: 'Plots', group: 'Panels', defaultKey: 'Mod+Shift+G' },
   { action: 'panelHistory', label: 'History', group: 'Panels', defaultKey: 'Mod+Shift+H' },
+  // A is for "annotate": C is claimed by the browser's inspector in Chrome and Firefox.
+  { action: 'panelComments', label: 'Comments', group: 'Panels', defaultKey: 'Mod+Shift+A' },
+  { action: 'panelTodo', label: 'To do', group: 'Panels', defaultKey: 'Mod+Shift+X' },
   { action: 'panelProjects', label: 'Projects', group: 'Panels', defaultKey: 'Mod+Shift+J' },
 
   { action: 'drawerSymbols', label: 'Symbols', group: 'Drawers', defaultKey: 'Mod+Shift+M' },
@@ -113,6 +119,14 @@ export const SHORTCUT_META: ShortcutMeta[] = [
     group: 'Document',
     defaultKey: 'Mod+S',
     hint: 'Write the file to disk, then compile it',
+  },
+
+  {
+    action: 'addComment',
+    label: 'Comment on this line',
+    group: 'Document',
+    defaultKey: 'Mod+Alt+C',
+    hint: 'Open the comment card on the cursor line',
   },
 
   { action: 'findFile', label: 'Find a file', group: 'App', defaultKey: 'Mod+P' },

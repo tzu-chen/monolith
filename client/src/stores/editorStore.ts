@@ -9,6 +9,7 @@ import {
 } from '../colorSchemes';
 import { parseDiagnostics, type Diagnostic } from '../lib/diagnostics';
 import type { ScopeGraph } from '../lib/scope-api';
+import type { Comment } from '../lib/comments-api';
 import {
   DEFAULT_KEYBINDINGS,
   SHORTCUT_ACTIONS,
@@ -55,6 +56,8 @@ export type SidePanel =
   | 'references'
   | 'plots'
   | 'history'
+  | 'comments'
+  | 'todo'
   | 'projects';
 
 /** Rail tools that open the drawer docked at the bottom of the editor pane. */
@@ -109,6 +112,16 @@ export interface SyncTexHighlight {
   y: number;
   h: number;
   w: number;
+}
+
+/**
+ * A comment being written. `line` null is a comment on the whole document.
+ * Set by the panel's buttons, the gutter and the shortcut; the Comments panel
+ * shows the composer while one is open.
+ */
+export interface CommentDraft {
+  file: string;
+  line: number | null;
 }
 
 export interface FileTab {
@@ -183,6 +196,17 @@ interface EditorState {
    * History panel re-reads what is uncommitted and what has been saved.
    */
   versionsNonce: number;
+
+  // Comments — loaded once per project (`useComments`), shared by the editor
+  // gutter, the status bar and the panel.
+  comments: Comment[];
+  /** Bumped when the server reports a change, so the list re-reads. */
+  commentsNonce: number;
+  /** The comment selected in the panel; its line is highlighted in the editor. */
+  activeCommentId: string | null;
+  commentDraft: CommentDraft | null;
+  /** Bumped when the to-do list changes, here or in another tab. */
+  todosNonce: number;
 
   editorView: EditorView | null;
 
@@ -303,6 +327,16 @@ interface EditorState {
   setManagerDetail: (detail: ManagerDetail | null) => void;
   invalidateLibrary: () => void;
   invalidateVersions: () => void;
+  // Comments
+  setComments: (comments: Comment[]) => void;
+  invalidateComments: () => void;
+  setActiveComment: (id: string | null) => void;
+  /** Open the Comments panel with a composer for the active file. */
+  startCommentDraft: (line: number | null) => void;
+  clearCommentDraft: () => void;
+  /** The editor's report of where line comments sit now — local only. */
+  moveComments: (moves: { id: string; line: number; anchor: string | null }[]) => void;
+  invalidateTodos: () => void;
   setActiveDrawer: (drawer: Drawer | null) => void;
   toggleDrawer: (drawer: Drawer) => void;
   setFinder: (finder: Finder | null) => void;
@@ -491,7 +525,7 @@ function getInitialHtmlCollapsedEnvs(): string[] {
   return [];
 }
 
-const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'history', 'projects'];
+const SIDE_PANELS: SidePanel[] = ['files', 'outline', 'scope', 'references', 'plots', 'history', 'comments', 'todo', 'projects'];
 
 function getInitialPanel(): SidePanel | null {
   try {
@@ -542,6 +576,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   managerDetail: null,
   libraryNonce: 0,
   versionsNonce: 0,
+  comments: [],
+  commentsNonce: 0,
+  activeCommentId: null,
+  commentDraft: null,
+  todosNonce: 0,
   editorView: null,
   scope: null,
   scopeStatus: 'idle',
@@ -607,6 +646,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       preambleMacros: '',
       // The open reference/plot belonged to the project being left.
       managerDetail: null,
+      comments: [],
+      activeCommentId: null,
+      commentDraft: null,
       scope: null,
       scopeStatus: 'idle',
       scopeError: null,
@@ -764,6 +806,38 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setManagerDetail: (managerDetail) => set({ managerDetail }),
   invalidateLibrary: () => set((state) => ({ libraryNonce: state.libraryNonce + 1 })),
   invalidateVersions: () => set((state) => ({ versionsNonce: state.versionsNonce + 1 })),
+
+  setComments: (comments) =>
+    set((state) => ({
+      comments,
+      activeCommentId: comments.some((c) => c.id === state.activeCommentId) ? state.activeCommentId : null,
+    })),
+  invalidateComments: () => set((state) => ({ commentsNonce: state.commentsNonce + 1 })),
+  setActiveComment: (activeCommentId) => set({ activeCommentId }),
+  startCommentDraft: (line) => {
+    const file = get().activeTabPath;
+    if (!file) return;
+    try { localStorage.setItem('monolith-panel', 'comments'); } catch {}
+    set((state) => ({
+      commentDraft: { file, line },
+      activePanel: 'comments',
+      managerDetail: detailFor('comments', state.managerDetail),
+    }));
+  },
+  clearCommentDraft: () => set({ commentDraft: null }),
+  moveComments: (moves) =>
+    set((state) => {
+      const byId = new Map(moves.map((m) => [m.id, m]));
+      let changed = false;
+      const comments = state.comments.map((c) => {
+        const m = byId.get(c.id);
+        if (!m || c.line === null || (c.line === m.line && c.anchor === m.anchor)) return c;
+        changed = true;
+        return { ...c, line: m.line, anchor: m.anchor };
+      });
+      return changed ? { comments } : {};
+    }),
+  invalidateTodos: () => set((state) => ({ todosNonce: state.todosNonce + 1 })),
 
   setActiveDrawer: (activeDrawer) => set({ activeDrawer }),
   toggleDrawer: (drawer) =>

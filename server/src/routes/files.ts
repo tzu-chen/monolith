@@ -4,6 +4,13 @@ import path from 'path';
 import multer from 'multer';
 import { getProjectsRoot } from '../projectContext.js';
 import { safePath } from '../util/safePath.js';
+import { broadcast } from '../ws.js';
+import { renamePath as renameCommentPath, removePath as removeCommentPath } from '../services/comments.js';
+
+/** A request path in the form comments are keyed by: forward slashes, no `./`. */
+function normalizeRel(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+}
 
 export function createFilesRouter(getProjectRoot: () => string | null): Router {
   const router = Router();
@@ -89,6 +96,10 @@ export function createFilesRouter(getProjectRoot: () => string | null): Router {
       }
       await fs.mkdir(path.dirname(toPath), { recursive: true });
       await fs.rename(fromPath, toPath);
+      // Comments are keyed by path; they follow the file.
+      if (await renameCommentPath(projectRoot, normalizeRel(from), normalizeRel(to))) {
+        broadcast({ type: 'comments_changed' });
+      }
       res.json({ from, to, renamed: true });
     } catch (err) {
       res.status(500).json({ error: `Failed to rename: ${err}` });
@@ -282,6 +293,9 @@ export function createFilesRouter(getProjectRoot: () => string | null): Router {
         return;
       }
       await fs.rm(filePath, { recursive: true });
+      if (await removeCommentPath(projectRoot, normalizeRel(relPath))) {
+        broadcast({ type: 'comments_changed' });
+      }
       res.json({ path: relPath, deleted: true });
     } catch (err: any) {
       if (err.code === 'ENOENT') {

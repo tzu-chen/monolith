@@ -9,6 +9,8 @@ import {
   BookIcon,
   ChartIcon,
   HistoryIcon,
+  CommentIcon,
+  TodoIcon,
   OmegaIcon,
   SnippetIcon,
   SettingsIcon,
@@ -33,6 +35,8 @@ const TOOLS: { panel: SidePanel; icon: ReactNode; title: string; action: Shortcu
   { panel: 'references', icon: <BookIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'References', action: 'panelReferences' },
   { panel: 'plots', icon: <ChartIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Plots', action: 'panelPlots' },
   { panel: 'history', icon: <HistoryIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'History', action: 'panelHistory' },
+  { panel: 'comments', icon: <CommentIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'Comments', action: 'panelComments' },
+  { panel: 'todo', icon: <TodoIcon size={metrics.railGlyph} strokeWidth={1.6} />, title: 'To do', action: 'panelTodo' },
 ];
 
 const DRAWERS: { drawer: Drawer; icon: ReactNode; title: string; action: ShortcutAction }[] = [

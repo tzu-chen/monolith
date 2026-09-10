@@ -19,6 +19,14 @@ interface VersionsChangedMessage {
   type: 'versions_changed';
 }
 
+interface CommentsChangedMessage {
+  type: 'comments_changed';
+}
+
+interface TodosChangedMessage {
+  type: 'todos_changed';
+}
+
 export function useFileWatcher() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,7 +47,12 @@ export function useFileWatcher() {
 
       ws.onmessage = async (event) => {
         try {
-          const msg: FileChangeMessage | ProjectSwitchedMessage | VersionsChangedMessage = JSON.parse(event.data);
+          const msg:
+            | FileChangeMessage
+            | ProjectSwitchedMessage
+            | VersionsChangedMessage
+            | CommentsChangedMessage
+            | TodosChangedMessage = JSON.parse(event.data);
 
           // Handle project switch (from another client/tab)
           if (msg.type === 'project_switched') {
@@ -77,6 +90,16 @@ export function useFileWatcher() {
           // A version saved, relabelled or restored — here or in another tab.
           if (msg.type === 'versions_changed') {
             useEditorStore.getState().invalidateVersions();
+            return;
+          }
+
+          if (msg.type === 'comments_changed') {
+            useEditorStore.getState().invalidateComments();
+            return;
+          }
+
+          if (msg.type === 'todos_changed') {
+            useEditorStore.getState().invalidateTodos();
             return;
           }
 

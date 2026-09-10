@@ -76,6 +76,10 @@ export const metrics = {
   panelReferences: 470,
   /** version history: changes since the last version, then the versions */
   panelHistory: 300,
+  /** comments on the open file or the whole project */
+  panelComments: 340,
+  /** the project's checklist, with deadlines and tags */
+  panelTodo: 340,
 
   /** Detail columns beside a manager list — 1c's entry editor, 1f's preview. */
   detailReference: 460,

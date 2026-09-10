@@ -21,8 +21,19 @@ import {
 } from './scope-decorations';
 import { compileBaselineFacet, compileDiffGutter, compileDiffTheme } from './compile-diff';
 import { diagnosticsFacet, diagnosticsGutter } from './diagnostics-gutter';
+import {
+  activeCommentFacet,
+  commentTracking,
+  commentsFacet,
+  commentsGutter,
+  onCommentClickFacet,
+  onCommentsMovedFacet,
+  type CommentMoveReport,
+} from './comments-gutter';
+import { commentPopover } from './comment-popover';
 import type { ScopeGraph } from '../../lib/scope-api';
 import type { Diagnostic } from '../../lib/diagnostics';
+import type { Comment } from '../../lib/comments-api';
 
 export const themeCompartment = new Compartment();
 export const vimCompartment = new Compartment();
@@ -33,6 +44,9 @@ export const scopeCompartment = new Compartment();
 export const diagnosticsCompartment = new Compartment();
 export const baselineCompartment = new Compartment();
 export const fileTreeCompartment = new Compartment();
+export const commentsCompartment = new Compartment();
+export const commentGutterCompartment = new Compartment();
+export const activeCommentCompartment = new Compartment();
 
 const defaultFont: FontSettings = { fontSize: 13.5, fontFamily: "'Source Code Pro', monospace" };
 
@@ -59,6 +73,16 @@ export interface EditorConfig {
   baseline: string | null;
   fileTree: string[];
   onGoToDefinition: (file: string, line: number) => void;
+  /** Line comments on this file. */
+  comments: Comment[];
+  activeCommentId: string | null;
+  onCommentsMoved: (moves: CommentMoveReport[]) => void;
+  onCommentClick: (ids: string[], line: number) => void;
+}
+
+/** The gutter column is only there while the file has line comments. */
+function commentGutterExtensions(comments: Comment[]): Extension {
+  return comments.some((c) => c.line !== null) ? commentsGutter : [];
 }
 
 export function createExtensions(config: EditorConfig): Extension[] {
@@ -70,6 +94,7 @@ export function createExtensions(config: EditorConfig): Extension[] {
     compileDiffGutter,
     compileDiffTheme,
     diagnosticsGutter,
+    commentGutterCompartment.of(commentGutterExtensions(config.comments)),
     lineNumbersCompartment.of(lineNumbersExtensions(config.showLineNumbers)),
     highlightActiveLine(),
     history(),
@@ -85,6 +110,12 @@ export function createExtensions(config: EditorConfig): Extension[] {
     baselineCompartment.of(compileBaselineFacet.of(config.baseline)),
     fileTreeCompartment.of(fileTreeFacet.of(config.fileTree)),
     goToDefinitionFacet.of(config.onGoToDefinition),
+    commentsCompartment.of(commentsFacet.of(config.comments)),
+    activeCommentCompartment.of(activeCommentFacet.of(config.activeCommentId)),
+    onCommentsMovedFacet.of(config.onCommentsMoved),
+    onCommentClickFacet.of(config.onCommentClick),
+    commentTracking,
+    commentPopover,
     scopeDecorations,
     macroTooltip,
     // Must precede the SyncTeX click handler so a modifier-click on a macro
@@ -141,4 +172,15 @@ export function getBaselineReconfiguration(baseline: string | null) {
 
 export function getFileTreeReconfiguration(files: string[]) {
   return fileTreeCompartment.reconfigure(fileTreeFacet.of(files));
+}
+
+export function getCommentsReconfiguration(comments: Comment[]) {
+  return [
+    commentsCompartment.reconfigure(commentsFacet.of(comments)),
+    commentGutterCompartment.reconfigure(commentGutterExtensions(comments)),
+  ];
+}
+
+export function getActiveCommentReconfiguration(id: string | null) {
+  return activeCommentCompartment.reconfigure(activeCommentFacet.of(id));
 }

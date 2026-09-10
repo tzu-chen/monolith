@@ -4,6 +4,7 @@ import { diagnosticsForFile } from '../../lib/diagnostics';
 import { diffLines, summarise } from '../../lib/line-diff';
 import { fs, font, metrics } from '../../theme/tokens';
 import { Dot } from '../shared/ui';
+import { CommentIcon } from '../shared/Icons';
 
 /**
  * Editor status bar (26px in the handoff, scaled here).
@@ -56,6 +57,14 @@ export default function EditorStatusBar() {
   const cursorCol = useEditorStore((s) => s.cursorCol);
   const vimMode = useEditorStore((s) => s.vimMode);
   const requestScrollToLine = useEditorStore((s) => s.requestScrollToLine);
+  const comments = useEditorStore((s) => s.comments);
+  const activePanel = useEditorStore((s) => s.activePanel);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
+
+  const openComments = useMemo(
+    () => (activeTabPath ? comments.filter((c) => c.file === activeTabPath && !c.resolved).length : 0),
+    [comments, activeTabPath]
+  );
 
   const cursor = useRef({ error: 0, warning: 0 });
 
@@ -116,6 +125,25 @@ export default function EditorStatusBar() {
           ~{diff.modified}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>since last compile</span>
         </span>
+      )}
+
+      {openComments > 0 && (
+        <button
+          onClick={() => setActivePanel('comments')}
+          title="Open the Comments panel"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            color: activePanel === 'comments' ? 'var(--accent)' : 'var(--text-faint)',
+            fontSize: fs.meta,
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          <CommentIcon size={12} />
+          {openComments} comment{openComments === 1 ? '' : 's'}
+        </button>
       )}
 
       <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>

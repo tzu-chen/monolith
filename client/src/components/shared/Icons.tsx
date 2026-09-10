@@ -310,6 +310,45 @@ export function SettingsIcon(props: IconProps) {
   ));
 }
 
+export function CommentIcon(props: IconProps) {
+  return svg(props, <path d="M20 14a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />);
+}
+
+export function TodoIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7.5 12.5l3 3 6-7" />
+    </>
+  ));
+}
+
+export function TagIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
+      <circle cx="7.5" cy="7.5" r="1" />
+    </>
+  ));
+}
+
+export function CalendarIcon(props: IconProps) {
+  return svg(props, (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </>
+  ));
+}
+
+export function CheckIcon(props: IconProps) {
+  return svg(props, <path d="M5 12.5l5 5 9-11" />);
+}
+
+export function TrashIcon(props: IconProps) {
+  return svg(props, <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />);
+}
+
 export function CodeIcon(props: IconProps) {
   return svg(props, <><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></>);
 }

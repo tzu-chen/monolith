@@ -141,6 +141,43 @@ export function createEditorTheme(scheme: ColorScheme, font: FontSettings) {
         alignItems: 'center',
         justifyContent: 'center',
       },
+      // Comments gutter (see comments-gutter.ts): an outlined bubble, faint
+      // until the comment is selected in the panel; its line then gets a wash
+      // and the same 2px accent edge selection carries everywhere else.
+      '.cm-commentGutter': { width: '18px', cursor: 'pointer' },
+      '.cm-commentGutter .cm-gutterElement': {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      '.cm-comment-marker': {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        color: colors.textFaint,
+      },
+      '.cm-comment-marker:hover': { color: colors.text },
+      '.cm-comment-marker-resolved': { color: colors.textDisabled },
+      '.cm-comment-marker-active': { color: colors.accent },
+      '.cm-comment-count': {
+        position: 'absolute',
+        right: '-5px',
+        top: '-4px',
+        fontSize: '8px',
+        lineHeight: '1',
+        fontFamily: font.fontFamily,
+      },
+      // The floating comment card (comment-popover.ts) is a tooltip, so it
+      // inherits the popover chrome above; only its width and font are its own.
+      '.cm-tooltip.cm-comment-popover': {
+        backgroundColor: colors.surfaceChrome,
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+      },
+      '.cm-comment-active-line': {
+        backgroundColor: colors.accentWashStrong,
+        boxShadow: `inset 2px 0 0 ${colors.accent}`,
+      },
       '.cm-diffGutter': { width: '2px', paddingLeft: 0 },
       '.cm-diffGutter .cm-gutterElement': { width: '2px' },
       '.cm-diff-added': { backgroundColor: colors.ok },

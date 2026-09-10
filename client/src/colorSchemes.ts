@@ -58,6 +58,17 @@ export interface ColorScheme {
     synNumber: string;
     synMacro: string;
 
+    // To-do tag hues. Fixed set, one variable each, so a tag colour is a
+    // theme token like every other colour and never a literal in the UI.
+    tagRed: string;
+    tagOrange: string;
+    tagYellow: string;
+    tagGreen: string;
+    tagTeal: string;
+    tagBlue: string;
+    tagPurple: string;
+    tagPink: string;
+
     // Elevation
     shadowPopover: string;
     shadowPaper: string;
@@ -102,6 +113,15 @@ const parchment: ColorScheme = {
     synNumber: '#b07830',
     synMacro: '#8b5e3c',
 
+    tagRed: '#b04a4a',
+    tagOrange: '#c2743a',
+    tagYellow: '#b3951f',
+    tagGreen: '#4a8c5e',
+    tagTeal: '#3d8080',
+    tagBlue: '#3d6b8e',
+    tagPurple: '#7a5a99',
+    tagPink: '#b05a8a',
+
     shadowPopover: '0 8px 24px rgba(45, 40, 30, 0.13)',
     shadowPaper: '0 2px 10px rgba(45, 40, 30, 0.07)',
     shadowCard: '0 1px 3px rgba(0, 0, 0, 0.06)',
@@ -145,6 +165,15 @@ const graphite: ColorScheme = {
     synRef: '#8b929c',
     synNumber: '#d99a4e',
     synMacro: '#d99a4e',
+
+    tagRed: '#d97b6c',
+    tagOrange: '#e0925a',
+    tagYellow: '#d6c05e',
+    tagGreen: '#5cc08a',
+    tagTeal: '#61b3a6',
+    tagBlue: '#6fa8d0',
+    tagPurple: '#c58fd6',
+    tagPink: '#d98ab8',
 
     shadowPopover: '0 8px 24px rgba(0, 0, 0, 0.45)',
     shadowPaper: '0 2px 10px rgba(0, 0, 0, 0.35)',
@@ -207,6 +236,14 @@ const CSS_VAR_MAP: Record<ColorKey, string> = {
   synRef: '--syn-ref',
   synNumber: '--syn-number',
   synMacro: '--syn-macro',
+  tagRed: '--tag-red',
+  tagOrange: '--tag-orange',
+  tagYellow: '--tag-yellow',
+  tagGreen: '--tag-green',
+  tagTeal: '--tag-teal',
+  tagBlue: '--tag-blue',
+  tagPurple: '--tag-purple',
+  tagPink: '--tag-pink',
   shadowPopover: '--shadow-popover',
   shadowPaper: '--shadow-paper',
   shadowCard: '--shadow-card',
