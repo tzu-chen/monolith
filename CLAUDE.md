@@ -17,7 +17,7 @@ npm start                # Build + start production server
 
 ## Architecture
 
-- **client/src/components/shell/** — the app shell: `Rail.tsx` (full-height icon rail), `SidePanelHost.tsx` (one panel at a time), `EditorPanel.tsx`, `Shell.tsx`, `CommandPalette.tsx` (Mod+P files / Mod+Shift+P projects). There is no global top or bottom bar — the editor and preview each carry their own toolbar and status bar.
+- **client/src/components/shell/** — the app shell: `Rail.tsx` (full-height icon rail), `SidePanelHost.tsx` (one panel at a time), `EditorPanel.tsx`, `Shell.tsx`, `CommandPalette.tsx` (Mod+P files / Mod+Shift+P projects). There is no global top or bottom bar — the editor and preview each carry their own toolbar and status bar. The side panel (and its detail column) is docked as a column by default; Settings ▸ Appearance ▸ *Floating side panel* (`floatingSidePanel`, localStorage `monolith-floating-panel`) lays it over the workspace beside the rail instead, closing on a click into the workspace or Escape.
 - **client/src/components/panels/** — rail panels: Files, Outline, Scope (In-scope), References, Plots, History (`HistoryPanel.tsx` + `VersionDetail.tsx`), Comments (`CommentsPanel.tsx`), To do (`TodoPanel.tsx`), Projects, plus the symbol/snippet drawer content
 - **client/src/components/editor/** — CodeMirror 6 editor with LaTeX language mode, snippets, math preview, scope strip, compile-diff, diagnostics and comments gutters, path completion, macro decorations + definition popover
 - **client/src/components/preview/** — pdf.js-based PDF viewer with SyncTeX support; `HtmlPreview.tsx` + `PreviewModeToggle.tsx` add the LaTeXML HTML render mode (PDF | HTML toggle)

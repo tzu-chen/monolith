@@ -238,6 +238,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
   const trimPdfMargins = useEditorStore((s) => s.trimPdfMargins);
   const toggleTrimPdfMargins = useEditorStore((s) => s.toggleTrimPdfMargins);
+  const floatingSidePanel = useEditorStore((s) => s.floatingSidePanel);
+  const toggleFloatingSidePanel = useEditorStore((s) => s.toggleFloatingSidePanel);
   const toggleInvertPdfInDark = useEditorStore((s) => s.toggleInvertPdfInDark);
   const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
   const toggleHideNonTexFiles = useEditorStore((s) => s.toggleHideNonTexFiles);
@@ -457,6 +459,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               hint="Crop the blank paper margins so Fit spends the width on the text"
             >
               <Toggle on={trimPdfMargins} onClick={toggleTrimPdfMargins} ariaLabel="Trim PDF margins" />
+            </Row>
+            <Row
+              title="Floating side panel"
+              hint="Lay the panel over the editor instead of beside it; a click into the workspace or Escape closes it"
+            >
+              <Toggle on={floatingSidePanel} onClick={toggleFloatingSidePanel} ariaLabel="Floating side panel" />
             </Row>
           </section>
 

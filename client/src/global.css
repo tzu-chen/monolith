@@ -87,6 +87,7 @@ body {
   height: 100vh;
   display: flex;
   overflow: hidden;
+  position: relative; /* anchors the floating side panel */
 }
 
 /*

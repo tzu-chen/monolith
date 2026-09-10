@@ -7,7 +7,7 @@ import SplitPane from '../shared/SplitPane';
 import CommandPalette from './CommandPalette';
 import SettingsModal from '../settings/SettingsModal';
 import { useEditorStore } from '../../stores/editorStore';
-import { motion } from '../../theme/tokens';
+import { metrics, motion } from '../../theme/tokens';
 
 /**
  * Application shell.
@@ -21,6 +21,11 @@ import { motion } from '../../theme/tokens';
  *
  * Opening the project browser dims the workspace to 55%: the current project is
  * still loaded, just no longer the focus.
+ *
+ * With `floatingSidePanel` on (Settings ▸ Appearance) the panel and detail
+ * columns are lifted out of the row and laid over the workspace, flush against
+ * the rail, so the editor and preview keep their width. A click into the
+ * workspace, or Escape, closes the floating panel.
  */
 
 interface ShellProps {
@@ -34,6 +39,8 @@ export default function Shell({ onManualSave, onCompile, onRenderHtml }: ShellPr
   const activePanel = useEditorStore((s) => s.activePanel);
   const showSettings = useEditorStore((s) => s.showSettings);
   const setShowSettings = useEditorStore((s) => s.setShowSettings);
+  const floating = useEditorStore((s) => s.floatingSidePanel);
+  const setActivePanel = useEditorStore((s) => s.setActivePanel);
 
   const editor = <EditorPanel onManualSave={onManualSave} onCompile={onCompile} />;
   const preview = <PreviewPane onCompile={onCompile} onRenderHtml={onRenderHtml} />;
@@ -41,9 +48,31 @@ export default function Shell({ onManualSave, onCompile, onRenderHtml }: ShellPr
   return (
     <>
       <Rail />
-      <SidePanelHost />
-      <DetailPaneHost />
+      {floating ? (
+        activePanel && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: metrics.rail,
+              display: 'flex',
+              zIndex: 100,
+              boxShadow: 'var(--shadow-popover)',
+            }}
+          >
+            <SidePanelHost />
+            <DetailPaneHost />
+          </div>
+        )
+      ) : (
+        <>
+          <SidePanelHost />
+          <DetailPaneHost />
+        </>
+      )}
       <main
+        onPointerDownCapture={floating && activePanel ? () => setActivePanel(null) : undefined}
         style={{
           flex: 1,
           minWidth: 0,

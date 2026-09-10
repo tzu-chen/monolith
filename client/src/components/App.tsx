@@ -131,6 +131,9 @@ export default function App() {
       } else if (store.activeDrawer) {
         store.setActiveDrawer(null);
         e.preventDefault();
+      } else if (store.floatingSidePanel && store.activePanel) {
+        store.setActivePanel(null);
+        e.preventDefault();
       }
     };
     window.addEventListener('keydown', onKey);

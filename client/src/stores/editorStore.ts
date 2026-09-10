@@ -236,6 +236,12 @@ interface EditorState {
    * text rather than on the paper's white.
    */
   trimPdfMargins: boolean;
+  /**
+   * Float the side panel (and its detail column) over the workspace instead
+   * of docking it as a column beside the editor. The editor and preview keep
+   * their width; the panel closes on a click into the workspace or Escape.
+   */
+  floatingSidePanel: boolean;
 
   // Vim mode
   vimMode: boolean;
@@ -363,6 +369,7 @@ interface EditorState {
   applyAutoSwitchScheme: () => void;
   toggleInvertPdfInDark: () => void;
   toggleTrimPdfMargins: () => void;
+  toggleFloatingSidePanel: () => void;
 
   // Vim mode
   toggleVimMode: () => void;
@@ -592,6 +599,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   autoSwitch: getInitialAutoSwitch(),
   invertPdfInDark: readFlag('monolith-invert-pdf-dark', false),
   trimPdfMargins: readFlag('monolith-trim-pdf', true),
+  floatingSidePanel: readFlag('monolith-floating-panel', false),
   vimMode: readFlag('monolith-vim', false),
   keybindings: getInitialKeybindings(),
   autoRecompile: readFlag('monolith-auto-recompile', false),
@@ -914,6 +922,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const next = !get().trimPdfMargins;
     writeFlag('monolith-trim-pdf', next);
     set({ trimPdfMargins: next });
+  },
+
+  toggleFloatingSidePanel: () => {
+    const next = !get().floatingSidePanel;
+    writeFlag('monolith-floating-panel', next);
+    set({ floatingSidePanel: next });
   },
 
   toggleVimMode: () => {
