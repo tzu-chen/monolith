@@ -206,6 +206,12 @@ interface EditorState {
    * inverted rendering stays available for low-light work.
    */
   invertPdfInDark: boolean;
+  /**
+   * Trim the blank margins off every PDF page (automatic content-box
+   * detection, see `lib/autoTrim.ts`) so Fit spends the pane's width on the
+   * text rather than on the paper's white.
+   */
+  trimPdfMargins: boolean;
 
   // Vim mode
   vimMode: boolean;
@@ -322,6 +328,7 @@ interface EditorState {
   setAutoSwitch: (settings: AutoSwitchSettings) => void;
   applyAutoSwitchScheme: () => void;
   toggleInvertPdfInDark: () => void;
+  toggleTrimPdfMargins: () => void;
 
   // Vim mode
   toggleVimMode: () => void;
@@ -545,6 +552,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   colorScheme: getInitialColorScheme(),
   autoSwitch: getInitialAutoSwitch(),
   invertPdfInDark: readFlag('monolith-invert-pdf-dark', false),
+  trimPdfMargins: readFlag('monolith-trim-pdf', true),
   vimMode: readFlag('monolith-vim', false),
   keybindings: getInitialKeybindings(),
   autoRecompile: readFlag('monolith-auto-recompile', false),
@@ -826,6 +834,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const next = !get().invertPdfInDark;
     writeFlag('monolith-invert-pdf-dark', next);
     set({ invertPdfInDark: next });
+  },
+
+  toggleTrimPdfMargins: () => {
+    const next = !get().trimPdfMargins;
+    writeFlag('monolith-trim-pdf', next);
+    set({ trimPdfMargins: next });
   },
 
   toggleVimMode: () => {

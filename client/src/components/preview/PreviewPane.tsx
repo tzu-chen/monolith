@@ -14,6 +14,7 @@ import { formatClock } from '../../lib/time';
 import { toolbarLayout } from './toolbarLayout';
 import { parseLineNumber } from '../../lib/diagnostics';
 import { fs, font, metrics, radius, motion } from '../../theme/tokens';
+import { measureDocumentCrop, croppedWidthFactor, hasCrop, NO_DOCUMENT_CROP, type DocumentCrop } from '../../lib/autoTrim';
 
 // Configure pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -33,11 +34,21 @@ type Zoom = number | 'fit';
 
 const ZOOM_STEPS = [50, 75, 90, 100, 116, 125, 150, 200, 300];
 
+/**
+ * `containerWidth` is the scroll container's clientWidth, which already
+ * excludes the scrollbar (its gutter is reserved with `scrollbar-gutter:
+ * stable`, so it does not change once pages appear) and includes the
+ * handoff's 18px page padding on each side. `pageWidth` is the width the
+ * page is shown at — after trimming, if margins are trimmed — to which the
+ * sheet adds its 1px border on each side.
+ */
 function zoomToScale(zoom: Zoom, containerWidth: number, pageWidth: number): number {
-  // Leave the handoff's 18px page padding on each side, plus room for a scrollbar.
-  if (zoom === 'fit') return Math.max(0.1, (containerWidth - metrics.padPage * 2 - 12) / pageWidth);
+  if (zoom === 'fit') return Math.max(0.1, (containerWidth - metrics.padPage * 2 - 2) / pageWidth);
   return zoom / 100;
 }
+
+/** Trailing debounce for splitter drags: re-fitting on every resize event would re-render the PDF dozens of times. */
+const REFIT_DEBOUNCE_MS = 120;
 
 interface PreviewPaneProps {
   onCompile: () => void;
@@ -56,6 +67,8 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const syncTexHighlight = useEditorStore((s) => s.syncTexHighlight);
   const theme = useEditorStore((s) => s.theme);
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
+  const trimPdfMargins = useEditorStore((s) => s.trimPdfMargins);
+  const toggleTrimPdfMargins = useEditorStore((s) => s.toggleTrimPdfMargins);
   const previewMode = useEditorStore((s) => s.previewMode);
   const viewMode = useEditorStore((s) => s.viewMode);
   const currentProject = useEditorStore((s) => s.currentProject);
@@ -70,6 +83,16 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [renderedScale, setRenderedScale] = useState(1);
+  const [renderedCrop, setRenderedCrop] = useState<DocumentCrop>(NO_DOCUMENT_CROP);
+  // Width of the page scroll container. Fit re-derives its scale from this, so
+  // the page follows the splitter and view-mode changes instead of keeping the
+  // scale it was first laid out at.
+  const [containerWidth, setContainerWidth] = useState(0);
+  // Bumped by the Fit button so pressing it re-fits even when already in fit mode.
+  const [fitNonce, setFitNonce] = useState(0);
+  // Measured margins per document — measuring costs ~24 small renders, so it
+  // happens once per compile, not once per zoom step.
+  const cropCacheRef = useRef(new WeakMap<pdfjsLib.PDFDocumentProxy, Promise<DocumentCrop>>());
   const pageGeometryRef = useRef<Array<{ canvas: HTMLCanvasElement; page: number; scale: number }>>([]);
   const savedScrollRatioRef = useRef<number | null>(null);
   const hasRenderedRef = useRef(false);
@@ -139,7 +162,27 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     loadPdf().catch(console.error);
   }, [pdfData]);
 
-  // Render pages whenever the doc, zoom, theme or log toggle changes.
+  // Follow the container's width (debounced) while in fit mode.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || showLog) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new ResizeObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setContainerWidth(container.clientWidth), REFIT_DEBOUNCE_MS);
+    });
+    observer.observe(container);
+    setContainerWidth(container.clientWidth);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [showLog]);
+
+  // Only fit mode cares about the width; a fixed zoom must not re-render on resize.
+  const fitWidth = zoom === 'fit' ? containerWidth : 0;
+
+  // Render pages whenever the doc, zoom, fit width, trim, theme or log toggle changes.
   useEffect(() => {
     if (!pdfDoc || !containerRef.current || showLog) return;
 
@@ -148,11 +191,29 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     let cancelled = false;
 
     const renderPdf = async () => {
+      let crop = NO_DOCUMENT_CROP;
+      if (trimPdfMargins) {
+        let pending = cropCacheRef.current.get(pdf);
+        if (!pending) {
+          pending = measureDocumentCrop(pdf).catch((err) => {
+            console.error('Auto-trim failed:', err);
+            return NO_DOCUMENT_CROP;
+          });
+          cropCacheRef.current.set(pdf, pending);
+        }
+        crop = await pending;
+        if (cancelled) return;
+      }
+
       const firstPage = await pdf.getPage(1);
       const baseViewport = firstPage.getViewport({ scale: 1 });
-      const scale = zoomToScale(zoom, container.clientWidth, baseViewport.width);
+      // Fit the trimmed width (the tighter parity, so both fit) — the page then
+      // spends the pane on its text rather than on the paper's white.
+      const shownWidth = baseViewport.width * croppedWidthFactor(crop);
+      const scale = zoomToScale(zoom, container.clientWidth, shownWidth);
       if (cancelled) return;
       setRenderedScale(scale);
+      setRenderedCrop(crop);
 
       if (hasRenderedRef.current && container.scrollHeight > 0) {
         savedScrollRatioRef.current = container.scrollTop / container.scrollHeight;
@@ -170,11 +231,39 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale });
 
+        // The wrapper is the visible sheet: the trimmed window onto the page.
+        // Inside it the full page sits at a negative offset, so everything in
+        // page coordinates (the SyncTeX overlay, the inverse-sync hit test on
+        // the canvas rect) keeps working untouched.
+        const box = i % 2 === 1 ? crop.odd : crop.even;
+        const trimmed = hasCrop(box);
+        const shownW = trimmed ? Math.floor(viewport.width * (1 - box.left - box.right)) : viewport.width;
+        const shownH = trimmed ? Math.floor(viewport.height * (1 - box.top - box.bottom)) : viewport.height;
+
         const wrapper = document.createElement('div');
         wrapper.style.position = 'relative';
         wrapper.style.margin = '0 auto 20px';
-        wrapper.style.width = `${viewport.width}px`;
+        wrapper.style.width = `${shownW}px`;
+        wrapper.style.height = `${shownH}px`;
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.flexShrink = '0';
+        wrapper.style.background = 'var(--paper-sheet)';
+        wrapper.style.border = '1px solid var(--line)';
+        wrapper.style.boxShadow = 'var(--shadow-paper)';
+        if (invert) {
+          wrapper.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
+          wrapper.style.background = 'white';
+        }
         wrapper.dataset.page = String(i);
+
+        const sheet = document.createElement('div');
+        sheet.style.position = 'relative';
+        sheet.style.width = `${viewport.width}px`;
+        sheet.style.height = `${viewport.height}px`;
+        if (trimmed) {
+          sheet.style.marginLeft = `${-Math.floor(box.left * viewport.width)}px`;
+          sheet.style.marginTop = `${-Math.floor(box.top * viewport.height)}px`;
+        }
 
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width * outputScale);
@@ -182,15 +271,9 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
         canvas.style.display = 'block';
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
-        canvas.style.background = 'var(--paper-sheet)';
-        canvas.style.border = '1px solid var(--line)';
-        canvas.style.boxShadow = 'var(--shadow-paper)';
-        if (invert) {
-          canvas.style.filter = 'invert(0.88) hue-rotate(180deg) brightness(0.95)';
-          canvas.style.background = 'white';
-        }
 
-        wrapper.appendChild(canvas);
+        sheet.appendChild(canvas);
+        wrapper.appendChild(sheet);
         container.appendChild(wrapper);
         pageGeometryRef.current.push({ canvas, page: i, scale });
 
@@ -212,7 +295,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
     return () => {
       cancelled = true;
     };
-  }, [pdfDoc, showLog, invert, zoom]);
+  }, [pdfDoc, showLog, invert, zoom, fitWidth, fitNonce, trimPdfMargins]);
 
   // Track which page is under the viewport's midline, for the status bar.
   useEffect(() => {
@@ -397,11 +480,25 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
               />
               <IconButton icon={<PlusIcon size={12} />} title="Zoom in" size={24} onClick={() => stepZoom(1)} />
               <OutlinedButton
-                onClick={() => setZoom('fit')}
+                accent={zoom === 'fit'}
+                onClick={() => {
+                  setZoom('fit');
+                  setFitNonce((n) => n + 1);
+                }}
                 title="Fit page width"
-                style={{ borderColor: zoom === 'fit' ? 'var(--accent)' : undefined, color: zoom === 'fit' ? 'var(--accent)' : undefined }}
               >
                 Fit
+              </OutlinedButton>
+              <OutlinedButton
+                accent={trimPdfMargins}
+                onClick={toggleTrimPdfMargins}
+                title={
+                  trimPdfMargins
+                    ? `Trim margins — on${hasCrop(renderedCrop.odd) || hasCrop(renderedCrop.even) ? '' : ' (no margins detected)'}`
+                    : 'Trim margins — crop the blank paper margins off every page'
+                }
+              >
+                Trim
               </OutlinedButton>
               <BarDivider />
             </>
@@ -437,6 +534,7 @@ export default function PreviewPane({ onCompile, onRenderHtml }: PreviewPaneProp
             flex: 1,
             minHeight: 0,
             overflow: 'auto',
+            scrollbarGutter: 'stable',
             padding: `${metrics.padPage}px ${metrics.padPage}px 0`,
             display: 'flex',
             flexDirection: 'column',

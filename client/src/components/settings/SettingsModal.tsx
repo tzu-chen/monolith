@@ -236,6 +236,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
   const invertPdfInDark = useEditorStore((s) => s.invertPdfInDark);
+  const trimPdfMargins = useEditorStore((s) => s.trimPdfMargins);
+  const toggleTrimPdfMargins = useEditorStore((s) => s.toggleTrimPdfMargins);
   const toggleInvertPdfInDark = useEditorStore((s) => s.toggleInvertPdfInDark);
   const hideNonTexFiles = useEditorStore((s) => s.hideNonTexFiles);
   const toggleHideNonTexFiles = useEditorStore((s) => s.toggleHideNonTexFiles);
@@ -449,6 +451,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               hint="Off — the page stays a dimmed paper sheet, as it prints"
             >
               <Toggle on={invertPdfInDark} onClick={toggleInvertPdfInDark} ariaLabel="Invert PDF in dark mode" />
+            </Row>
+            <Row
+              title="Trim PDF margins"
+              hint="Crop the blank paper margins so Fit spends the width on the text"
+            >
+              <Toggle on={trimPdfMargins} onClick={toggleTrimPdfMargins} ariaLabel="Trim PDF margins" />
             </Row>
           </section>
 
